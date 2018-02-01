@@ -10,3 +10,5 @@ add_subdirectory("External")
 # Example apps
 
 add_subdirectory("01-HelloWorld")
+add_subdirectory("02-WindowEvents")
+
