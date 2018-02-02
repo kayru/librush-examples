@@ -23,6 +23,14 @@ function(hlsl_shader_compile_rule shaderName stage)
 	)
 endfunction(hlsl_shader_compile_rule)
 
+function(glsl_shader_compile_rule shaderName)
+    add_custom_command(
+        OUTPUT ${CMAKE_CFG_INTDIR}/${shaderName}.bin
+        COMMAND ${GLSLC} -o ${CMAKE_CFG_INTDIR}/${shaderName}.bin ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
+        MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
+    )
+endfunction(glsl_shader_compile_rule)
+
 # Example apps
 
 add_subdirectory("Common")
@@ -32,3 +40,4 @@ add_subdirectory("02-WindowEvents")
 add_subdirectory("03-Primitives")
 add_subdirectory("04-Shaders")
 add_subdirectory("05-Compute")
+add_subdirectory("06-Instancing")
