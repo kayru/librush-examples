@@ -10,10 +10,10 @@ static void update(void* userData)
 {
 	GfxContext* gfxContext = Platform_GetGfxContext();
 
-	GfxPassDescr passDescr;
-	passDescr.flags          = GfxPassFlags::ClearAll;
-	passDescr.clearColors[0] = ColorRGBA8(11, 22, 33);
-	Gfx_BeginPass(gfxContext, passDescr);
+	GfxPassDesc passDesc;
+	passDesc.flags          = GfxPassFlags::ClearAll;
+	passDesc.clearColors[0] = ColorRGBA8(11, 22, 33);
+	Gfx_BeginPass(gfxContext, passDesc);
 	Gfx_EndPass(gfxContext);
 }
 
