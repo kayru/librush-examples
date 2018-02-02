@@ -71,7 +71,7 @@ public:
 		m_constants.shaderParams.y = (float)window->getSize().y;
 		m_constants.shaderParams.z = (float)m_timer.time();
 		m_constants.shaderParams.w = 0;
-		Gfx_UpdateBuffer(ctx, m_cb, &m_constants, 0, sizeof(m_constants), true);
+		Gfx_UpdateBuffer(ctx, m_cb, &m_constants, sizeof(m_constants));
 
 		GfxPassDesc passDesc;
 		passDesc.flags          = GfxPassFlags::ClearAll;

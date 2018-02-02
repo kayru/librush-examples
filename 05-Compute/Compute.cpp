@@ -56,7 +56,7 @@ public:
 		m_constants.z = 0.0f;
 		m_constants.w = 0.0f;
 
-		Gfx_UpdateBuffer(ctx, m_constantBuffer, &m_constants, 0, sizeof(m_constants), true);
+		Gfx_UpdateBuffer(ctx, m_constantBuffer, &m_constants, sizeof(m_constants));
 
 		Gfx_SetTechnique(ctx, m_technique);
 		Gfx_SetStorageImage(ctx, GfxStage::Compute, 0, m_texture);
