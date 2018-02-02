@@ -8,16 +8,16 @@
 
 using namespace Rush;
 
-class PrimitivesExample : public Application
+class PrimitivesApp : public Application
 {
 public:
-	PrimitivesExample()
+	PrimitivesApp()
 	{
 		m_prim = new PrimitiveBatch();
 		m_font = new BitmapFontRenderer(BitmapFontRenderer::createEmbeddedFont(true, 0, 1));
 	}
 
-	~PrimitivesExample()
+	~PrimitivesApp()
 	{
 		delete m_font;
 		delete m_prim;
@@ -97,5 +97,5 @@ int main()
 	cfg.height    = 480;
 	cfg.resizable = true;
 
-	return Platform_Main<PrimitivesExample>(cfg);
+	return Platform_Main<PrimitivesApp>(cfg);
 }

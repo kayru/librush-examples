@@ -7,10 +7,10 @@
 
 using namespace Rush;
 
-class WindowEventsExample : public Application
+class WindowEventsApp : public Application
 {
 public:
-	WindowEventsExample()
+	WindowEventsApp()
 	{
 		Window* window = Platform_GetWindow();
 		m_events.setOwner(window);
@@ -60,5 +60,5 @@ int main()
 	cfg.name      = "WindowEvents";
 	cfg.resizable = true;
 
-	return Platform_Main<WindowEventsExample>(cfg);
+	return Platform_Main<WindowEventsApp>(cfg);
 }

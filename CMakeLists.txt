@@ -7,9 +7,27 @@ project(RushExamples)
 
 add_subdirectory("External")
 
+# Custom build rules
+
+find_program(GLSLC NAMES glslc PATHS
+	$ENV{VK_SDK_PATH}/Bin
+	$ENV{PATH}
+	"~/bin"
+)
+
+function(hlsl_shader_compile_rule shaderName stage)
+	add_custom_command(
+		OUTPUT ${CMAKE_CFG_INTDIR}/${shaderName}.bin
+		COMMAND ${GLSLC} -x hlsl -fentry-point=main -fshader-stage=${stage} -o ${CMAKE_CFG_INTDIR}/${shaderName}.bin ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
+		MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
+	)
+endfunction(hlsl_shader_compile_rule)
+
 # Example apps
+
+add_subdirectory("Common")
 
 add_subdirectory("01-HelloWorld")
 add_subdirectory("02-WindowEvents")
 add_subdirectory("03-Primitives")
-
+add_subdirectory("04-Shaders")
