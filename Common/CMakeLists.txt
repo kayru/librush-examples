@@ -1,6 +1,8 @@
 set(COMMON_SRC
 	Utils.h
 	Utils.cpp
+	ExampleApp.h
+	ExampleApp.cpp
 )
 
 add_library(Common STATIC ${COMMON_SRC})
