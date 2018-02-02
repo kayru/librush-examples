@@ -11,4 +11,5 @@ add_subdirectory("External")
 
 add_subdirectory("01-HelloWorld")
 add_subdirectory("02-WindowEvents")
+add_subdirectory("03-Primitives")
 
