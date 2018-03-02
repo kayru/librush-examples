@@ -62,7 +62,7 @@ GfxShaderSource loadShaderFromFile(const char* filename, const char* shaderDirec
 	}
 	else
 	{
-		Log::error("Failed to load shader '%s'", fullFilename);
+		RUSH_LOG_ERROR("Failed to load shader '%s'", fullFilename);
 	}
 
 	return source;
