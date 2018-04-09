@@ -33,8 +33,7 @@ public:
 		bindings.addConstantBuffer("Global", 0);
 		m_tech = Gfx_CreateTechnique(GfxTechniqueDesc(ps, vs, vf, &bindings));
 
-		GfxBufferDesc cbDesc(
-		    GfxBufferType::Constant, GfxBufferMode::Temporary, GfxFormat_Unknown, 1, sizeof(m_constants));
+		GfxBufferDesc cbDesc(GfxBufferFlags::TransientConstant, GfxFormat_Unknown, 1, sizeof(m_constants));
 		m_cb = Gfx_CreateBuffer(cbDesc);
 
 		float vertices[] = {
@@ -46,8 +45,7 @@ public:
 		    +3.0f,
 		};
 
-		GfxBufferDesc vbDesc(
-		    GfxBufferType::Vertex, GfxBufferMode::Static, GfxFormat_Unknown, 3, fmtDesc.streamStride(0));
+		GfxBufferDesc vbDesc(GfxBufferFlags::Vertex, GfxFormat_Unknown, 3, fmtDesc.streamStride(0));
 		m_vb = Gfx_CreateBuffer(vbDesc, vertices);
 
 		Gfx_Release(vs);
@@ -65,7 +63,7 @@ public:
 	void update()
 	{
 		auto window = Platform_GetWindow();
-		auto ctx = Platform_GetGfxContext();
+		auto ctx    = Platform_GetGfxContext();
 
 		m_constants.shaderParams.x = (float)window->getSize().x;
 		m_constants.shaderParams.y = (float)window->getSize().y;
@@ -95,7 +93,6 @@ public:
 	}
 
 private:
-
 	GfxBuffer    m_vb;
 	GfxTechnique m_tech;
 	GfxBuffer    m_cb;

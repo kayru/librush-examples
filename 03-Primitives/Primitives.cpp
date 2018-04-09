@@ -59,7 +59,7 @@ public:
 			m_prim->drawLine(Line2(0.0f, 0.0f, 0.0f, 1.0f), ColorRGBA8::Green());
 
 			m_prim->drawTriangle(Vec2(-0.5f, -0.5f), Vec2(-0.5f, 0.0f), Vec2(0.0f, -0.5f), ColorRGBA8(255, 0, 0),
-				ColorRGBA8(0, 255, 0), ColorRGBA8(0, 0, 255));
+			    ColorRGBA8(0, 255, 0), ColorRGBA8(0, 0, 255));
 
 			m_prim->end2D();
 		}
@@ -78,7 +78,6 @@ public:
 
 			m_prim->end2D();
 		}
-		
 
 		Gfx_EndPass(ctx);
 	}

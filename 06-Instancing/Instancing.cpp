@@ -90,14 +90,12 @@ public:
 		m_meshVertexCount = RUSH_COUNTOF(meshVertices);
 		m_meshIndexCount  = RUSH_COUNTOF(meshIndices);
 
-		m_vertexBuffer.takeover(Gfx_CreateBuffer(GfxBufferDesc(GfxBufferType::Vertex, GfxBufferMode::Static,
-		                                             RUSH_COUNTOF(meshVertices), sizeof(meshVertices[0])),
-		    meshVertices));
+		m_vertexBuffer.takeover(Gfx_CreateBuffer(
+		    GfxBufferDesc(GfxBufferFlags::Vertex, RUSH_COUNTOF(meshVertices), sizeof(meshVertices[0])), meshVertices));
 
-		m_indexBuffer.takeover(
-		    Gfx_CreateBuffer(GfxBufferDesc(GfxBufferType::Index, GfxBufferMode::Static, GfxFormat_R32_Uint,
-		                         RUSH_COUNTOF(meshIndices), sizeof(meshIndices[0])),
-		        meshIndices));
+		m_indexBuffer.takeover(Gfx_CreateBuffer(
+		    GfxBufferDesc(GfxBufferFlags::Index, GfxFormat_R32_Uint, RUSH_COUNTOF(meshIndices), sizeof(meshIndices[0])),
+		    meshIndices));
 
 		GfxVertexFormatDesc vfDesc;
 		vfDesc.add(0, GfxVertexFormatDesc::DataType::Float3, GfxVertexFormatDesc::Semantic::Position, 0);
@@ -193,17 +191,14 @@ public:
 			Gfx_Release(vs);
 		}
 
-		m_globalConstantBuffer.takeover(Gfx_CreateBuffer(GfxBufferDesc(
-		    GfxBufferType::Constant, GfxBufferMode::Temporary, GfxFormat_Unknown, 1, sizeof(GlobalConstants))));
+		m_globalConstantBuffer.takeover(Gfx_CreateBuffer(
+		    GfxBufferDesc(GfxBufferFlags::TransientConstant, GfxFormat_Unknown, 1, sizeof(GlobalConstants))));
 
-		m_instanceConstantBuffer.takeover(Gfx_CreateBuffer(GfxBufferDesc(GfxBufferType::Constant,
-		    GfxBufferMode::Temporary,
-		    GfxFormat_Unknown,
-		    MaxInstanceCount,
-		    sizeof(InstanceConstants))));
+		m_instanceConstantBuffer.takeover(Gfx_CreateBuffer(GfxBufferDesc(
+		    GfxBufferFlags::TransientConstant, GfxFormat_Unknown, MaxInstanceCount, sizeof(InstanceConstants))));
 
-		m_dynamicInstanceConstantBuffer.takeover(Gfx_CreateBuffer(GfxBufferDesc(
-		    GfxBufferType::Constant, GfxBufferMode::Temporary, GfxFormat_Unknown, 1, sizeof(InstanceConstants))));
+		m_dynamicInstanceConstantBuffer.takeover(Gfx_CreateBuffer(
+		    GfxBufferDesc(GfxBufferFlags::TransientConstant, GfxFormat_Unknown, 1, sizeof(InstanceConstants))));
 
 		m_indirectArgs.resize(MaxInstanceCount);
 		for (u32 i = 0; i < MaxInstanceCount; ++i)
@@ -216,11 +211,8 @@ public:
 			arg.firstInstance      = i;
 		}
 
-		m_indirectArgsBuffer.takeover(Gfx_CreateBuffer(GfxBufferDesc(GfxBufferType::IndirectArgs,
-		                                                   GfxBufferMode::Static,
-		                                                   GfxFormat_Unknown,
-		                                                   MaxInstanceCount,
-		                                                   sizeof(GfxDrawIndexedArg)),
+		m_indirectArgsBuffer.takeover(Gfx_CreateBuffer(
+		    GfxBufferDesc(GfxBufferFlags::IndirectArgs, GfxFormat_Unknown, MaxInstanceCount, sizeof(GfxDrawIndexedArg)),
 		    m_indirectArgs.data()));
 
 		m_paddedInstanceConstants.resize(MaxInstanceCount);
@@ -366,8 +358,8 @@ public:
 
 				drawTime -= m_timer.time();
 
-				Gfx_UpdateBuffer(ctx, m_instanceConstantBuffer, m_instanceConstants.data(),
-				    batchSize * sizeof(InstanceConstants));
+				Gfx_UpdateBuffer(
+				    ctx, m_instanceConstantBuffer, m_instanceConstants.data(), batchSize * sizeof(InstanceConstants));
 				Gfx_SetConstantBuffer(ctx, 1, m_instanceConstantBuffer);
 
 				for (u32 i = 0; i < (u32)batchSize; ++i)
@@ -398,8 +390,8 @@ public:
 
 				drawTime -= m_timer.time();
 
-				Gfx_UpdateBuffer(ctx, m_instanceConstantBuffer, m_instanceConstants.data(),
-				    batchSize * sizeof(InstanceConstants));
+				Gfx_UpdateBuffer(
+				    ctx, m_instanceConstantBuffer, m_instanceConstants.data(), batchSize * sizeof(InstanceConstants));
 				Gfx_SetConstantBuffer(ctx, 1, m_instanceConstantBuffer);
 				Gfx_DrawIndexedInstanced(ctx, m_meshIndexCount, 0, 0, m_meshVertexCount, batchSize, 0);
 
@@ -427,8 +419,8 @@ public:
 
 				drawTime -= m_timer.time();
 
-				Gfx_UpdateBuffer(ctx, m_instanceConstantBuffer, m_instanceConstants.data(),
-				    batchSize * sizeof(InstanceConstants));
+				Gfx_UpdateBuffer(
+				    ctx, m_instanceConstantBuffer, m_instanceConstants.data(), batchSize * sizeof(InstanceConstants));
 				Gfx_SetConstantBuffer(ctx, 1, m_instanceConstantBuffer);
 
 				for (u32 i = 0; i < (u32)batchSize; ++i)
@@ -460,8 +452,8 @@ public:
 
 				drawTime -= m_timer.time();
 
-				Gfx_UpdateBuffer(ctx, m_instanceConstantBuffer, m_instanceConstants.data(),
-				    batchSize * sizeof(InstanceConstants));
+				Gfx_UpdateBuffer(
+				    ctx, m_instanceConstantBuffer, m_instanceConstants.data(), batchSize * sizeof(InstanceConstants));
 				Gfx_SetConstantBuffer(ctx, 1, m_instanceConstantBuffer);
 
 				Gfx_DrawIndexedIndirect(ctx, m_indirectArgsBuffer.get(), 0, batchSize);
