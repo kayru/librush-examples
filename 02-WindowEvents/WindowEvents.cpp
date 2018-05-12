@@ -1,6 +1,7 @@
 #include <Rush/Platform.h>
 #include <Rush/Rush.h>
 #include <Rush/Window.h>
+#include <Rush/GfxDevice.h>
 
 #include <memory>
 #include <stdio.h>
@@ -47,6 +48,14 @@ public:
 		}
 
 		m_events.clear();
+
+		GfxContext* gfxContext = Platform_GetGfxContext();
+
+		GfxPassDesc passDesc;
+		passDesc.flags          = GfxPassFlags::ClearAll;
+		passDesc.clearColors[0] = ColorRGBA8(11, 22, 33);
+		Gfx_BeginPass(gfxContext, passDesc);
+		Gfx_EndPass(gfxContext);
 	}
 
 private:
