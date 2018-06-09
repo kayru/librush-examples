@@ -12,8 +12,6 @@
 #define sprintf_s sprintf // TODO: make a common cross-compiler/platform equivalent
 #endif
 
-using namespace Rush;
-
 class VSyncTestApp : public Application
 {
 public:

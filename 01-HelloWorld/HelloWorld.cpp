@@ -4,8 +4,6 @@
 
 #include <stdio.h>
 
-using namespace Rush;
-
 static void update(void* userData)
 {
 	GfxContext* gfxContext = Platform_GetGfxContext();

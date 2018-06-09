@@ -10,8 +10,6 @@
 #include <memory>
 #include <stdio.h>
 
-using namespace Rush;
-
 class ShadersApp : public Rush::Application
 {
 public:

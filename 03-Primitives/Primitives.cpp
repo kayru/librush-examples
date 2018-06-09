@@ -6,8 +6,6 @@
 
 #include <stdio.h>
 
-using namespace Rush;
-
 class PrimitivesApp : public Application
 {
 public:

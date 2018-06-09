@@ -14,8 +14,6 @@
 #include <stdio.h>
 #include <vector>
 
-using namespace Rush;
-
 class InstancingApp : public ExampleApp
 {
 public:

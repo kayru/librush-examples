@@ -6,8 +6,6 @@
 #include <memory>
 #include <stdio.h>
 
-using namespace Rush;
-
 class WindowEventsApp : public Application
 {
 public:
