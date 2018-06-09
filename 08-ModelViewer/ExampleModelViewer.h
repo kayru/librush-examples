@@ -32,6 +32,9 @@ private:
 	void render();
 
 	bool loadModel(const char* filename);
+	bool loadModelObj(const char* filename);
+	bool loadModelNative(const char* filename);
+
 	GfxRef<GfxTexture> loadTexture(const std::string& filename);
 
 	Timer m_timer;

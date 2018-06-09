@@ -9,6 +9,8 @@ add_executable(${app}
 	${shaders}
 	ExampleModelViewer.h
 	ExampleModelViewer.cpp
+	Model.h
+	Model.cpp
 )
 
 target_link_libraries(${app} Common Rush stb tiny_obj_loader)

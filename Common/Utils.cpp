@@ -5,7 +5,7 @@
 namespace Rush
 {
 
-inline bool endsWith(const char* str, const char* suffix)
+bool endsWith(const char* str, const char* suffix)
 {
 	size_t len1 = strlen(str);
 	size_t len2 = strlen(suffix);

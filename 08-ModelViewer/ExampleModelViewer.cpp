@@ -12,6 +12,8 @@
 #include <Rush/UtilHash.h>
 #include <Rush/UtilLog.h>
 
+#include "Model.h"
+
 #include <stb_image.h>
 #include <stb_image_resize.h>
 #include <tiny_obj_loader.h>
@@ -87,6 +89,11 @@ ExampleModelViewer::ExampleModelViewer() : ExampleApp(), m_boundingBox(Vec3(0.0f
 		m_statusString            = std::string("Model: ") + modelFilename;
 		m_valid                   = loadModel(modelFilename);
 
+		if (!m_valid)
+		{
+			RUSH_LOG("Could not load model from '%s'\n", modelFilename);
+		}
+
 		Vec3  center       = m_boundingBox.center();
 		Vec3  dimensions   = m_boundingBox.dimensions();
 		float longest_side = dimensions.reduceMax();
@@ -152,7 +159,7 @@ void ExampleModelViewer::update()
 			{
 				m_cameraScale *= 0.9f;
 			}
-			Log::message("Camera scale: %f", m_cameraScale);
+			RUSH_LOG("Camera scale: %f", m_cameraScale);
 			break;
 		default: break;
 		}
@@ -267,28 +274,14 @@ void ExampleModelViewer::render()
 	Gfx_EndPass(ctx);
 }
 
-static std::string directoryFromFilename(const std::string& filename)
-{
-	size_t pos = filename.find_last_of("/\\");
-	if (pos != std::string::npos)
-	{
-		return filename.substr(0, pos + 1);
-	}
-	else
-	{
-		return std::string();
-	}
-}
-
 GfxRef<GfxTexture> ExampleModelViewer::loadTexture(const std::string& filename)
 {
 	auto it = m_textures.find(filename);
 	if (it == m_textures.end())
 	{
-		Log::message("Loading texture '%s'", filename.c_str());
+		RUSH_LOG("Loading texture '%s'", filename.c_str());
 
 		int w, h, comp;
-		stbi_set_flip_vertically_on_load(true);
 		u8* pixels = stbi_load(filename.c_str(), &w, &h, &comp, 4);
 
 		GfxRef<GfxTexture> texture;
@@ -335,7 +328,7 @@ GfxRef<GfxTexture> ExampleModelViewer::loadTexture(const std::string& filename)
 		}
 		else
 		{
-			Log::warning("Failed to load texture '%s'", filename.c_str());
+			RUSH_LOG("Failed to load texture '%s'", filename.c_str());
 		}
 
 		return texture;
@@ -346,10 +339,8 @@ GfxRef<GfxTexture> ExampleModelViewer::loadTexture(const std::string& filename)
 	}
 }
 
-bool ExampleModelViewer::loadModel(const char* filename)
+bool ExampleModelViewer::loadModelObj(const char* filename)
 {
-	Log::message("Loading model '%s'", filename);
-
 	std::vector<tinyobj::shape_t>    shapes;
 	std::vector<tinyobj::material_t> materials;
 	std::string                      errors;
@@ -359,7 +350,7 @@ bool ExampleModelViewer::loadModel(const char* filename)
 	bool loaded = tinyobj::LoadObj(shapes, materials, errors, filename, directory.c_str());
 	if (!loaded)
 	{
-		Log::error("Could not load model from '%s'\n%s\n", filename, errors.c_str());
+		RUSH_LOG_ERROR("OBJ loader error: %s", errors.c_str());
 		return false;
 	}
 
@@ -432,6 +423,8 @@ bool ExampleModelViewer::loadModel(const char* filename)
 			{
 				v.texcoord.x = mesh.texcoords[i * 2 + 0];
 				v.texcoord.y = mesh.texcoords[i * 2 + 1];
+
+				v.texcoord.y = 1.0f - v.texcoord.y;
 			}
 			else
 			{
@@ -515,4 +508,111 @@ bool ExampleModelViewer::loadModel(const char* filename)
 	m_indexBuffer = Gfx_CreateBuffer(ibDesc, indices.data());
 
 	return true;
+}
+
+bool ExampleModelViewer::loadModelNative(const char* filename)
+{
+	Model model;
+
+	if (!model.read(filename))
+	{
+		return false;
+	}
+
+	std::string directory = directoryFromFilename(filename);
+
+	const GfxBufferDesc materialCbDesc(GfxBufferFlags::Constant, GfxFormat_Unknown, 1, sizeof(MaterialConstants));
+	for (const auto& offlineMaterial : model.materials)
+	{
+		MaterialConstants constants;
+		constants.baseColor.x = offlineMaterial.baseColor.x;
+		constants.baseColor.y = offlineMaterial.baseColor.y;
+		constants.baseColor.z = offlineMaterial.baseColor.z;
+		constants.baseColor.w = 1.0f;
+
+		Material material;
+		if (offlineMaterial.albedoTexture[0])
+		{
+			material.albedoTexture = loadTexture(directory + std::string(offlineMaterial.albedoTexture));
+		}
+
+		{
+			u64  constantHash = hashFnv1a64(&constants, sizeof(constants));
+			auto it           = m_materialConstantBuffers.find(constantHash);
+			if (it == m_materialConstantBuffers.end())
+			{
+				GfxBuffer cb = Gfx_CreateBuffer(materialCbDesc, &constants);
+				m_materialConstantBuffers[constantHash].retain(cb);
+				material.constantBuffer.retain(cb);
+			}
+			else
+			{
+				material.constantBuffer = it->second;
+			}
+		}
+
+		m_materials.push_back(material);
+	}
+
+	{
+		MaterialConstants constants;
+		constants.baseColor = Vec4(1.0f);
+		m_defaultMaterial.constantBuffer.takeover(Gfx_CreateBuffer(materialCbDesc, &constants));
+		m_defaultMaterial.albedoTexture.retain(m_defaultWhiteTexture);
+	}
+
+	m_segments.reserve(model.segments.size());
+	for (const auto& offlineSegment : model.segments)
+	{
+		MeshSegment segment;
+		segment.indexCount  = offlineSegment.indexCount;
+		segment.indexOffset = offlineSegment.indexOffset;
+		segment.material    = offlineSegment.material;
+		m_segments.push_back(segment);
+	}
+
+	m_vertexCount = u32(model.vertices.size());
+	m_indexCount  = u32(model.indices.size());
+
+	std::vector<Vertex> vertices;
+	vertices.reserve(m_vertexCount);
+
+	for (u32 i = 0; i < m_vertexCount; ++i)
+	{
+		const auto& vSrc = model.vertices[i];
+		Vertex      vDst;
+
+		vDst.position = vSrc.position;
+		vDst.normal   = vSrc.normal;
+		vDst.texcoord = vSrc.texcoord;
+
+		vertices.push_back(vDst);
+	}
+
+	GfxBufferDesc vbDesc(GfxBufferFlags::Vertex, GfxFormat_Unknown, m_vertexCount, sizeof(Vertex));
+	m_vertexBuffer = Gfx_CreateBuffer(vbDesc, vertices.data());
+
+	GfxBufferDesc ibDesc(GfxBufferFlags::Index, GfxFormat_R32_Uint, m_indexCount, 4);
+	m_indexBuffer = Gfx_CreateBuffer(ibDesc, model.indices.data());
+
+	return true;
+}
+
+bool ExampleModelViewer::loadModel(const char* filename)
+{
+	RUSH_LOG("Loading model '%s'", filename);
+
+	if (endsWith(filename, ".obj"))
+	{
+		return loadModelObj(filename);
+	}
+	else if (endsWith(filename, ".model"))
+	{
+		return loadModelNative(filename);
+	}
+	else
+	{
+		RUSH_LOG_ERROR("Unsupported model file extension.");
+		return false;
+	}
 }
