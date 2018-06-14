@@ -18,6 +18,8 @@
 #include <stb_image_resize.h>
 #include <tiny_obj_loader.h>
 
+#include <chrono>
+
 #ifdef __GNUC__
 #define sprintf_s sprintf // TODO: make a common cross-compiler/platform equivalent
 #endif
@@ -119,10 +121,21 @@ ExampleModelViewer::ExampleModelViewer() : ExampleApp(), m_boundingBox(Vec3(0.0f
 	m_interpolatedCamera = m_camera;
 
 	m_cameraMan = new CameraManipulator();
+
+	m_loadingThread = std::thread([this]() { this->loadingThreadFunction(); });
 }
 
 ExampleModelViewer::~ExampleModelViewer()
 {
+	m_loadingThreadShouldExit = true;
+	m_loadingThread.join();
+
+	for (const auto& it : m_textures)
+	{
+		Gfx_Release(it.second->albedoTexture);
+		delete it.second;
+	}
+
 	m_windowEvents.setOwner(nullptr);
 
 	delete m_cameraMan;
@@ -176,6 +189,35 @@ void ExampleModelViewer::update()
 	m_interpolatedCamera.blendTo(m_camera, 0.1f, 0.125f);
 
 	m_windowEvents.clear();
+
+	{
+		TextureData* textureData = nullptr;
+		m_loadingMutex.lock();
+		if (!m_loadedTextures.empty())
+		{
+			textureData = m_loadedTextures.back();
+			m_loadedTextures.pop_back();
+		}
+		m_loadingMutex.unlock();
+
+		if (textureData)
+		{
+			GfxTextureData mipData[16];
+			for (u32 i = 0; i < textureData->desc.mips; ++i)
+			{
+				mipData[i] = GfxTextureData(textureData->mips[i].data());
+				mipData[i].mip = i;
+			}
+
+			textureData->albedoTexture = Gfx_CreateTexture(textureData->desc, mipData, textureData->desc.mips);
+
+			for (u32 i : textureData->patchList)
+			{
+				m_materials[i].albedoTexture.retain(textureData->albedoTexture);
+			}
+		}
+	}
+
 	render();
 }
 
@@ -218,20 +260,15 @@ void ExampleModelViewer::render()
 		Gfx_SetIndexStream(ctx, m_indexBuffer);
 		Gfx_SetConstantBuffer(ctx, 0, m_constantBuffer);
 
+		Gfx_SetSampler(ctx, GfxStage::Pixel, 0, m_samplerStates.anisotropicWrap);
+
 		for (const MeshSegment& segment : m_segments)
 		{
-			GfxTexture texture = m_defaultWhiteTexture;
-
 			const Material& material =
 			    (segment.material == 0xFFFFFFFF) ? m_defaultMaterial : m_materials[segment.material];
-			if (material.albedoTexture.valid())
-			{
-				texture = material.albedoTexture.get();
-			}
-			Gfx_SetConstantBuffer(ctx, 1, material.constantBuffer);
 
-			Gfx_SetSampler(ctx, GfxStage::Pixel, 0, m_samplerStates.anisotropicWrap);
-			Gfx_SetTexture(ctx, GfxStage::Pixel, 0, texture);
+			Gfx_SetConstantBuffer(ctx, 1, material.constantBuffer);
+			Gfx_SetTexture(ctx, GfxStage::Pixel, 0, material.albedoTexture);
 
 			Gfx_DrawIndexed(ctx, segment.indexCount, segment.indexOffset, 0, m_vertexCount);
 		}
@@ -274,68 +311,99 @@ void ExampleModelViewer::render()
 	Gfx_EndPass(ctx);
 }
 
-GfxRef<GfxTexture> ExampleModelViewer::loadTexture(const std::string& filename)
+void ExampleModelViewer::loadingThreadFunction()
 {
-	auto it = m_textures.find(filename);
-	if (it == m_textures.end())
+	while (!m_loadingThreadShouldExit)
 	{
-		RUSH_LOG("Loading texture '%s'", filename.c_str());
+		TextureData* pendingLoad = nullptr;
 
-		int w, h, comp;
-		u8* pixels = stbi_load(filename.c_str(), &w, &h, &comp, 4);
-
-		GfxRef<GfxTexture> texture;
-
-		if (pixels)
+		m_loadingMutex.lock();
+		if (!m_pendingTextures.empty())
 		{
-			std::vector<std::unique_ptr<u8>> mips;
-			mips.reserve(16);
+			pendingLoad = m_pendingTextures.back();
+			m_pendingTextures.pop_back();
+		}
+		m_loadingMutex.unlock();
 
-			std::vector<GfxTextureData> textureData;
-			textureData.reserve(16);
-			textureData.push_back(GfxTextureData(pixels));
+		if (pendingLoad)
+		{
+			RUSH_LOG("Loading texture '%s'", pendingLoad->filename.c_str());
 
-			u32 mipWidth  = w;
-			u32 mipHeight = h;
+			int w, h, comp;
+			u8* pixels = stbi_load(pendingLoad->filename.c_str(), &w, &h, &comp, 4);
 
-			while (mipWidth != 1 && mipHeight != 1)
+			if (pixels)
 			{
-				u32 nextMipWidth  = max<u32>(1, mipWidth / 2);
-				u32 nextMipHeight = max<u32>(1, mipHeight / 2);
+				u32 mipIndex = 0;
 
-				u8* nextMip = new u8[nextMipWidth * nextMipHeight * 4];
-				mips.push_back(std::unique_ptr<u8>(nextMip));
+				{
+					u32 levelSize = w * h * 4;
+					pendingLoad->mips[mipIndex].resize(levelSize);
+					memcpy(pendingLoad->mips[mipIndex].data(), pixels, levelSize);
+					mipIndex++;
+				}
 
-				const u32 mipPitch     = mipWidth * 4;
-				const u32 nextMipPitch = nextMipWidth * 4;
-				int       resizeResult = stbir_resize_uint8((const u8*)textureData.back().pixels, mipWidth, mipHeight,
-                    mipPitch, nextMip, nextMipWidth, nextMipHeight, nextMipPitch, 4);
-				RUSH_ASSERT(resizeResult);
+				u32 mipWidth  = w;
+				u32 mipHeight = h;
 
-				textureData.push_back(GfxTextureData(nextMip, (u32)textureData.size()));
+				while (mipWidth != 1 && mipHeight != 1)
+				{
+					u32 nextMipWidth  = max<u32>(1, mipWidth / 2);
+					u32 nextMipHeight = max<u32>(1, mipHeight / 2);
 
-				mipWidth  = nextMipWidth;
-				mipHeight = nextMipHeight;
+					u32 levelSize = nextMipWidth * nextMipHeight * 4;
+					pendingLoad->mips[mipIndex].resize(levelSize);
+
+					const u32 mipPitch     = mipWidth * 4;
+					const u32 nextMipPitch = nextMipWidth * 4;
+
+					int resizeResult = stbir_resize_uint8(pendingLoad->mips[mipIndex - 1].data(), mipWidth, mipHeight,
+					    mipPitch, pendingLoad->mips[mipIndex].data(), nextMipWidth, nextMipHeight, nextMipPitch, 4);
+					RUSH_ASSERT(resizeResult);
+
+					mipIndex++;
+					mipWidth  = nextMipWidth;
+					mipHeight = nextMipHeight;
+				}
+
+				pendingLoad->desc      = GfxTextureDesc::make2D(w, h);
+				pendingLoad->desc.mips = mipIndex;
+
+				m_loadingMutex.lock();
+				m_loadedTextures.push_back(pendingLoad);
+				m_loadingMutex.unlock();
 			}
-
-			GfxTextureDesc desc = GfxTextureDesc::make2D(w, h);
-			desc.mips           = (u32)textureData.size();
-
-			texture.takeover(Gfx_CreateTexture(desc, textureData.data(), (u32)textureData.size()));
-			m_textures.insert(std::make_pair(filename, texture));
-
-			stbi_image_free(pixels);
+			else
+			{
+				RUSH_LOG("Failed to load texture '%s'", pendingLoad->filename.c_str());
+			}
 		}
 		else
 		{
-			RUSH_LOG("Failed to load texture '%s'", filename.c_str());
+			using namespace std::chrono_literals;
+			std::this_thread::sleep_for(100ms);
 		}
+	}
+}
 
-		return texture;
+void ExampleModelViewer::enqueueLoadTexture(const std::string& filename, u32 materialId)
+{
+	auto it = m_textures.find(filename);
+
+	if (it == m_textures.end())
+	{
+		TextureData* textureData = new TextureData;
+		textureData->filename    = filename;
+
+		textureData->patchList.push_back(materialId);
+
+		m_textures[filename] = textureData;
+
+		m_pendingTextures.push_back(textureData);
 	}
 	else
 	{
-		return it->second;
+		it->second->patchList.push_back(materialId);
 	}
 }
 
@@ -363,11 +431,15 @@ bool ExampleModelViewer::loadModelObj(const char* filename)
 		constants.baseColor.z = objMaterial.diffuse[2];
 		constants.baseColor.w = 1.0f;
 
+		u32 materialId = u32(m_materials.size());
+
 		Material material;
 		if (!objMaterial.diffuse_texname.empty())
 		{
-			material.albedoTexture = loadTexture(directory + objMaterial.diffuse_texname);
+			enqueueLoadTexture(directory + objMaterial.diffuse_texname, materialId);
 		}
+
+		material.albedoTexture.retain(m_defaultWhiteTexture);
 
 		{
 			u64  constantHash = hashFnv1a64(&constants, sizeof(constants));
@@ -393,6 +465,8 @@ bool ExampleModelViewer::loadModelObj(const char* filename)
 		m_defaultMaterial.constantBuffer.takeover(Gfx_CreateBuffer(materialCbDesc, &constants));
 		m_defaultMaterial.albedoTexture.retain(m_defaultWhiteTexture);
 	}
+
+	RUSH_LOG("Converting mesh");
 
 	std::vector<Vertex> vertices;
 	std::vector<u32>    indices;
@@ -501,6 +575,8 @@ bool ExampleModelViewer::loadModelObj(const char* filename)
 		m_indexCount  = (u32)indices.size();
 	}
 
+	RUSH_LOG("Uploading mesh to GPU");
+
 	GfxBufferDesc vbDesc(GfxBufferFlags::Vertex, GfxFormat_Unknown, m_vertexCount, sizeof(Vertex));
 	m_vertexBuffer = Gfx_CreateBuffer(vbDesc, vertices.data());
 
@@ -530,11 +606,15 @@ bool ExampleModelViewer::loadModelNative(const char* filename)
 		constants.baseColor.z = offlineMaterial.baseColor.z;
 		constants.baseColor.w = 1.0f;
 
+		u32 materialId = u32(m_materials.size());
+
 		Material material;
 		if (offlineMaterial.albedoTexture[0])
 		{
-			material.albedoTexture = loadTexture(directory + std::string(offlineMaterial.albedoTexture));
+			enqueueLoadTexture(directory + std::string(offlineMaterial.albedoTexture), materialId);
 		}
+
+		material.albedoTexture.retain(m_defaultWhiteTexture);
 
 		{
 			u64  constantHash = hashFnv1a64(&constants, sizeof(constants));
@@ -571,8 +651,12 @@ bool ExampleModelViewer::loadModelNative(const char* filename)
 		m_segments.push_back(segment);
 	}
 
+	RUSH_LOG("Converting mesh");
+
 	m_vertexCount = u32(model.vertices.size());
 	m_indexCount  = u32(model.indices.size());
+
+	m_boundingBox.expandInit();
 
 	std::vector<Vertex> vertices;
 	vertices.reserve(m_vertexCount);
@@ -586,8 +670,12 @@ bool ExampleModelViewer::loadModelNative(const char* filename)
 		vDst.normal   = vSrc.normal;
 		vDst.texcoord = vSrc.texcoord;
 
+		m_boundingBox.expand(vSrc.position);
+
 		vertices.push_back(vDst);
 	}
+
+	RUSH_LOG("Uploading mesh to GPU");
 
 	GfxBufferDesc vbDesc(GfxBufferFlags::Vertex, GfxFormat_Unknown, m_vertexCount, sizeof(Vertex));
 	m_vertexBuffer = Gfx_CreateBuffer(vbDesc, vertices.data());

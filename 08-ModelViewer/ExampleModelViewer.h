@@ -13,9 +13,11 @@
 #include <Common/ExampleApp.h>
 #include <Common/Utils.h>
 
-#include <stdio.h>
 #include <memory>
+#include <mutex>
+#include <stdio.h>
 #include <string>
+#include <thread>
 #include <unordered_map>
 
 class ExampleModelViewer : public ExampleApp
@@ -35,7 +37,7 @@ private:
 	bool loadModelObj(const char* filename);
 	bool loadModelNative(const char* filename);
 
-	GfxRef<GfxTexture> loadTexture(const std::string& filename);
+	void enqueueLoadTexture(const std::string& filename, u32 materialId);
 
 	Timer m_timer;
 
@@ -69,7 +71,6 @@ private:
 	{
 		Mat4 matViewProj = Mat4::identity();
 		Mat4 matWorld = Mat4::identity();
-		Vec4 baseColor = Vec4(1.0f);
 	};
 
 	Mat4 m_worldTransform = Mat4::identity();
@@ -86,7 +87,6 @@ private:
 	std::string m_statusString;
 	bool m_valid = false;
 
-	std::unordered_map<std::string, GfxRef<GfxTexture>> m_textures;
 	std::unordered_map<u64, GfxRef<GfxBuffer>> m_materialConstantBuffers;
 
 	struct MaterialConstants
@@ -115,4 +115,24 @@ private:
 	WindowEventListener m_windowEvents;
 
 	float m_cameraScale = 1.0f;
+
+	struct TextureData
+	{
+		GfxTextureDesc   desc;
+		std::vector<u8>  mips[16];
+		std::vector<u32> patchList;
+		std::string      filename;
+		GfxTexture       albedoTexture;
+	};
+
+	std::unordered_map<std::string, TextureData*> m_textures;
+	std::vector<TextureData*>                     m_pendingTextures;
+	std::vector<TextureData*>                     m_loadedTextures;
+
+	std::thread m_loadingThread;
+	bool        m_loadingThreadShouldExit = false;
+
+	std::mutex m_loadingMutex;
+
+	void loadingThreadFunction();
 };
