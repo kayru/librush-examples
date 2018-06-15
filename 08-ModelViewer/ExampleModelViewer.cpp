@@ -122,13 +122,20 @@ ExampleModelViewer::ExampleModelViewer() : ExampleApp(), m_boundingBox(Vec3(0.0f
 
 	m_cameraMan = new CameraManipulator();
 
-	m_loadingThread = std::thread([this]() { this->loadingThreadFunction(); });
+	u32 threadCount = std::thread::hardware_concurrency();
+	for (u32 i = 0; i < threadCount; ++i)
+	{
+		m_loadingThreads.push_back(std::thread([this]() { this->loadingThreadFunction(); }));
+	}
 }
 
 ExampleModelViewer::~ExampleModelViewer()
 {
 	m_loadingThreadShouldExit = true;
-	m_loadingThread.join();
+	for (auto& it : m_loadingThreads)
+	{
+		it.join();
+	}
 
 	for (const auto& it : m_textures)
 	{

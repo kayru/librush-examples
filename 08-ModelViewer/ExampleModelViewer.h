@@ -129,7 +129,7 @@ private:
 	std::vector<TextureData*>                     m_pendingTextures;
 	std::vector<TextureData*>                     m_loadedTextures;
 
-	std::thread m_loadingThread;
+	std::vector<std::thread> m_loadingThreads;
 	bool        m_loadingThreadShouldExit = false;
 
 	std::mutex m_loadingMutex;
