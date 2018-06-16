@@ -9,6 +9,12 @@
 namespace Rush
 {
 
+#if RUSH_RENDER_API == RUSH_RENDER_API_MTL
+#define RUSH_SHADER_NAME(x) x ".metal"
+#else
+#define RUSH_SHADER_NAME(x) x ".bin"
+#endif
+
 GfxShaderSource loadShaderFromFile(
     const char* filename, const char* shaderDirectory = Platform_GetExecutableDirectory());
 

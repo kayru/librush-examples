@@ -106,8 +106,8 @@ public:
 		m_vertexFormatInstanceId.takeover(Gfx_CreateVertexFormat(vfDescInstanceId));
 
 		{
-			GfxVertexShader vs = Gfx_CreateVertexShader(loadShaderFromFile("ModelVS.hlsl.bin"));
-			GfxPixelShader  ps = Gfx_CreatePixelShader(loadShaderFromFile("ModelPS.hlsl.bin"));
+			GfxVertexShader vs = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelVS.hlsl")));
+			GfxPixelShader  ps = Gfx_CreatePixelShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelPS.hlsl")));
 
 			struct SpecializationData
 			{
@@ -129,7 +129,7 @@ public:
 			}
 
 			{
-				GfxVertexShader   vsPush = Gfx_CreateVertexShader(loadShaderFromFile("ModelPush.vert.bin"));
+				GfxVertexShader   vsPush = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelPush.vert")));
 				GfxShaderBindings bindings;
 				bindings.addPushConstants("PushConstants", GfxStageFlags::Vertex, sizeof(Mat4));
 				bindings.addConstantBuffer("Global", 0);
@@ -143,7 +143,7 @@ public:
 			}
 
 			{
-				GfxVertexShader   vsPushOffset = Gfx_CreateVertexShader(loadShaderFromFile("ModelPushOffset.vert.bin"));
+				GfxVertexShader   vsPushOffset = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelPushOffset.vert")));
 				GfxShaderBindings bindings;
 				bindings.addPushConstants("PushConstants", GfxStageFlags::Vertex, sizeof(u32));
 				bindings.addConstantBuffer("Global", 0);
@@ -158,7 +158,7 @@ public:
 			}
 
 			{
-				GfxVertexShader   vsInstanced = Gfx_CreateVertexShader(loadShaderFromFile("ModelInstanced.vert.bin"));
+				GfxVertexShader   vsInstanced = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelInstanced.vert")));
 				GfxShaderBindings bindings;
 				bindings.addConstantBuffer("Global", 0);
 				bindings.addConstantBuffer("Instance", 1);
@@ -172,7 +172,7 @@ public:
 			}
 
 			{
-				GfxVertexShader   vsInstanceId = Gfx_CreateVertexShader(loadShaderFromFile("ModelInstanced.vert.bin"));
+				GfxVertexShader   vsInstanceId = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelInstanced.vert")));
 				GfxShaderBindings bindings;
 				bindings.addConstantBuffer("Global", 0);
 				bindings.addConstantBuffer("Instance", 1);
@@ -319,6 +319,7 @@ public:
 				drawTime += m_timer.time();
 			}
 		}
+#if RUSH_RENDER_API != RUSH_RENDER_API_MTL
 		else if (m_method == Method::PushConstants)
 		{
 			Gfx_SetTechnique(ctx, m_techniquePush);
@@ -459,6 +460,7 @@ public:
 				drawTime += m_timer.time();
 			}
 		}
+#endif
 
 		m_cpuTime.add(drawTime);
 

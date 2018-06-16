@@ -36,7 +36,8 @@ GfxShaderSource loadShaderFromFile(const char* filename, const char* shaderDirec
 
 	if (endsWith(fullFilename, ".metal"))
 	{
-		source.type = GfxShaderSourceType::GfxShaderSourceType_Metal;
+		source.type = GfxShaderSourceType::GfxShaderSourceType_MSL;
+		source.entry = "main0";
 		isText      = true;
 	}
 	else if (endsWith(fullFilename, ".hlsl"))

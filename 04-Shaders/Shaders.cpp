@@ -18,10 +18,8 @@ public:
 		GfxVertexShader vs;
 		GfxPixelShader  ps;
 
-		const auto& caps = Gfx_GetCapability();
-
-		vs = Gfx_CreateVertexShader(loadShaderFromFile("Vertex.hlsl.bin"));
-		ps = Gfx_CreatePixelShader(loadShaderFromFile("Pixel.hlsl.bin"));
+		vs = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("Vertex.hlsl")));
+		ps = Gfx_CreatePixelShader(loadShaderFromFile(RUSH_SHADER_NAME("Pixel.hlsl")));
 
 		GfxVertexFormatDesc fmtDesc;
 		fmtDesc.add(0, GfxVertexFormatDesc::DataType::Float2, GfxVertexFormatDesc::Semantic::Position, 0);

@@ -1,7 +1,9 @@
 cbuffer constantBuffer0 : register(b0)
 {
 	float g_elapsedTime;
-	float g_padding[3];
+	float g_padding0;
+	float g_padding1;
+	float g_padding2;
 };
 
 RWTexture2D<float4> outputImage : register(u1);

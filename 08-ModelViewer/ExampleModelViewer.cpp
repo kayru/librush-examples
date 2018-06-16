@@ -64,8 +64,8 @@ ExampleModelViewer::ExampleModelViewer() : ExampleApp(), m_boundingBox(Vec3(0.0f
 	m_defaultWhiteTexture                = Gfx_CreateTexture(textureDesc, whiteTexturePixels);
 
 	{
-		m_vs = Gfx_CreateVertexShader(loadShaderFromFile("ModelVS.hlsl.bin"));
-		m_ps = Gfx_CreatePixelShader(loadShaderFromFile("ModelPS.hlsl.bin"));
+		m_vs = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelVS.hlsl")));
+		m_ps = Gfx_CreatePixelShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelPS.hlsl")));
 	}
 
 	GfxVertexFormatDesc vfDesc;
@@ -241,6 +241,8 @@ void ExampleModelViewer::render()
 
 	GfxContext* ctx = Platform_GetGfxContext();
 
+	GfxMarkerScope markerFrame(ctx, "Frame");
+
 	{
 		TimingScope timingScope(m_stats.cpuUpdateConstantBuffer);
 		Gfx_UpdateBuffer(ctx, m_constantBuffer, &constants, sizeof(constants));
@@ -258,6 +260,8 @@ void ExampleModelViewer::render()
 
 	if (m_valid)
 	{
+		GfxMarkerScope markerFrame(ctx, "Model");
+
 		TimingScope timingScope(m_stats.cpuModel);
 
 		Gfx_SetBlendState(ctx, m_blendStates.opaque);
@@ -282,6 +286,8 @@ void ExampleModelViewer::render()
 	}
 
 	{
+		GfxMarkerScope markerFrame(ctx, "UI");
+
 		TimingScope timingScope(m_stats.cpuUI);
 
 		Gfx_SetBlendState(ctx, m_blendStates.lerp);

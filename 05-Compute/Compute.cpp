@@ -17,7 +17,7 @@ public:
 	{
 		m_prim = new PrimitiveBatch();
 
-		m_computeShader = Gfx_CreateComputeShader(loadShaderFromFile("ComputeShader.hlsl.bin"));
+		m_computeShader = Gfx_CreateComputeShader(loadShaderFromFile(RUSH_SHADER_NAME("ComputeShader.hlsl")));
 
 		GfxBufferDesc cbDesc(GfxBufferFlags::TransientConstant, GfxFormat_Unknown, 1, sizeof(m_constants));
 		m_constantBuffer = Gfx_CreateBuffer(cbDesc);
