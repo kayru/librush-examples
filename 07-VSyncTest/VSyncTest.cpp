@@ -45,7 +45,7 @@ public:
 		Gfx_SetViewport(ctx, GfxViewport(window->getFramebufferSize()));
 		Gfx_SetScissorRect(ctx, window->getFramebufferSize());
 
-		const bool overTime = deltaTime > (1.01 / 60.0);
+		const bool overTime = deltaTime > (1.05 / 60.0);
 		if (overTime)
 		{
 			Log::message("Long frame time: %f ms", deltaTime * 1000.0);
@@ -57,7 +57,7 @@ public:
 		const float  posX = float(t - (int)t) * window->getSizeFloat().x;
 		const float  size = max(1.0f, window->getSizeFloat().x * 0.01f);
 		m_prim->drawRect(Box2(posX - size, 0, posX + size, window->getSizeFloat().y),
-		    overTime ? ColorRGBA8(255, 0, 0) : ColorRGBA8(128, 128, 255));
+		    ColorRGBA8(128, 128, 255));
 
 		m_font->setScale(2.0f);
 		char str[1024];
