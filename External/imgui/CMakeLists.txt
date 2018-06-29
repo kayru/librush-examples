@@ -10,4 +10,10 @@ add_library(imgui
 	stb_truetype.h
 )
 target_include_directories(imgui INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
-target_compile_options(imgui PRIVATE "-w")
+
+if (MSVC)
+	target_compile_options(imgui PRIVATE -W0 -wd4996)
+else()
+	target_compile_options(imgui PRIVATE -w)
+endif()
+
