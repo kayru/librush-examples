@@ -36,6 +36,26 @@ ExampleApp::ExampleApp() : m_window(Platform_GetWindow())
 		m_depthStencilStates.writeLessEqual.takeover(Gfx_CreateDepthStencilState(desc));
 	}
 
+	// Rasterizer states
+
+	{
+		GfxRasterizerDesc desc;
+		desc.cullMode = GfxCullMode::CW;
+		m_rasterizerStates.solidCullCW.takeover(Gfx_CreateRasterizerState(desc));
+	}
+
+	{
+		GfxRasterizerDesc desc;
+		desc.cullMode = GfxCullMode::CCW;
+		m_rasterizerStates.solidCullCCW.takeover(Gfx_CreateRasterizerState(desc));
+	}
+
+	{
+		GfxRasterizerDesc desc;
+		desc.cullMode = GfxCullMode::None;
+		m_rasterizerStates.solidNoCull.takeover(Gfx_CreateRasterizerState(desc));
+	}
+
 	// Blend states
 
 	{

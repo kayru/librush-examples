@@ -257,6 +257,7 @@ void ExampleModelViewer::render()
 	Gfx_SetScissorRect(ctx, m_window->getSize());
 
 	Gfx_SetDepthStencilState(ctx, m_depthStencilStates.writeLessEqual);
+	Gfx_SetRasterizerState(ctx, m_rasterizerStates.solidCullCW);
 
 	if (m_valid)
 	{

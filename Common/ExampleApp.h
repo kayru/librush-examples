@@ -24,6 +24,13 @@ protected:
 		GfxDepthStencilStateRef disable;
 	} m_depthStencilStates;
 
+	struct RasterizerStates
+	{
+		GfxRasterizerStateRef solidCullCW;
+		GfxRasterizerStateRef solidCullCCW;
+		GfxRasterizerStateRef solidNoCull;
+	} m_rasterizerStates;
+
 	struct SamplerStates
 	{
 		GfxSamplerRef pointClamp;
