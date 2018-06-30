@@ -31,13 +31,13 @@ public:
 		auto window = Platform_GetWindow();
 		auto ctx    = Platform_GetGfxContext();
 
-		Gfx_SetViewport(ctx, GfxViewport(window->getSize()));
-		Gfx_SetScissorRect(ctx, window->getSize());
-
 		GfxPassDesc passDesc;
 		passDesc.flags = GfxPassFlags::ClearAll;
 		passDesc.clearColors[0] = ColorRGBA8(11, 22, 33);
 		Gfx_BeginPass(ctx, passDesc);
+
+		Gfx_SetViewport(ctx, GfxViewport(window->getSize()));
+		Gfx_SetScissorRect(ctx, window->getSize());
 
 		ImGui::ShowTestWindow();
 		ImGuiImpl_Render(ctx, m_prim);
