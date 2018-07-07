@@ -10,6 +10,7 @@ add_subdirectory("External")
 # Custom build rules
 
 find_program(GLSLC NAMES glslc PATHS
+	$ENV{VULKAN_SDK}/Bin
 	$ENV{VK_SDK_PATH}/Bin
 	$ENV{PATH}
 	"~/bin"
