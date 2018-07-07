@@ -25,5 +25,9 @@ int main()
 
 	cfg.name = "Hello World";
 
+#ifdef RUSH_DEBUG
+	cfg.debug = true;
+#endif
+
 	return Platform_Main(cfg);
 }

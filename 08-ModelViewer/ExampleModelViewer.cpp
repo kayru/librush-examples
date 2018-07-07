@@ -36,7 +36,7 @@ int main(int argc, char** argv)
 	g_appCfg.argv      = argv;
 	g_appCfg.resizable = true;
 
-#ifndef NDEBUG
+#ifdef RUSH_DEBUG
 	g_appCfg.debug = true;
 #endif
 

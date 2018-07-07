@@ -112,5 +112,9 @@ int main()
 	cfg.height    = 600;
 	cfg.resizable = true;
 
+#ifdef RUSH_DEBUG
+	cfg.debug = true;
+#endif
+
 	return Platform_Main<ShadersApp>(cfg);
 }

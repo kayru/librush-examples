@@ -21,8 +21,12 @@ public:
 		{
 			switch (e.type)
 			{
-			case WindowEventType_KeyDown: printf("WindowEventType_KeyDown: code=%d\n", e.code); break;
-			case WindowEventType_KeyUp: printf("WindowEventType_KeyUp: code=%d\n", e.code); break;
+			case WindowEventType_KeyDown:
+				printf("WindowEventType_KeyDown: code=%d name=%s\n", e.code, toString(e.code));
+				break;
+			case WindowEventType_KeyUp:
+				printf("WindowEventType_KeyUp: code=%d name=%s\n", e.code, toString(e.code));
+				break;
 			case WindowEventType_Resize:
 				printf("WindowEventType_Resize: width=%d height=%d\n", e.width, e.height);
 				break;
@@ -66,6 +70,10 @@ int main()
 
 	cfg.name      = "WindowEvents";
 	cfg.resizable = true;
+
+#ifdef RUSH_DEBUG
+	cfg.debug = true;
+#endif
 
 	return Platform_Main<WindowEventsApp>(cfg);
 }

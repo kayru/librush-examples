@@ -99,5 +99,9 @@ int main()
 	cfg.height    = 480;
 	cfg.resizable = true;
 
+#ifdef RUSH_DEBUG
+	cfg.debug = true;
+#endif
+
 	return Platform_Main<ComputeApp>(cfg);
 }

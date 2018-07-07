@@ -94,5 +94,9 @@ int main()
 	cfg.resizable = true;
 	cfg.vsync     = true;
 
+#ifdef RUSH_DEBUG
+	cfg.debug = true;
+#endif
+
 	return Platform_Main<VSyncTestApp>(cfg);
 }
