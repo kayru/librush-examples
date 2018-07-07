@@ -78,7 +78,7 @@ ExampleModelViewer::ExampleModelViewer() : ExampleApp(), m_boundingBox(Vec3(0.0f
 	GfxShaderBindings bindings;
 	bindings.addConstantBuffer("constantBuffer0", 0); // scene consants
 	bindings.addConstantBuffer("constantBuffer1", 1); // material constants
-	bindings.addSeparateSampler("sampler0", 0);       // linear sampler
+	bindings.addSampler("sampler0", 0);               // linear sampler
 	bindings.addTexture("texture0", 0);               // albedo texture
 	m_technique = Gfx_CreateTechnique(GfxTechniqueDesc(m_ps, m_vs, m_vf, &bindings));
 
