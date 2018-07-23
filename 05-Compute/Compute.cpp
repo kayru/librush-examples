@@ -22,10 +22,10 @@ public:
 		GfxBufferDesc cbDesc(GfxBufferFlags::TransientConstant, GfxFormat_Unknown, 1, sizeof(m_constants));
 		m_constantBuffer = Gfx_CreateBuffer(cbDesc);
 
-		GfxShaderBindings bindings;
-		bindings.addConstantBuffer("Global", 0);
-		bindings.addStorageImage("outputImage", 1);
-		m_technique = Gfx_CreateTechnique(GfxTechniqueDesc(m_computeShader, &bindings));
+		GfxShaderBindingDesc bindings;
+		bindings.constantBuffers = 1;
+		bindings.rwImages        = 1;
+		m_technique = Gfx_CreateTechnique(GfxTechniqueDesc(m_computeShader, bindings));
 
 		GfxTextureDesc textureDesc = GfxTextureDesc::make2D(m_imageSize.x, m_imageSize.y, GfxFormat_RGBA8_Unorm,
 		    GfxUsageFlags::ShaderResource | GfxUsageFlags::StorageImage);

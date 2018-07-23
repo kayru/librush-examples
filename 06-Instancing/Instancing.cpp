@@ -117,10 +117,9 @@ public:
 			GfxSpecializationConstant specializationConstants[] = {{0, 0, sizeof(int)}};
 
 			{
-				GfxShaderBindings bindings;
-				bindings.addConstantBuffer("Global", 0);
-				bindings.addConstantBuffer("Instance", 1);
-				GfxTechniqueDesc techDesc(ps, vs, m_vertexFormat.get(), &bindings);
+				GfxShaderBindingDesc bindings;
+				bindings.constantBuffers = 2; // Global, Instance
+				GfxTechniqueDesc techDesc(ps, vs, m_vertexFormat.get(), bindings);
 				techDesc.specializationConstants     = specializationConstants;
 				techDesc.specializationConstantCount = RUSH_COUNTOF(specializationConstants);
 				techDesc.specializationData          = &specializationData;
@@ -130,10 +129,11 @@ public:
 
 			{
 				GfxVertexShader   vsPush = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelPush.vert")));
-				GfxShaderBindings bindings;
-				bindings.addPushConstants("PushConstants", GfxStageFlags::Vertex, sizeof(Mat4));
-				bindings.addConstantBuffer("Global", 0);
-				GfxTechniqueDesc techDesc(ps, vsPush, m_vertexFormat.get(), &bindings);
+				GfxShaderBindingDesc bindings;
+				bindings.pushConstants          = u8(sizeof(Mat4));
+				bindings.pushConstantStageFlags = GfxStageFlags::Vertex;
+				bindings.constantBuffers        = 1; // Global
+				GfxTechniqueDesc techDesc(ps, vsPush, m_vertexFormat.get(), bindings);
 				techDesc.specializationConstants     = specializationConstants;
 				techDesc.specializationConstantCount = RUSH_COUNTOF(specializationConstants);
 				techDesc.specializationData          = &specializationData;
@@ -144,11 +144,11 @@ public:
 
 			{
 				GfxVertexShader   vsPushOffset = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelPushOffset.vert")));
-				GfxShaderBindings bindings;
-				bindings.addPushConstants("PushConstants", GfxStageFlags::Vertex, sizeof(u32));
-				bindings.addConstantBuffer("Global", 0);
-				bindings.addConstantBuffer("Instance", 1);
-				GfxTechniqueDesc techDesc(ps, vsPushOffset, m_vertexFormat.get(), &bindings);
+				GfxShaderBindingDesc bindings;
+				bindings.pushConstants          = u8(sizeof(u32));
+				bindings.pushConstantStageFlags = GfxStageFlags::Vertex;
+				bindings.constantBuffers        = 2; // Global, Instance
+				GfxTechniqueDesc techDesc(ps, vsPushOffset, m_vertexFormat.get(), bindings);
 				techDesc.specializationConstants     = specializationConstants;
 				techDesc.specializationConstantCount = RUSH_COUNTOF(specializationConstants);
 				techDesc.specializationData          = &specializationData;
@@ -159,10 +159,9 @@ public:
 
 			{
 				GfxVertexShader   vsInstanced = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelInstanced.vert")));
-				GfxShaderBindings bindings;
-				bindings.addConstantBuffer("Global", 0);
-				bindings.addConstantBuffer("Instance", 1);
-				GfxTechniqueDesc techDesc(ps, vsInstanced, m_vertexFormat.get(), &bindings);
+				GfxShaderBindingDesc bindings;
+				bindings.constantBuffers = 2; // Global, Instance
+				GfxTechniqueDesc techDesc(ps, vsInstanced, m_vertexFormat.get(), bindings);
 				techDesc.specializationConstants     = specializationConstants;
 				techDesc.specializationConstantCount = RUSH_COUNTOF(specializationConstants);
 				techDesc.specializationData          = &specializationData;
@@ -173,10 +172,9 @@ public:
 
 			{
 				GfxVertexShader   vsInstanceId = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelInstanced.vert")));
-				GfxShaderBindings bindings;
-				bindings.addConstantBuffer("Global", 0);
-				bindings.addConstantBuffer("Instance", 1);
-				GfxTechniqueDesc techDesc(ps, vsInstanceId, m_vertexFormatInstanceId.get(), &bindings);
+				GfxShaderBindingDesc bindings;
+				bindings.constantBuffers = 2; // Global, Instance
+				GfxTechniqueDesc techDesc(ps, vsInstanceId, m_vertexFormatInstanceId.get(), bindings);
 				techDesc.specializationConstants     = specializationConstants;
 				techDesc.specializationConstantCount = RUSH_COUNTOF(specializationConstants);
 				techDesc.specializationData          = &specializationData;

@@ -75,12 +75,12 @@ ExampleModelViewer::ExampleModelViewer() : ExampleApp(), m_boundingBox(Vec3(0.0f
 
 	m_vf = Gfx_CreateVertexFormat(vfDesc);
 
-	GfxShaderBindings bindings;
-	bindings.addConstantBuffer("constantBuffer0", 0); // scene consants
-	bindings.addConstantBuffer("constantBuffer1", 1); // material constants
-	bindings.addSampler("sampler0", 0);               // linear sampler
-	bindings.addTexture("texture0", 0);               // albedo texture
-	m_technique = Gfx_CreateTechnique(GfxTechniqueDesc(m_ps, m_vs, m_vf, &bindings));
+	GfxShaderBindingDesc bindings;
+	bindings.constantBuffers = 2; // scene consants, material constants
+	bindings.samplers        = 1; // linear sampler
+	bindings.textures        = 1; // albedo texture
+
+	m_technique = Gfx_CreateTechnique(GfxTechniqueDesc(m_ps, m_vs, m_vf, bindings));
 
 	GfxBufferDesc cbDesc(GfxBufferFlags::TransientConstant, GfxFormat_Unknown, 1, sizeof(Constants));
 	m_constantBuffer = Gfx_CreateBuffer(cbDesc);
