@@ -209,10 +209,10 @@ void ExampleModelViewer::update()
 
 		if (textureData)
 		{
-			GfxTextureData mipData[16];
+			GfxTextureData mipData[16] = {};
 			for (u32 i = 0; i < textureData->desc.mips; ++i)
 			{
-				mipData[i] = GfxTextureData(textureData->mips[i].data());
+				mipData[i].pixels = textureData->mips[i].data();
 				mipData[i].mip = i;
 			}
 
