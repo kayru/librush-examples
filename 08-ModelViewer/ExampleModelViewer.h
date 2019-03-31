@@ -6,7 +6,6 @@
 #include <Rush/MathTypes.h>
 #include <Rush/Platform.h>
 #include <Rush/UtilCamera.h>
-#include <Rush/UtilCameraManipulator.h>
 #include <Rush/UtilTimer.h>
 #include <Rush/Window.h>
 

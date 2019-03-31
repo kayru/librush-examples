@@ -3,6 +3,9 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 project(RushExamples)
 
+# Multithreaded compilation in MSVC
+add_compile_options($<$<CXX_COMPILER_ID:MSVC>:/MP>)
+
 # Dependencies
 
 add_subdirectory("External")
