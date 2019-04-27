@@ -15,15 +15,12 @@ class ShadersApp : public Rush::Application
 public:
 	ShadersApp()
 	{
-		GfxVertexShader vs;
-		GfxPixelShader  ps;
-
-		vs = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("Vertex.hlsl")));
-		ps = Gfx_CreatePixelShader(loadShaderFromFile(RUSH_SHADER_NAME("Pixel.hlsl")));
+		auto vs = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("Vertex.hlsl")));
+		auto ps = Gfx_CreatePixelShader(loadShaderFromFile(RUSH_SHADER_NAME("Pixel.hlsl")));
 
 		GfxVertexFormatDesc fmtDesc;
 		fmtDesc.add(0, GfxVertexFormatDesc::DataType::Float2, GfxVertexFormatDesc::Semantic::Position, 0);
-		GfxVertexFormat vf = Gfx_CreateVertexFormat(fmtDesc);
+		auto vf = Gfx_CreateVertexFormat(fmtDesc);
 
 		GfxShaderBindingDesc bindings;
 		bindings.constantBuffers = 1;
@@ -43,17 +40,10 @@ public:
 
 		GfxBufferDesc vbDesc(GfxBufferFlags::Vertex, GfxFormat_Unknown, 3, fmtDesc.streamStride(0));
 		m_vb = Gfx_CreateBuffer(vbDesc, vertices);
-
-		Gfx_Release(vs);
-		Gfx_Release(ps);
-		Gfx_Release(vf);
 	}
 
 	~ShadersApp()
 	{
-		Gfx_Release(m_tech);
-		Gfx_Release(m_vb);
-		Gfx_Release(m_cb);
 	}
 
 	void update()
@@ -89,9 +79,9 @@ public:
 	}
 
 private:
-	GfxBuffer    m_vb;
-	GfxTechnique m_tech;
-	GfxBuffer    m_cb;
+	GfxOwn<GfxBuffer>    m_vb;
+	GfxOwn<GfxTechnique> m_tech;
+	GfxOwn<GfxBuffer>    m_cb;
 
 	struct Constants
 	{

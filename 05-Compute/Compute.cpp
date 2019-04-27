@@ -36,11 +36,6 @@ public:
 	~ComputeApp()
 	{
 		delete m_prim;
-
-		Gfx_Release(m_constantBuffer);
-		Gfx_Release(m_texture);
-		Gfx_Release(m_technique);
-		Gfx_Release(m_computeShader);
 	}
 
 	void update()
@@ -79,10 +74,10 @@ public:
 	}
 
 private:
-	GfxBuffer        m_constantBuffer;
-	GfxComputeShader m_computeShader;
-	GfxTechnique     m_technique;
-	GfxTexture       m_texture;
+	GfxOwn<GfxBuffer>        m_constantBuffer;
+	GfxOwn<GfxComputeShader> m_computeShader;
+	GfxOwn<GfxTechnique>     m_technique;
+	GfxOwn<GfxTexture>       m_texture;
 	PrimitiveBatch*  m_prim      = nullptr;
 	Tuple2u          m_imageSize = {640, 480};
 	Timer            m_timer;

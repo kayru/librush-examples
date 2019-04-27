@@ -20,30 +20,30 @@ public:
 protected:
 	struct DepthStencilStates
 	{
-		GfxDepthStencilStateRef writeLessEqual;
-		GfxDepthStencilStateRef disable;
+		GfxOwn<GfxDepthStencilState> writeLessEqual;
+		GfxOwn<GfxDepthStencilState> disable;
 	} m_depthStencilStates;
 
 	struct RasterizerStates
 	{
-		GfxRasterizerStateRef solidCullCW;
-		GfxRasterizerStateRef solidCullCCW;
-		GfxRasterizerStateRef solidNoCull;
+		GfxOwn<GfxRasterizerState> solidCullCW;
+		GfxOwn<GfxRasterizerState> solidCullCCW;
+		GfxOwn<GfxRasterizerState> solidNoCull;
 	} m_rasterizerStates;
 
 	struct SamplerStates
 	{
-		GfxSamplerRef pointClamp;
-		GfxSamplerRef linearClamp;
-		GfxSamplerRef linearWrap;
-		GfxSamplerRef anisotropicWrap;
+		GfxOwn<GfxSampler> pointClamp;
+		GfxOwn<GfxSampler> linearClamp;
+		GfxOwn<GfxSampler> linearWrap;
+		GfxOwn<GfxSampler> anisotropicWrap;
 	} m_samplerStates;
 
 	struct BlendStates
 	{
-		GfxBlendStateRef lerp;
-		GfxBlendStateRef opaque;
-		GfxBlendStateRef additive;
+		GfxOwn<GfxBlendState> lerp;
+		GfxOwn<GfxBlendState> opaque;
+		GfxOwn<GfxBlendState> additive;
 	} m_blendStates;
 
 	Window*             m_window;

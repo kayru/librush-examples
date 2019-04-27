@@ -54,15 +54,15 @@ private:
 
 	CameraManipulator* m_cameraMan;
 
-	GfxVertexShader m_vs;
-	GfxPixelShader m_ps;
-	GfxVertexFormat m_vf;
-	GfxTechnique m_technique;
-	GfxTexture m_defaultWhiteTexture;
+	GfxOwn<GfxVertexShader> m_vs;
+	GfxOwn<GfxPixelShader> m_ps;
+	GfxOwn<GfxVertexFormat> m_vf;
+	GfxOwn<GfxTechnique> m_technique;
+	GfxOwn<GfxTexture> m_defaultWhiteTexture;
 
-	GfxBuffer m_vertexBuffer;
-	GfxBuffer m_indexBuffer;
-	GfxBuffer m_constantBuffer;
+	GfxOwn<GfxBuffer> m_vertexBuffer;
+	GfxOwn<GfxBuffer> m_indexBuffer;
+	GfxOwn<GfxBuffer> m_constantBuffer;
 	u32 m_indexCount = 0;
 	u32 m_vertexCount = 0;
 
@@ -86,7 +86,7 @@ private:
 	std::string m_statusString;
 	bool m_valid = false;
 
-	std::unordered_map<u64, GfxRef<GfxBuffer>> m_materialConstantBuffers;
+	std::unordered_map<u64, GfxOwn<GfxBuffer>> m_materialConstantBuffers;
 
 	struct MaterialConstants
 	{
@@ -95,12 +95,13 @@ private:
 
 	struct Material
 	{
-		GfxTextureRef albedoTexture;
-		GfxBufferRef constantBuffer;
+		GfxTexture albedoTexture;
+		GfxBuffer constantBuffer;
 	};
 
 	std::vector<Material> m_materials;
 	Material m_defaultMaterial;
+	GfxOwn<GfxBuffer> m_defaultConstantBuffer;
 
 	struct MeshSegment
 	{
@@ -117,11 +118,11 @@ private:
 
 	struct TextureData
 	{
-		GfxTextureDesc   desc;
-		std::vector<u8>  mips[16];
-		std::vector<u32> patchList;
-		std::string      filename;
-		GfxTexture       albedoTexture;
+		GfxTextureDesc     desc;
+		std::vector<u8>    mips[16];
+		std::vector<u32>   patchList;
+		std::string        filename;
+		GfxOwn<GfxTexture> albedoTexture;
 	};
 
 	std::unordered_map<std::string, TextureData*> m_textures;

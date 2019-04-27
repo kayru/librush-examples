@@ -76,7 +76,7 @@ ExampleModelViewer::ExampleModelViewer() : ExampleApp(), m_boundingBox(Vec3(0.0f
 	m_vf = Gfx_CreateVertexFormat(vfDesc);
 
 	GfxShaderBindingDesc bindings;
-	bindings.constantBuffers = 2; // scene consants, material constants
+	bindings.constantBuffers = 2; // scene constants, material constants
 	bindings.samplers        = 1; // linear sampler
 	bindings.textures        = 1; // albedo texture
 
@@ -139,21 +139,13 @@ ExampleModelViewer::~ExampleModelViewer()
 
 	for (const auto& it : m_textures)
 	{
-		Gfx_Release(it.second->albedoTexture);
+		it.second->albedoTexture.reset();
 		delete it.second;
 	}
 
 	m_windowEvents.setOwner(nullptr);
 
 	delete m_cameraMan;
-
-	Gfx_Release(m_defaultWhiteTexture);
-	Gfx_Release(m_vertexBuffer);
-	Gfx_Release(m_indexBuffer);
-	Gfx_Release(m_constantBuffer);
-	Gfx_Release(m_vs);
-	Gfx_Release(m_ps);
-	Gfx_Release(m_vf);
 }
 
 void ExampleModelViewer::update()
@@ -220,7 +212,7 @@ void ExampleModelViewer::update()
 
 			for (u32 i : textureData->patchList)
 			{
-				m_materials[i].albedoTexture.retain(textureData->albedoTexture);
+				m_materials[i].albedoTexture = textureData->albedoTexture.get();
 			}
 		}
 	}
@@ -453,20 +445,20 @@ bool ExampleModelViewer::loadModelObj(const char* filename)
 			enqueueLoadTexture(directory + objMaterial.diffuse_texname, materialId);
 		}
 
-		material.albedoTexture.retain(m_defaultWhiteTexture);
+		material.albedoTexture = m_defaultWhiteTexture.get();
 
 		{
 			u64  constantHash = hashFnv1a64(&constants, sizeof(constants));
 			auto it           = m_materialConstantBuffers.find(constantHash);
 			if (it == m_materialConstantBuffers.end())
 			{
-				GfxBuffer cb = Gfx_CreateBuffer(materialCbDesc, &constants);
-				m_materialConstantBuffers[constantHash].retain(cb);
-				material.constantBuffer.retain(cb);
+				GfxOwn<GfxBuffer> cb = Gfx_CreateBuffer(materialCbDesc, &constants);
+				material.constantBuffer = cb.get();
+				m_materialConstantBuffers[constantHash] = std::move(cb);
 			}
 			else
 			{
-				material.constantBuffer = it->second;
+				material.constantBuffer = it->second.get();
 			}
 		}
 
@@ -476,8 +468,9 @@ bool ExampleModelViewer::loadModelObj(const char* filename)
 	{
 		MaterialConstants constants;
 		constants.baseColor = Vec4(1.0f);
-		m_defaultMaterial.constantBuffer.takeover(Gfx_CreateBuffer(materialCbDesc, &constants));
-		m_defaultMaterial.albedoTexture.retain(m_defaultWhiteTexture);
+		m_defaultConstantBuffer = Gfx_CreateBuffer(materialCbDesc, &constants);
+		m_defaultMaterial.constantBuffer = m_defaultConstantBuffer.get();
+		m_defaultMaterial.albedoTexture = m_defaultWhiteTexture.get();
 	}
 
 	RUSH_LOG("Converting mesh");
@@ -628,20 +621,20 @@ bool ExampleModelViewer::loadModelNative(const char* filename)
 			enqueueLoadTexture(directory + std::string(offlineMaterial.albedoTexture), materialId);
 		}
 
-		material.albedoTexture.retain(m_defaultWhiteTexture);
+		material.albedoTexture = m_defaultWhiteTexture.get();
 
 		{
 			u64  constantHash = hashFnv1a64(&constants, sizeof(constants));
 			auto it           = m_materialConstantBuffers.find(constantHash);
 			if (it == m_materialConstantBuffers.end())
 			{
-				GfxBuffer cb = Gfx_CreateBuffer(materialCbDesc, &constants);
-				m_materialConstantBuffers[constantHash].retain(cb);
-				material.constantBuffer.retain(cb);
+				GfxOwn<GfxBuffer> cb = Gfx_CreateBuffer(materialCbDesc, &constants);
+				material.constantBuffer = cb.get();
+				m_materialConstantBuffers[constantHash] = std::move(cb);
 			}
 			else
 			{
-				material.constantBuffer = it->second;
+				material.constantBuffer = it->second.get();
 			}
 		}
 
@@ -651,8 +644,9 @@ bool ExampleModelViewer::loadModelNative(const char* filename)
 	{
 		MaterialConstants constants;
 		constants.baseColor = Vec4(1.0f);
-		m_defaultMaterial.constantBuffer.takeover(Gfx_CreateBuffer(materialCbDesc, &constants));
-		m_defaultMaterial.albedoTexture.retain(m_defaultWhiteTexture);
+		m_defaultConstantBuffer = Gfx_CreateBuffer(materialCbDesc, &constants);
+		m_defaultMaterial.constantBuffer = m_defaultConstantBuffer.get();
+		m_defaultMaterial.albedoTexture = m_defaultWhiteTexture.get();
 	}
 
 	m_segments.reserve(model.segments.size());

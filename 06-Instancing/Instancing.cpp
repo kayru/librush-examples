@@ -88,26 +88,26 @@ public:
 		m_meshVertexCount = RUSH_COUNTOF(meshVertices);
 		m_meshIndexCount  = RUSH_COUNTOF(meshIndices);
 
-		m_vertexBuffer.takeover(Gfx_CreateBuffer(
-		    GfxBufferDesc(GfxBufferFlags::Vertex, RUSH_COUNTOF(meshVertices), sizeof(meshVertices[0])), meshVertices));
+		m_vertexBuffer = Gfx_CreateBuffer(
+		    GfxBufferDesc(GfxBufferFlags::Vertex, RUSH_COUNTOF(meshVertices), sizeof(meshVertices[0])), meshVertices);
 
-		m_indexBuffer.takeover(Gfx_CreateBuffer(
+		m_indexBuffer = Gfx_CreateBuffer(
 		    GfxBufferDesc(GfxBufferFlags::Index, GfxFormat_R32_Uint, RUSH_COUNTOF(meshIndices), sizeof(meshIndices[0])),
-		    meshIndices));
+		    meshIndices);
 
 		GfxVertexFormatDesc vfDesc;
 		vfDesc.add(0, GfxVertexFormatDesc::DataType::Float3, GfxVertexFormatDesc::Semantic::Position, 0);
 		vfDesc.add(0, GfxVertexFormatDesc::DataType::Color, GfxVertexFormatDesc::Semantic::Color, 0);
-		m_vertexFormat.takeover(Gfx_CreateVertexFormat(vfDesc));
+		m_vertexFormat = Gfx_CreateVertexFormat(vfDesc);
 
 		GfxVertexFormatDesc vfDescInstanceId;
 		vfDescInstanceId.add(0, GfxVertexFormatDesc::DataType::Float3, GfxVertexFormatDesc::Semantic::Position, 0);
 		vfDescInstanceId.add(0, GfxVertexFormatDesc::DataType::Color, GfxVertexFormatDesc::Semantic::Color, 0);
-		m_vertexFormatInstanceId.takeover(Gfx_CreateVertexFormat(vfDescInstanceId));
+		m_vertexFormatInstanceId = Gfx_CreateVertexFormat(vfDescInstanceId);
 
 		{
-			GfxVertexShader vs = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelVS.hlsl")));
-			GfxPixelShader  ps = Gfx_CreatePixelShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelPS.hlsl")));
+			auto vs = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelVS.hlsl")));
+			auto ps = Gfx_CreatePixelShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelPS.hlsl")));
 
 			struct SpecializationData
 			{
@@ -119,82 +119,75 @@ public:
 			{
 				GfxShaderBindingDesc bindings;
 				bindings.constantBuffers = 2; // Global, Instance
-				GfxTechniqueDesc techDesc(ps, vs, m_vertexFormat.get(), bindings);
+				GfxTechniqueDesc techDesc(ps, vs, m_vertexFormat, bindings);
 				techDesc.specializationConstants     = specializationConstants;
 				techDesc.specializationConstantCount = RUSH_COUNTOF(specializationConstants);
 				techDesc.specializationData          = &specializationData;
 				techDesc.specializationDataSize      = sizeof(specializationData);
-				m_technique.takeover(Gfx_CreateTechnique(techDesc));
+				m_technique = Gfx_CreateTechnique(techDesc);
 			}
 
 			{
-				GfxVertexShader   vsPush = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelPush.vert")));
+				auto vsPush = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelPush.vert")));
 				GfxShaderBindingDesc bindings;
 				bindings.pushConstants          = u8(sizeof(Mat4));
 				bindings.pushConstantStageFlags = GfxStageFlags::Vertex;
 				bindings.constantBuffers        = 1; // Global
-				GfxTechniqueDesc techDesc(ps, vsPush, m_vertexFormat.get(), bindings);
+				GfxTechniqueDesc techDesc(ps, vsPush, m_vertexFormat, bindings);
 				techDesc.specializationConstants     = specializationConstants;
 				techDesc.specializationConstantCount = RUSH_COUNTOF(specializationConstants);
 				techDesc.specializationData          = &specializationData;
 				techDesc.specializationDataSize      = sizeof(specializationData);
-				m_techniquePush.takeover(Gfx_CreateTechnique(techDesc));
-				Gfx_Release(vsPush);
+				m_techniquePush = Gfx_CreateTechnique(techDesc);
 			}
 
 			{
-				GfxVertexShader   vsPushOffset = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelPushOffset.vert")));
+				auto vsPushOffset = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelPushOffset.vert")));
 				GfxShaderBindingDesc bindings;
 				bindings.pushConstants          = u8(sizeof(u32));
 				bindings.pushConstantStageFlags = GfxStageFlags::Vertex;
 				bindings.constantBuffers        = 2; // Global, Instance
-				GfxTechniqueDesc techDesc(ps, vsPushOffset, m_vertexFormat.get(), bindings);
+				GfxTechniqueDesc techDesc(ps, vsPushOffset, m_vertexFormat, bindings);
 				techDesc.specializationConstants     = specializationConstants;
 				techDesc.specializationConstantCount = RUSH_COUNTOF(specializationConstants);
 				techDesc.specializationData          = &specializationData;
 				techDesc.specializationDataSize      = sizeof(specializationData);
-				m_techniquePushOffset.takeover(Gfx_CreateTechnique(techDesc));
-				Gfx_Release(vsPushOffset);
+				m_techniquePushOffset = Gfx_CreateTechnique(techDesc);
 			}
 
 			{
-				GfxVertexShader   vsInstanced = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelInstanced.vert")));
+				auto vsInstanced = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelInstanced.vert")));
 				GfxShaderBindingDesc bindings;
 				bindings.constantBuffers = 2; // Global, Instance
-				GfxTechniqueDesc techDesc(ps, vsInstanced, m_vertexFormat.get(), bindings);
+				GfxTechniqueDesc techDesc(ps, vsInstanced, m_vertexFormat, bindings);
 				techDesc.specializationConstants     = specializationConstants;
 				techDesc.specializationConstantCount = RUSH_COUNTOF(specializationConstants);
 				techDesc.specializationData          = &specializationData;
 				techDesc.specializationDataSize      = sizeof(specializationData);
-				m_techniqueInstanced.takeover(Gfx_CreateTechnique(techDesc));
-				Gfx_Release(vsInstanced);
+				m_techniqueInstanced = Gfx_CreateTechnique(techDesc);
 			}
 
 			{
-				GfxVertexShader   vsInstanceId = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelInstanced.vert")));
+				auto vsInstanceId = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelInstanced.vert")));
 				GfxShaderBindingDesc bindings;
 				bindings.constantBuffers = 2; // Global, Instance
-				GfxTechniqueDesc techDesc(ps, vsInstanceId, m_vertexFormatInstanceId.get(), bindings);
+				GfxTechniqueDesc techDesc(ps, vsInstanceId, m_vertexFormatInstanceId, bindings);
 				techDesc.specializationConstants     = specializationConstants;
 				techDesc.specializationConstantCount = RUSH_COUNTOF(specializationConstants);
 				techDesc.specializationData          = &specializationData;
 				techDesc.specializationDataSize      = sizeof(specializationData);
-				m_techniqueInstanceId.takeover(Gfx_CreateTechnique(techDesc));
-				Gfx_Release(vsInstanceId);
+				m_techniqueInstanceId = Gfx_CreateTechnique(techDesc);
 			}
-
-			Gfx_Release(ps);
-			Gfx_Release(vs);
 		}
 
-		m_globalConstantBuffer.takeover(Gfx_CreateBuffer(
-		    GfxBufferDesc(GfxBufferFlags::TransientConstant, GfxFormat_Unknown, 1, sizeof(GlobalConstants))));
+		m_globalConstantBuffer = Gfx_CreateBuffer(
+		    GfxBufferDesc(GfxBufferFlags::TransientConstant, GfxFormat_Unknown, 1, sizeof(GlobalConstants)));
 
-		m_instanceConstantBuffer.takeover(Gfx_CreateBuffer(GfxBufferDesc(
-		    GfxBufferFlags::TransientConstant, GfxFormat_Unknown, MaxInstanceCount, sizeof(InstanceConstants))));
+		m_instanceConstantBuffer = Gfx_CreateBuffer(GfxBufferDesc(
+		    GfxBufferFlags::TransientConstant, GfxFormat_Unknown, MaxInstanceCount, sizeof(InstanceConstants)));
 
-		m_dynamicInstanceConstantBuffer.takeover(Gfx_CreateBuffer(
-		    GfxBufferDesc(GfxBufferFlags::TransientConstant, GfxFormat_Unknown, 1, sizeof(InstanceConstants))));
+		m_dynamicInstanceConstantBuffer = Gfx_CreateBuffer(
+		    GfxBufferDesc(GfxBufferFlags::TransientConstant, GfxFormat_Unknown, 1, sizeof(InstanceConstants)));
 
 		m_indirectArgs.resize(MaxInstanceCount);
 		for (u32 i = 0; i < MaxInstanceCount; ++i)
@@ -207,9 +200,9 @@ public:
 			arg.firstInstance      = i;
 		}
 
-		m_indirectArgsBuffer.takeover(Gfx_CreateBuffer(
+		m_indirectArgsBuffer = Gfx_CreateBuffer(
 		    GfxBufferDesc(GfxBufferFlags::IndirectArgs, GfxFormat_Unknown, MaxInstanceCount, sizeof(GfxDrawIndexedArg)),
-		    m_indirectArgs.data()));
+		    m_indirectArgs.data());
 
 		m_paddedInstanceConstants.resize(MaxInstanceCount);
 		m_instanceConstants.resize(MaxInstanceCount);
@@ -228,7 +221,7 @@ public:
 
 		GlobalConstants globalConstants;
 		globalConstants.viewProj = (matView * matProj).transposed();
-		Gfx_UpdateBuffer(ctx, m_globalConstantBuffer, globalConstants);
+		Gfx_UpdateBufferT(ctx, m_globalConstantBuffer, globalConstants);
 
 		GfxPassDesc passDesc;
 		passDesc.clearColors[0] = ColorRGBA(0.1f, 0.2f, 0.3f);
@@ -310,7 +303,7 @@ public:
 
 				drawTime -= m_timer.time();
 
-				Gfx_UpdateBuffer(ctx, m_dynamicInstanceConstantBuffer, constants);
+				Gfx_UpdateBufferT(ctx, m_dynamicInstanceConstantBuffer, constants);
 				Gfx_SetConstantBuffer(ctx, 1, m_dynamicInstanceConstantBuffer);
 				Gfx_DrawIndexed(ctx, m_meshIndexCount, 0, 0, m_meshVertexCount);
 
@@ -453,7 +446,7 @@ public:
 				    ctx, m_instanceConstantBuffer, m_instanceConstants.data(), batchSize * sizeof(InstanceConstants));
 				Gfx_SetConstantBuffer(ctx, 1, m_instanceConstantBuffer);
 
-				Gfx_DrawIndexedIndirect(ctx, m_indirectArgsBuffer.get(), 0, batchSize);
+				Gfx_DrawIndexedIndirect(ctx, m_indirectArgsBuffer, 0, batchSize);
 
 				drawTime += m_timer.time();
 			}
@@ -526,22 +519,22 @@ private:
 		Mat4 padding[3];
 	};
 
-	GfxTechniqueRef    m_technique;
-	GfxTechniqueRef    m_techniquePush;
-	GfxTechniqueRef    m_techniquePushOffset;
-	GfxTechniqueRef    m_techniqueInstanced;
-	GfxTechniqueRef    m_techniqueInstanceId;
-	GfxVertexFormatRef m_vertexFormat;
-	GfxVertexFormatRef m_vertexFormatInstanceId;
+	GfxOwn<GfxTechnique>    m_technique;
+	GfxOwn<GfxTechnique>    m_techniquePush;
+	GfxOwn<GfxTechnique>    m_techniquePushOffset;
+	GfxOwn<GfxTechnique>    m_techniqueInstanced;
+	GfxOwn<GfxTechnique>    m_techniqueInstanceId;
+	GfxOwn<GfxVertexFormat> m_vertexFormat;
+	GfxOwn<GfxVertexFormat> m_vertexFormatInstanceId;
 
-	GfxBufferRef m_vertexBuffer;
-	GfxBufferRef m_instanceIdBuffer;
-	GfxBufferRef m_indexBuffer;
-	GfxBufferRef m_indirectArgsBuffer;
+	GfxOwn<GfxBuffer> m_vertexBuffer;
+	GfxOwn<GfxBuffer> m_instanceIdBuffer;
+	GfxOwn<GfxBuffer> m_indexBuffer;
+	GfxOwn<GfxBuffer> m_indirectArgsBuffer;
 
-	GfxBufferRef                         m_globalConstantBuffer;
-	GfxBufferRef                         m_instanceConstantBuffer;
-	GfxBufferRef                         m_dynamicInstanceConstantBuffer;
+	GfxOwn<GfxBuffer>                    m_globalConstantBuffer;
+	GfxOwn<GfxBuffer>                    m_instanceConstantBuffer;
+	GfxOwn<GfxBuffer>                    m_dynamicInstanceConstantBuffer;
 	std::vector<PaddedInstanceConstants> m_paddedInstanceConstants;
 	std::vector<InstanceConstants>       m_instanceConstants;
 	std::vector<GfxDrawIndexedArg>       m_indirectArgs;
