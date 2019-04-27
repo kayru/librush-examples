@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Rush/GfxDevice.h>
-#include <Rush/GfxRef.h>
 #include <Rush/Platform.h>
 
 namespace Rush

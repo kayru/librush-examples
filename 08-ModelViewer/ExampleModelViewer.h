@@ -2,7 +2,6 @@
 
 #include <Rush/GfxDevice.h>
 #include <Rush/GfxPrimitiveBatch.h>
-#include <Rush/GfxRef.h>
 #include <Rush/MathTypes.h>
 #include <Rush/Platform.h>
 #include <Rush/UtilCamera.h>
