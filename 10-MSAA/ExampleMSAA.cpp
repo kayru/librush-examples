@@ -23,6 +23,9 @@ public:
 			desc.usage = GfxUsageFlags::RenderTarget | GfxUsageFlags::ShaderResource | GfxUsageFlags::TransferDst;
 			m_resolveTarget = Gfx_CreateTexture(desc);
 		}
+
+		m_blendPremult = Gfx_CreateBlendState(GfxBlendStateDesc::makePremultiplied());
+		m_blendOpaque = Gfx_CreateBlendState(GfxBlendStateDesc::makeOpaque());
 	}
 
 	~ImGuiApp()
@@ -46,7 +49,6 @@ public:
 		const float dt = float(m_deltaTime.time());
 		ImGuiImpl_Update(dt);
 
-
 		if (m_enableAnimation)
 		{
 			if (m_animationTime > 1.0)
@@ -68,17 +70,35 @@ public:
 			passDesc.clearColors[0] = ColorRGBA8(11, 22, 33);
 			passDesc.color[0] = m_enableMSAA ? m_msaaTarget.get() : m_resolveTarget.get();
 			Gfx_BeginPass(ctx, passDesc);
-
+			Gfx_SetBlendState(ctx, m_blendPremult);
 			m_prim->begin2D(Vec2(1.0f), Vec2(0.0f));
 
-			float x = m_animationTime < 0.5f
-				? m_animationTime * 4.0f - 1.0f
-				: 3.0f - m_animationTime * 4.0f;
-			m_prim->drawTriangle(
-				Vec2(-1.0f, -1.0f),
-				Vec2(1.0f, -1.0f),
-				Vec2(x, 1.0f),
-				ColorRGBA8::White());
+			auto positionFromAngle = [](float a)
+			{
+				float sa = sinf(a);
+				float ca = cosf(a);
+				return Vec2(ca, sa);
+			};
+
+			float t = (m_animationTime * TwoPi) / 3.0f;
+
+			ColorRGBA8 colors[] = {
+				ColorRGBA8::Red(30),
+				ColorRGBA8::Green(30),
+				ColorRGBA8::Blue(30),
+				ColorRGBA8::White(30),
+			};
+
+			for (ColorRGBA8 c : colors)
+			{
+				m_prim->drawTriangle(
+					positionFromAngle(t + (0 * TwoPi / 3.0f)),
+					positionFromAngle(t + (1 * TwoPi / 3.0f)),
+					positionFromAngle(t + (2 * TwoPi / 3.0f)),
+					c);
+				t += (TwoPi / RUSH_COUNTOF(colors));
+			}
+
 			m_prim->end2D();
 
 			Gfx_EndPass(ctx);
@@ -97,6 +117,7 @@ public:
 			passDesc.flags = GfxPassFlags::ClearAll;
 			passDesc.clearColors[0] = ColorRGBA8(0, 0, 0);
 			Gfx_BeginPass(ctx, passDesc);
+			Gfx_SetBlendState(ctx, m_blendOpaque);
 
 			Gfx_SetViewport(ctx, GfxViewport(window->getSize()));
 			Gfx_SetScissorRect(ctx, window->getSize());
@@ -125,9 +146,12 @@ public:
 				ImGui::Checkbox("Enable Animation", &m_enableAnimation);
 				ImGui::SliderFloat("Animation time", &m_animationTime, 0.0f, 1.0f);
 				ImGui::Checkbox("Enable MSAA", &m_enableMSAA);
-				ImGui::SliderInt("Quality", &m_msaaQuality, 1, 3);
-				ImGui::End();
+				char msaaText[3] = {};
+				snprintf(msaaText, sizeof(msaaText), "%d", 1 << m_msaaQuality);
+				ImGui::SliderInt("Sample count", &m_msaaQuality, 1, 3, msaaText);
+				
 			}
+			ImGui::End();
 
 			ImGuiImpl_Render(ctx, m_prim);
 
@@ -145,6 +169,8 @@ private:
 	int m_msaaQuality = 1;
 	float m_animationTime = 0.0f;
 
+	GfxOwn<GfxBlendState> m_blendPremult;
+	GfxOwn<GfxBlendState> m_blendOpaque;
 	GfxOwn<GfxTexture> m_resolveTarget;
 	GfxOwn<GfxTexture> m_msaaTarget;
 	int m_currentSampleCount = 0;
