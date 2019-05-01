@@ -18,14 +18,24 @@ public:
 		m_prim = new PrimitiveBatch;
 		ImGuiImpl_Startup(Platform_GetWindow());
 
-		{
-			GfxTextureDesc desc = GfxTextureDesc::make2D(64, 64);
-			desc.usage = GfxUsageFlags::RenderTarget | GfxUsageFlags::ShaderResource | GfxUsageFlags::TransferDst;
-			m_resolveTarget = Gfx_CreateTexture(desc);
-		}
-
-		m_blendPremult = Gfx_CreateBlendState(GfxBlendStateDesc::makePremultiplied());
+		m_blendPremult = Gfx_CreateBlendState(GfxBlendStateDesc::makeLerp());
 		m_blendOpaque = Gfx_CreateBlendState(GfxBlendStateDesc::makeOpaque());
+
+		{
+			const GfxCapability& caps = Gfx_GetCapability();
+			u32 mask = caps.colorSampleCounts;
+			m_msaaModes.reserve(bitCount(mask));
+			u32 sampleCount = 1;
+			while (mask)
+			{
+				if (mask & sampleCount)
+				{
+					m_msaaModes.push(sampleCount);
+				}
+				mask &= ~sampleCount;
+				sampleCount <<= 1;
+			}
+		}
 	}
 
 	~ImGuiApp()
@@ -36,14 +46,26 @@ public:
 
 	void update()
 	{
-		int desiredSampleCount = 1 << m_msaaQuality;
-		if (m_currentSampleCount != desiredSampleCount)
+		int desiredSampleCount = m_msaaModes[m_msaaQuality];
+		if (m_currentSampleCount != desiredSampleCount || m_currentZoom != m_zoom)
 		{
-			GfxTextureDesc desc = Gfx_GetTextureDesc(m_resolveTarget);
-			desc.samples = desiredSampleCount;
-			desc.usage = GfxUsageFlags::RenderTarget | GfxUsageFlags::TransferSrc;
-			m_msaaTarget = Gfx_CreateTexture(desc);
+			const u32 resolution = max(1u, m_maxResolution >> m_zoom);
+
+			{
+				GfxTextureDesc desc = GfxTextureDesc::make2D(resolution, resolution);
+				desc.usage = GfxUsageFlags::RenderTarget | GfxUsageFlags::ShaderResource | GfxUsageFlags::TransferDst;
+				m_resolveTarget = Gfx_CreateTexture(desc);
+			}
+
+			{
+				GfxTextureDesc desc = GfxTextureDesc::make2D(resolution, resolution);
+				desc.samples = desiredSampleCount;
+				desc.usage = GfxUsageFlags::RenderTarget | GfxUsageFlags::TransferSrc;
+				m_msaaTarget = Gfx_CreateTexture(desc);
+			}
+
 			m_currentSampleCount = desiredSampleCount;
+			m_currentZoom = m_zoom;
 		}
 
 		const float dt = float(m_deltaTime.time());
@@ -64,46 +86,60 @@ public:
 
 		// off-screen rendering
 
-		{
-			GfxPassDesc passDesc;
-			passDesc.flags = GfxPassFlags::ClearAll;
-			passDesc.clearColors[0] = ColorRGBA8(11, 22, 33);
-			passDesc.color[0] = m_enableMSAA ? m_msaaTarget.get() : m_resolveTarget.get();
-			Gfx_BeginPass(ctx, passDesc);
-			Gfx_SetBlendState(ctx, m_blendPremult);
-			m_prim->begin2D(Vec2(1.0f), Vec2(0.0f));
+		ColorRGBA8 colors[] = {
+			ColorRGBA8::Red(m_enableWireframe ? 100 : 255),
+			ColorRGBA8::Green(m_enableWireframe ? 100 : 255),
+			ColorRGBA8::Blue(m_enableWireframe ? 100 : 255),
+			ColorRGBA8::White(m_enableWireframe ? 100 : 255),
+		};
 
+		Vec2 vertices[RUSH_COUNTOF(colors) * 3];
+
+		{
 			auto positionFromAngle = [](float a)
 			{
 				float sa = sinf(a);
 				float ca = cosf(a);
 				return Vec2(ca, sa);
 			};
-
+			u32 vertIdx = 0;
 			float t = (m_animationTime * TwoPi) / 3.0f;
+			for (ColorRGBA8 c : colors)
+			{
 
-			ColorRGBA8 colors[] = {
-				ColorRGBA8::Red(30),
-				ColorRGBA8::Green(30),
-				ColorRGBA8::Blue(30),
-				ColorRGBA8::White(30),
-			};
+				vertices[vertIdx++] = positionFromAngle(t + (0 * TwoPi / 3.0f));
+				vertices[vertIdx++] = positionFromAngle(t + (1 * TwoPi / 3.0f));
+				vertices[vertIdx++] = positionFromAngle(t + (2 * TwoPi / 3.0f));
+				t += (TwoPi / RUSH_COUNTOF(colors));
+			}
+		}
 
+		{
+			const bool useMSAA = m_currentSampleCount > 1;
+
+			GfxPassDesc passDesc;
+			passDesc.flags = GfxPassFlags::ClearAll;
+			passDesc.clearColors[0] = ColorRGBA8(11, 22, 33);
+			passDesc.color[0] = useMSAA ? m_msaaTarget.get() : m_resolveTarget.get();
+			Gfx_BeginPass(ctx, passDesc);
+			Gfx_SetBlendState(ctx, m_blendPremult);
+			m_prim->begin2D(Vec2(1.0f), Vec2(0.0f));
+
+			u32 vertIdx = 0;
 			for (ColorRGBA8 c : colors)
 			{
 				m_prim->drawTriangle(
-					positionFromAngle(t + (0 * TwoPi / 3.0f)),
-					positionFromAngle(t + (1 * TwoPi / 3.0f)),
-					positionFromAngle(t + (2 * TwoPi / 3.0f)),
+					vertices[vertIdx++],
+					vertices[vertIdx++],
+					vertices[vertIdx++],
 					c);
-				t += (TwoPi / RUSH_COUNTOF(colors));
 			}
 
 			m_prim->end2D();
 
 			Gfx_EndPass(ctx);
 
-			if (m_enableMSAA)
+			if (useMSAA)
 			{
 				Gfx_ResolveImage(ctx, m_msaaTarget, m_resolveTarget);
 			}
@@ -122,14 +158,14 @@ public:
 			Gfx_SetViewport(ctx, GfxViewport(window->getSize()));
 			Gfx_SetScissorRect(ctx, window->getSize());
 
-			m_prim->begin2D(1.0f, 1.0f);
+			m_prim->begin2D(Vec2(1.0f), Vec2(0.0f));
 
 			TexturedQuad2D q;
 
-			q.pos[0] = Vec2(0.0f, 0.0f);
-			q.pos[1] = Vec2(1.0f, 0.0f);
-			q.pos[2] = Vec2(1.0f, 1.0f);
-			q.pos[3] = Vec2(0.0f, 1.0f);
+			q.pos[0] = Vec2(-1.0f, 1.0f);
+			q.pos[1] = Vec2(1.0f, 1.0f);
+			q.pos[2] = Vec2(1.0f, -1.0f);
+			q.pos[3] = Vec2(-1.0f, -1.0f);
 
 			q.tex[0] = Vec2(0.0f, 0.0f);
 			q.tex[1] = Vec2(1.0f, 0.0);
@@ -139,16 +175,30 @@ public:
 			m_prim->setTexture(m_resolveTarget);
 			m_prim->drawTexturedQuad(&q);
 
+			if (m_enableWireframe)
+			{
+				u32 vertexIdx = 0;
+				for (ColorRGBA8 c : colors)
+				{
+					c.a = 255;
+					m_prim->drawLine(vertices[vertexIdx + 0], vertices[vertexIdx + 1], c);
+					m_prim->drawLine(vertices[vertexIdx + 1], vertices[vertexIdx + 2], c);
+					m_prim->drawLine(vertices[vertexIdx + 2], vertices[vertexIdx + 0], c);
+					vertexIdx += 3;
+				}
+			}
+
 			m_prim->end2D();
 
 			if (ImGui::Begin("Settings"))
 			{
+				ImGui::Checkbox("Enable Wireframe", &m_enableWireframe);
 				ImGui::Checkbox("Enable Animation", &m_enableAnimation);
 				ImGui::SliderFloat("Animation time", &m_animationTime, 0.0f, 1.0f);
-				ImGui::Checkbox("Enable MSAA", &m_enableMSAA);
 				char msaaText[3] = {};
-				snprintf(msaaText, sizeof(msaaText), "%d", 1 << m_msaaQuality);
-				ImGui::SliderInt("Sample count", &m_msaaQuality, 1, 3, msaaText);
+				snprintf(msaaText, sizeof(msaaText), "%d", m_msaaModes[m_msaaQuality]);
+				ImGui::SliderInt("Sample count", &m_msaaQuality, 0, u32(m_msaaModes.size())-1, msaaText);
+				ImGui::SliderInt("Zoom", &m_zoom, 0, bitScanForward(m_maxResolution));
 				
 			}
 			ImGui::End();
@@ -164,18 +214,25 @@ public:
 private:
 
 	PrimitiveBatch* m_prim = nullptr;
+
+	bool m_enableWireframe = false;
 	bool m_enableAnimation = false;
-	bool m_enableMSAA = false;
-	int m_msaaQuality = 1;
+	int m_msaaQuality = 0;
+	int m_zoom = 0;
+	DynamicArray<u32> m_msaaModes;
+
 	float m_animationTime = 0.0f;
 
 	GfxOwn<GfxBlendState> m_blendPremult;
 	GfxOwn<GfxBlendState> m_blendOpaque;
 	GfxOwn<GfxTexture> m_resolveTarget;
 	GfxOwn<GfxTexture> m_msaaTarget;
-	int m_currentSampleCount = 0;
+	u32 m_currentSampleCount = 0;
+	u32 m_currentZoom = 0;
 
 	Timer m_deltaTime;
+
+	u32 m_maxResolution = 1024;
 };
 
 int main()
