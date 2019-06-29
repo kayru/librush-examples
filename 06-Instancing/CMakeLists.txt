@@ -16,7 +16,7 @@ add_executable(${app}
 	Instancing.cpp
 )
 
-target_link_libraries(${app} Common)
+target_link_libraries(${app} Common tiny_obj_loader)
 target_compile_definitions(${app} PRIVATE RUSH_USING_NAMESPACE)
 
 hlsl_shader_compile_rule(ModelPS.hlsl fragment)

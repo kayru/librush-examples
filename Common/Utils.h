@@ -78,4 +78,15 @@ inline std::string directoryFromFilename(const std::string& filename)
 
 bool endsWith(const char* str, const char* suffix);
 
+
+struct HumanFriendlyValue
+{
+	double value;
+	const char* unit;
+};
+
+HumanFriendlyValue getHumanFriendlyValue(double v);
+HumanFriendlyValue getHumanFriendlyValueShort(double v);
+
+
 }

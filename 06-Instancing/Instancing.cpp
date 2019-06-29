@@ -14,8 +14,18 @@
 #include <stdio.h>
 #include <vector>
 
+#include <tiny_obj_loader.h>
+
+static AppConfig g_appCfg;
+
 class InstancingApp : public ExampleApp
 {
+	struct Vertex
+	{
+		Vec3       position;
+		ColorRGBA8 color;
+	};
+
 public:
 	InstancingApp() : ExampleApp()
 	{
@@ -23,77 +33,15 @@ public:
 
 		// TODO: load a model from obj file
 
-#if 0
-
-		// clang-format off
-		Vertex meshVertices[8] =
+		if (g_appCfg.argc >= 2)
 		{
-			{Vec3(-1.0, -1.0, +1.0), ColorRGBA8(0x00, 0x00, 0xFF)},
-			{Vec3(+1.0, -1.0, +1.0), ColorRGBA8(0xFF, 0x00, 0xFF)},
-			{Vec3(+1.0, +1.0, +1.0), ColorRGBA8(0xFF, 0xFF, 0xFF)},
-			{Vec3(-1.0, +1.0, +1.0), ColorRGBA8(0x00, 0xFF, 0xFF)},
-			{Vec3(-1.0, -1.0, -1.0), ColorRGBA8(0x00, 0x00, 0x00)},
-			{Vec3(+1.0, -1.0, -1.0), ColorRGBA8(0xFF, 0x00, 0x00)},
-			{Vec3(+1.0, +1.0, -1.0), ColorRGBA8(0xFF, 0xFF, 0x00)},
-			{Vec3(-1.0, +1.0, -1.0), ColorRGBA8(0x00, 0xFF, 0x00)},
-		};
-
-		u32 meshIndices[36] =
-		{
-			0, 1, 2, 2, 3, 0,
-			1, 5, 6, 6, 2, 1,
-			7, 6, 5, 5, 4, 7,
-			4, 0, 3, 3, 7, 4,
-			4, 5, 1, 1, 0, 4,
-			3, 2, 6, 6, 7, 3,
-		};
-		// clang-format on
-#else
-
-		// clang-format off
-		Vertex meshVertices[12];
-		{
-			const float t = (1.0f + sqrtf(5.0f)) / 2.0f;
-
-			Vec2 p = normalize(Vec2(1, t));
-
-			u32 i = 0;
-
-			auto makeVertex = [](float x, float y, float z) {
-				Vertex v;
-				v.position = Vec3(x, y, z) * 2.0f;
-				v.color    = ColorRGBA(Vec3(x, y, z) * 0.5f + 0.5f, 1.0f);
-				return v;
-			};
-
-			meshVertices[i++] = makeVertex(-p.x, p.y, 0);
-			meshVertices[i++] = makeVertex(+p.x, p.y, 0);
-			meshVertices[i++] = makeVertex(-p.x, -p.y, 0);
-			meshVertices[i++] = makeVertex(+p.x, -p.y, 0);
-			meshVertices[i++] = makeVertex(0, -p.x, p.y);
-			meshVertices[i++] = makeVertex(0, p.x, p.y);
-			meshVertices[i++] = makeVertex(0, -p.x, -p.y);
-			meshVertices[i++] = makeVertex(0, p.x, -p.y);
-			meshVertices[i++] = makeVertex(p.y, 0, -p.x);
-			meshVertices[i++] = makeVertex(p.y, 0, p.x);
-			meshVertices[i++] = makeVertex(-p.y, 0, -p.x);
-			meshVertices[i++] = makeVertex(-p.y, 0, p.x);
+			loadMesh(g_appCfg.argv[1]);
 		}
 
-		u32 meshIndices[60] = {0, 11, 5, 0, 5, 1, 0, 1, 7, 0, 7, 10, 0, 10, 11, 1, 5, 9, 5, 11, 4, 11, 10, 2, 10, 7, 6,
-		    7, 1, 8, 3, 9, 4, 3, 4, 2, 3, 2, 6, 3, 6, 8, 3, 8, 9, 4, 9, 5, 2, 4, 11, 6, 2, 10, 8, 6, 7, 9, 8, 1};
-		// clang-format on
-#endif
-
-		m_meshVertexCount = RUSH_COUNTOF(meshVertices);
-		m_meshIndexCount  = RUSH_COUNTOF(meshIndices);
-
-		m_vertexBuffer = Gfx_CreateBuffer(
-		    GfxBufferDesc(GfxBufferFlags::Vertex, RUSH_COUNTOF(meshVertices), sizeof(meshVertices[0])), meshVertices);
-
-		m_indexBuffer = Gfx_CreateBuffer(
-		    GfxBufferDesc(GfxBufferFlags::Index, GfxFormat_R32_Uint, RUSH_COUNTOF(meshIndices), sizeof(meshIndices[0])),
-		    meshIndices);
+		if (m_meshIndexCount == 0)
+		{
+			generateMesh();
+		}
 
 		GfxVertexFormatDesc vfDesc;
 		vfDesc.add(0, GfxVertexFormatDesc::DataType::Float3, GfxVertexFormatDesc::Semantic::Position, 0);
@@ -206,6 +154,176 @@ public:
 
 		m_paddedInstanceConstants.resize(MaxInstanceCount);
 		m_instanceConstants.resize(MaxInstanceCount);
+	}
+
+	static Vec4 computeApproximateBoundingSphere(Vertex* vertices, u32 count)
+	{
+		Vec3 avgPosition = Vec3(0.0f);
+		for (u32 i = 0; i < count; ++i)
+		{
+			avgPosition += vertices[i].position;
+		}
+		avgPosition /= float(count);
+
+		float maxDistanceSqr = 0.0f;
+		for (u32 i = 0; i < count; ++i)
+		{
+			Vec3 delta = vertices[i].position - avgPosition;
+			maxDistanceSqr = dot(delta, delta);
+		}
+		
+		return Vec4(avgPosition, sqrtf(maxDistanceSqr));
+	}
+
+	bool loadMesh(const char* filename)
+	{
+		if (!endsWith(filename, ".obj"))
+		{
+			RUSH_LOG_WARNING("Only .obj models are supported");
+			return false;
+		}
+
+		std::vector<tinyobj::shape_t>    shapes;
+		std::vector<tinyobj::material_t> materials;
+		std::string                      errors;
+
+		std::string directory = directoryFromFilename(filename);
+
+		bool loaded = tinyobj::LoadObj(shapes, materials, errors, filename, directory.c_str());
+		if (!loaded)
+		{
+			RUSH_LOG_ERROR("OBJ loader error: %s", errors.c_str());
+			return false;
+		}
+
+		std::vector<Vertex> vertices;
+		std::vector<u32>  indices;
+
+		for (const auto& shape : shapes)
+		{
+			u32         firstVertex = (u32)vertices.size();
+			const auto& mesh = shape.mesh;
+
+			const u32 vertexCount = (u32)mesh.positions.size() / 3;
+
+			const bool haveTexcoords = !mesh.texcoords.empty();
+			const bool haveNormals = mesh.positions.size() == mesh.normals.size();
+
+			for (u32 i = 0; i < vertexCount; ++i)
+			{
+				Vertex v = {};
+
+				v.position.x = mesh.positions[i * 3 + 0];
+				v.position.y = mesh.positions[i * 3 + 1];
+				v.position.z = mesh.positions[i * 3 + 2];
+
+				vertices.push_back(v);
+			}
+
+			const u32 triangleCount = (u32)mesh.indices.size() / 3;
+			for (u32 triangleIt = 0; triangleIt < triangleCount; ++triangleIt)
+			{
+				indices.push_back(mesh.indices[triangleIt * 3 + 0] + firstVertex);
+				indices.push_back(mesh.indices[triangleIt * 3 + 2] + firstVertex);
+				indices.push_back(mesh.indices[triangleIt * 3 + 1] + firstVertex);
+			}
+
+			m_meshVertexCount = (u32)vertices.size();
+			m_meshIndexCount = (u32)indices.size();
+		}
+
+		Vec4 boundingSphere = computeApproximateBoundingSphere(&vertices[0], m_meshVertexCount);
+		for (Vertex& v : vertices)
+		{
+			v.position -= boundingSphere.xyz();
+			v.position /= boundingSphere.w;
+
+			Vec3 n = normalize(v.position);
+			v.color = ColorRGBA(n * 0.5f + 0.5f, 1.0f);
+		}
+
+		GfxBufferDesc vbDesc(GfxBufferFlags::Vertex, GfxFormat_Unknown, m_meshVertexCount, sizeof(Vertex));
+		m_vertexBuffer = Gfx_CreateBuffer(vbDesc, vertices.data());
+
+		GfxBufferDesc ibDesc(GfxBufferFlags::Index, GfxFormat_R32_Uint, m_meshIndexCount, 4);
+		m_indexBuffer = Gfx_CreateBuffer(ibDesc, indices.data());
+
+		return true;
+	}
+
+	void generateMesh()
+	{
+#if 0
+
+		// clang-format off
+		Vertex meshVertices[8] =
+		{
+			{Vec3(-1.0, -1.0, +1.0), ColorRGBA8(0x00, 0x00, 0xFF)},
+			{Vec3(+1.0, -1.0, +1.0), ColorRGBA8(0xFF, 0x00, 0xFF)},
+			{Vec3(+1.0, +1.0, +1.0), ColorRGBA8(0xFF, 0xFF, 0xFF)},
+			{Vec3(-1.0, +1.0, +1.0), ColorRGBA8(0x00, 0xFF, 0xFF)},
+			{Vec3(-1.0, -1.0, -1.0), ColorRGBA8(0x00, 0x00, 0x00)},
+			{Vec3(+1.0, -1.0, -1.0), ColorRGBA8(0xFF, 0x00, 0x00)},
+			{Vec3(+1.0, +1.0, -1.0), ColorRGBA8(0xFF, 0xFF, 0x00)},
+			{Vec3(-1.0, +1.0, -1.0), ColorRGBA8(0x00, 0xFF, 0x00)},
+		};
+
+		u32 meshIndices[36] =
+		{
+			0, 1, 2, 2, 3, 0,
+			1, 5, 6, 6, 2, 1,
+			7, 6, 5, 5, 4, 7,
+			4, 0, 3, 3, 7, 4,
+			4, 5, 1, 1, 0, 4,
+			3, 2, 6, 6, 7, 3,
+		};
+		// clang-format on
+#else
+
+		// clang-format off
+		Vertex meshVertices[12];
+		{
+			const float t = (1.0f + sqrtf(5.0f)) / 2.0f;
+
+			Vec2 p = normalize(Vec2(1, t));
+
+			u32 i = 0;
+
+			auto makeVertex = [](float x, float y, float z) {
+				Vertex v;
+				v.position = Vec3(x, y, z) * 2.0f;
+				v.color = ColorRGBA(Vec3(x, y, z) * 0.5f + 0.5f, 1.0f);
+				return v;
+			};
+
+			meshVertices[i++] = makeVertex(-p.x, p.y, 0);
+			meshVertices[i++] = makeVertex(+p.x, p.y, 0);
+			meshVertices[i++] = makeVertex(-p.x, -p.y, 0);
+			meshVertices[i++] = makeVertex(+p.x, -p.y, 0);
+			meshVertices[i++] = makeVertex(0, -p.x, p.y);
+			meshVertices[i++] = makeVertex(0, p.x, p.y);
+			meshVertices[i++] = makeVertex(0, -p.x, -p.y);
+			meshVertices[i++] = makeVertex(0, p.x, -p.y);
+			meshVertices[i++] = makeVertex(p.y, 0, -p.x);
+			meshVertices[i++] = makeVertex(p.y, 0, p.x);
+			meshVertices[i++] = makeVertex(-p.y, 0, -p.x);
+			meshVertices[i++] = makeVertex(-p.y, 0, p.x);
+		}
+
+		u32 meshIndices[60] = { 0, 11, 5, 0, 5, 1, 0, 1, 7, 0, 7, 10, 0, 10, 11, 1, 5, 9, 5, 11, 4, 11, 10, 2, 10, 7, 6,
+			7, 1, 8, 3, 9, 4, 3, 4, 2, 3, 2, 6, 3, 6, 8, 3, 8, 9, 4, 9, 5, 2, 4, 11, 6, 2, 10, 8, 6, 7, 9, 8, 1 };
+		// clang-format on
+#endif
+
+		m_meshVertexCount = RUSH_COUNTOF(meshVertices);
+		m_meshIndexCount = RUSH_COUNTOF(meshIndices);
+
+		m_vertexBuffer = Gfx_CreateBuffer(
+			GfxBufferDesc(GfxBufferFlags::Vertex, RUSH_COUNTOF(meshVertices), sizeof(meshVertices[0])), meshVertices);
+
+		m_indexBuffer = Gfx_CreateBuffer(
+			GfxBufferDesc(GfxBufferFlags::Index, GfxFormat_R32_Uint, RUSH_COUNTOF(meshIndices), sizeof(meshIndices[0])),
+			meshIndices);
 	}
 
 	void update() override
@@ -457,8 +575,15 @@ public:
 
 		m_prim->begin2D(m_window->getSize());
 		char statusString[1024];
-		snprintf(statusString, 1024, "Method: %s\nCubes: %d\nCPU: %.2f ms\nGPU: %.2f", toString(m_method),
-		    m_instanceCount, m_cpuTime.get() * 1000.0f, m_gpuTime.get() * 1000.0f);
+		HumanFriendlyValue triangleCount = getHumanFriendlyValueShort(m_meshIndexCount * m_instanceCount / 3);
+		snprintf(statusString, 1024, 
+			"Method: %s\n"
+			"Meshes: %d\n"
+			"Triangles: %.2f%s\n"
+			"CPU: %.2f ms\n"
+			"GPU: %.2f", toString(m_method),
+		    m_instanceCount, triangleCount.value, triangleCount.unit,
+			m_cpuTime.get() * 1000.0f, m_gpuTime.get() * 1000.0f);
 
 		m_font->draw(m_prim, Vec2(10.0f), statusString);
 		m_prim->end2D();
@@ -485,6 +610,26 @@ public:
 			m_instanceCount -= 50;
 		}
 
+		if (m_window->getKeyboardState().isKeyDown(Key_PageUp))
+		{
+			m_instanceCount += 1000;
+		}
+
+		if (m_window->getKeyboardState().isKeyDown(Key_PageDown))
+		{
+			m_instanceCount -= 1000;
+		}
+
+		if (m_window->getKeyboardState().isKeyDown(Key_Home))
+		{
+			m_instanceCount = MaxInstanceCount;
+		}
+
+		if (m_window->getKeyboardState().isKeyDown(Key_End))
+		{
+			m_instanceCount = 1;
+		}
+
 		for (u32 i = 0; i < (u32)Method::count; ++i)
 		{
 			if (m_window->getKeyboardState().isKeyDown(Key_1 + i))
@@ -497,11 +642,7 @@ public:
 	}
 
 private:
-	struct Vertex
-	{
-		Vec3       position;
-		ColorRGBA8 color;
-	};
+
 
 	struct GlobalConstants
 	{
@@ -585,19 +726,19 @@ private:
 	MovingAverage<double, 60> m_cpuTime;
 };
 
-int main()
+int main(int argc, char** argv)
 {
-	AppConfig cfg;
+	g_appCfg.name = "Instancing (" RUSH_RENDER_API_NAME ")";
 
-	cfg.name = "Instancing (" RUSH_RENDER_API_NAME ")";
-
-	cfg.width     = 1280;
-	cfg.height    = 720;
-	cfg.resizable = true;
+	g_appCfg.width     = 1280;
+	g_appCfg.height    = 720;
+	g_appCfg.argc      = argc;
+	g_appCfg.argv      = argv;
+	g_appCfg.resizable = true;
 
 #ifdef RUSH_DEBUG
-	cfg.debug = true;
+	g_appCfg.debug = true;
 #endif
 
-	return Platform_Main<InstancingApp>(cfg);
+	return Platform_Main<InstancingApp>(g_appCfg);
 }

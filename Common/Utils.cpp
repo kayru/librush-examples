@@ -18,6 +18,46 @@ bool endsWith(const char* str, const char* suffix)
 	return !strcmp(str + len1 - len2, suffix);
 }
 
+HumanFriendlyValue getHumanFriendlyValue(double v)
+{
+	if (v >= 1e9)
+	{
+		return HumanFriendlyValue{ v / 1e9, "Billion" };
+	}
+	else if (v >= 1e6)
+	{
+		return HumanFriendlyValue{ v / 1e6, "Million" };
+	}
+	else if (v >= 1e3)
+	{
+		return HumanFriendlyValue{ v / 1e3, "Thousand" };
+	}
+	else
+	{
+		return HumanFriendlyValue{ v, "" };
+	}
+}
+
+HumanFriendlyValue getHumanFriendlyValueShort(double v)
+{
+	if (v >= 1e9)
+	{
+		return HumanFriendlyValue{ v / 1e9, "B" };
+	}
+	else if (v >= 1e6)
+	{
+		return HumanFriendlyValue{ v / 1e6, "M" };
+	}
+	else if (v >= 1e3)
+	{
+		return HumanFriendlyValue{ v / 1e3, "K" };
+	}
+	else
+	{
+		return HumanFriendlyValue{ v, "" };
+	}
+}
+
 GfxShaderSource loadShaderFromFile(const char* filename, const char* shaderDirectory)
 {
 	const char* fullFilename = filename;
