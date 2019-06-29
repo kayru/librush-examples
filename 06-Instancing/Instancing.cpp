@@ -137,20 +137,10 @@ public:
 		m_dynamicInstanceConstantBuffer = Gfx_CreateBuffer(
 		    GfxBufferDesc(GfxBufferFlags::TransientConstant, GfxFormat_Unknown, 1, sizeof(InstanceConstants)));
 
-		m_indirectArgs.resize(MaxInstanceCount);
-		for (u32 i = 0; i < MaxInstanceCount; ++i)
-		{
-			GfxDrawIndexedArg& arg = m_indirectArgs[i];
-			arg.indexCount         = m_meshIndexCount;
-			arg.instanceCount      = 1;
-			arg.firstIndex         = 0;
-			arg.vertexOffset       = 0;
-			arg.firstInstance      = i;
-		}
+		m_indirectArgs.resize(MaxBatchSize);
 
 		m_indirectArgsBuffer = Gfx_CreateBuffer(
-		    GfxBufferDesc(GfxBufferFlags::IndirectArgs, GfxFormat_Unknown, MaxInstanceCount, sizeof(GfxDrawIndexedArg)),
-		    m_indirectArgs.data());
+		    GfxBufferDesc(GfxBufferFlags::IndirectArgs | GfxBufferFlags::Transient, GfxFormat_Unknown, MaxBatchSize, sizeof(GfxDrawIndexedArg)));
 
 		m_paddedInstanceConstants.resize(MaxInstanceCount);
 		m_instanceConstants.resize(MaxInstanceCount);
@@ -388,6 +378,14 @@ public:
 
 		double drawTime = 0.0;
 
+		u32 trianglesPerDraw = m_meshIndexCount / 3;
+		u32 trianglesPerFrame = trianglesPerDraw * m_instanceCount;
+		if (m_limitTriangleCount && trianglesPerFrame > m_maxTrianglesPerFrame)
+		{
+			trianglesPerDraw = max<u32>(1, m_maxTrianglesPerFrame / m_instanceCount);
+		}
+		u32 indicesPerDraw = trianglesPerDraw * 3;
+
 		if (m_method == Method::ConstantBufferOffset)
 		{
 			Gfx_SetTechnique(ctx, m_technique);
@@ -405,7 +403,7 @@ public:
 			for (u32 i = 0; i < (u32)m_instanceCount; ++i)
 			{
 				Gfx_SetConstantBuffer(ctx, 1, m_instanceConstantBuffer, sizeof(PaddedInstanceConstants) * i);
-				Gfx_DrawIndexed(ctx, m_meshIndexCount, 0, 0, m_meshVertexCount);
+				Gfx_DrawIndexed(ctx, indicesPerDraw, 0, 0, m_meshVertexCount);
 			}
 
 			drawTime += m_timer.time();
@@ -423,7 +421,7 @@ public:
 
 				Gfx_UpdateBufferT(ctx, m_dynamicInstanceConstantBuffer, constants);
 				Gfx_SetConstantBuffer(ctx, 1, m_dynamicInstanceConstantBuffer);
-				Gfx_DrawIndexed(ctx, m_meshIndexCount, 0, 0, m_meshVertexCount);
+				Gfx_DrawIndexed(ctx, indicesPerDraw, 0, 0, m_meshVertexCount);
 
 				drawTime += m_timer.time();
 			}
@@ -441,7 +439,7 @@ public:
 				drawTime -= m_timer.time();
 
 				Gfx_DrawIndexed(
-				    ctx, m_meshIndexCount, 0, 0, m_meshVertexCount, &constants.world, sizeof(constants.world));
+				    ctx, indicesPerDraw, 0, 0, m_meshVertexCount, &constants.world, sizeof(constants.world));
 
 				drawTime += m_timer.time();
 			}
@@ -472,7 +470,7 @@ public:
 
 				for (u32 i = 0; i < (u32)batchSize; ++i)
 				{
-					Gfx_DrawIndexed(ctx, m_meshIndexCount, 0, 0, m_meshVertexCount, &i, sizeof(i));
+					Gfx_DrawIndexed(ctx, indicesPerDraw, 0, 0, m_meshVertexCount, &i, sizeof(i));
 				}
 
 				drawTime += m_timer.time();
@@ -501,7 +499,7 @@ public:
 				Gfx_UpdateBuffer(
 				    ctx, m_instanceConstantBuffer, m_instanceConstants.data(), batchSize * sizeof(InstanceConstants));
 				Gfx_SetConstantBuffer(ctx, 1, m_instanceConstantBuffer);
-				Gfx_DrawIndexedInstanced(ctx, m_meshIndexCount, 0, 0, m_meshVertexCount, batchSize, 0);
+				Gfx_DrawIndexedInstanced(ctx, indicesPerDraw, 0, 0, m_meshVertexCount, batchSize, 0);
 
 				drawTime += m_timer.time();
 			}
@@ -533,7 +531,7 @@ public:
 
 				for (u32 i = 0; i < (u32)batchSize; ++i)
 				{
-					Gfx_DrawIndexedInstanced(ctx, m_meshIndexCount, 0, 0, m_meshVertexCount, 1, i);
+					Gfx_DrawIndexedInstanced(ctx, indicesPerDraw, 0, 0, m_meshVertexCount, 1, i);
 				}
 
 				drawTime += m_timer.time();
@@ -560,8 +558,22 @@ public:
 
 				drawTime -= m_timer.time();
 
+				for (u32 i = 0; i < batchSize; ++i)
+				{
+					GfxDrawIndexedArg& arg = m_indirectArgs[i];
+					arg.indexCount = indicesPerDraw;
+					arg.instanceCount = 1;
+					arg.firstIndex = 0;
+					arg.vertexOffset = 0;
+					arg.firstInstance = i;
+				}
+
+				Gfx_UpdateBuffer(
+					ctx, m_indirectArgsBuffer, m_indirectArgs.data(), batchSize * sizeof(GfxDrawIndexedArg));
+
 				Gfx_UpdateBuffer(
 				    ctx, m_instanceConstantBuffer, m_instanceConstants.data(), batchSize * sizeof(InstanceConstants));
+
 				Gfx_SetConstantBuffer(ctx, 1, m_instanceConstantBuffer);
 
 				Gfx_DrawIndexedIndirect(ctx, m_indirectArgsBuffer, 0, batchSize);
@@ -575,14 +587,14 @@ public:
 
 		m_prim->begin2D(m_window->getSize());
 		char statusString[1024];
-		HumanFriendlyValue triangleCount = getHumanFriendlyValueShort(m_meshIndexCount * m_instanceCount / 3);
+		HumanFriendlyValue triangleCount = getHumanFriendlyValueShort(indicesPerDraw * m_instanceCount / 3);
 		snprintf(statusString, 1024, 
 			"Method: %s\n"
 			"Meshes: %d\n"
 			"Triangles: %.2f%s\n"
 			"CPU: %.2f ms\n"
 			"GPU: %.2f", toString(m_method),
-		    m_instanceCount, triangleCount.value, triangleCount.unit,
+			m_instanceCount, triangleCount.value, triangleCount.unit,
 			m_cpuTime.get() * 1000.0f, m_gpuTime.get() * 1000.0f);
 
 		m_font->draw(m_prim, Vec2(10.0f), statusString);
@@ -709,6 +721,8 @@ private:
 	}
 
 	Method m_method = Method::Instancing;
+	bool m_limitTriangleCount = true;
+	const u32 m_maxTrianglesPerFrame = 100'000'000;
 
 	u32 m_meshVertexCount = 0;
 	u32 m_meshIndexCount  = 0;
@@ -716,8 +730,8 @@ private:
 	int m_instanceCount = 10000;
 	enum
 	{
-		MaxInstanceCount = 50000,
-		MaxBatchSize     = 1000, // making this larger requires updating vertex shaders
+		MaxInstanceCount = 1'000'000,
+		MaxBatchSize     = 1000,
 	};
 
 	Timer m_timer;
