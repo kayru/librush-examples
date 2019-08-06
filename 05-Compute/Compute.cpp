@@ -25,7 +25,8 @@ public:
 		GfxShaderBindingDesc bindings;
 		bindings.constantBuffers = 1;
 		bindings.rwImages        = 1;
-		m_technique = Gfx_CreateTechnique(GfxTechniqueDesc(m_computeShader, bindings));
+
+		m_technique = Gfx_CreateTechnique(GfxTechniqueDesc(m_computeShader, bindings, {8,8,1}));
 
 		GfxTextureDesc textureDesc = GfxTextureDesc::make2D(m_imageSize.x, m_imageSize.y, GfxFormat_RGBA8_Unorm,
 		    GfxUsageFlags::ShaderResource | GfxUsageFlags::StorageImage);
