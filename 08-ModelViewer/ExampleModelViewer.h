@@ -96,7 +96,11 @@ private:
 	{
 		GfxTexture albedoTexture;
 		GfxBuffer constantBuffer;
+
+		GfxOwn<GfxDescriptorSet> descriptorSet;
 	};
+
+	GfxDescriptorSetDesc m_materialDescriptorSetDesc;
 
 	std::vector<Material> m_materials;
 	Material m_defaultMaterial;
