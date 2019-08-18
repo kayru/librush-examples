@@ -31,6 +31,8 @@ public:
 	{
 		Gfx_SetPresentInterval(0);
 
+		const GfxCapability& caps = Gfx_GetCapability();
+
 		// TODO: load a model from obj file
 
 		if (g_appCfg.argc >= 2)
@@ -75,6 +77,7 @@ public:
 				m_technique = Gfx_CreateTechnique(techDesc);
 			}
 
+			if (caps.pushConstants)
 			{
 				auto vsPush = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelPush.vert")));
 				GfxShaderBindingDesc bindings;
@@ -89,6 +92,7 @@ public:
 				m_techniquePush = Gfx_CreateTechnique(techDesc);
 			}
 
+			if (caps.pushConstants)
 			{
 				auto vsPushOffset = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelPushOffset.vert")));
 				GfxShaderBindingDesc bindings;
@@ -103,6 +107,7 @@ public:
 				m_techniquePushOffset = Gfx_CreateTechnique(techDesc);
 			}
 
+			if (caps.instancing)
 			{
 				auto vsInstanced = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelInstanced.vert")));
 				GfxShaderBindingDesc bindings;
@@ -115,6 +120,7 @@ public:
 				m_techniqueInstanced = Gfx_CreateTechnique(techDesc);
 			}
 
+			if (caps.instancing)
 			{
 				auto vsInstanceId = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelInstanced.vert")));
 				GfxShaderBindingDesc bindings;
@@ -426,8 +432,7 @@ public:
 				drawTime += m_timer.time();
 			}
 		}
-#if RUSH_RENDER_API != RUSH_RENDER_API_MTL
-		else if (m_method == Method::PushConstants)
+		else if (m_method == Method::PushConstants && caps.pushConstants)
 		{
 			Gfx_SetTechnique(ctx, m_techniquePush);
 
@@ -444,7 +449,7 @@ public:
 				drawTime += m_timer.time();
 			}
 		}
-		else if (m_method == Method::ConstantBufferPushOffset)
+		else if (m_method == Method::ConstantBufferPushOffset && caps.pushConstants)
 		{
 			Gfx_SetTechnique(ctx, m_techniquePushOffset);
 
@@ -476,7 +481,7 @@ public:
 				drawTime += m_timer.time();
 			}
 		}
-		else if (m_method == Method::Instancing)
+		else if (m_method == Method::Instancing && caps.instancing)
 		{
 			Gfx_SetTechnique(ctx, m_techniqueInstanced);
 
@@ -504,7 +509,7 @@ public:
 				drawTime += m_timer.time();
 			}
 		}
-		else if (m_method == Method::InstanceId)
+		else if (m_method == Method::InstanceId && caps.instancing)
 		{
 			Gfx_SetVertexStream(ctx, 1, m_instanceIdBuffer);
 			Gfx_SetTechnique(ctx, m_techniqueInstanceId);
@@ -537,7 +542,7 @@ public:
 				drawTime += m_timer.time();
 			}
 		}
-		else if (m_method == Method::DrawIndirect)
+		else if (m_method == Method::DrawIndirect && caps.drawIndirect)
 		{
 			Gfx_SetVertexStream(ctx, 1, m_instanceIdBuffer);
 			Gfx_SetTechnique(ctx, m_techniqueInstanceId);
@@ -581,7 +586,6 @@ public:
 				drawTime += m_timer.time();
 			}
 		}
-#endif
 
 		m_cpuTime.add(drawTime);
 

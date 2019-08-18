@@ -8,7 +8,7 @@ layout (binding = 0) uniform Global
 	mat4 g_matViewProj;
 };
 
-layout(constant_id = 0) const int maxBatchCount = 1;
+layout(constant_id = 0) const int maxBatchCount = 1000;
 layout(binding = 1) uniform Instance
 {
 	mat4 g_matWorld[maxBatchCount];
