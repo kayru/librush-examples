@@ -444,7 +444,9 @@ bool ExampleModelViewer::loadModelObj(const char* filename)
 		Material material;
 		if (!objMaterial.diffuse_texname.empty())
 		{
-			enqueueLoadTexture(directory + objMaterial.diffuse_texname, materialId);
+			std::string filename = directory + objMaterial.diffuse_texname;
+			fixDirectorySeparatorsInplace(filename);
+			enqueueLoadTexture(filename, materialId);
 		}
 
 		material.albedoTexture = m_defaultWhiteTexture.get();

@@ -76,8 +76,9 @@ inline std::string directoryFromFilename(const std::string& filename)
 	}
 }
 
-bool endsWith(const char* str, const char* suffix);
+void fixDirectorySeparatorsInplace(std::string& path);
 
+bool endsWith(const char* str, const char* suffix);
 
 struct HumanFriendlyValue
 {
