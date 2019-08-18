@@ -18,6 +18,17 @@ bool endsWith(const char* str, const char* suffix)
 	return !strcmp(str + len1 - len2, suffix);
 }
 
+void fixDirectorySeparatorsInplace(std::string& path)
+{
+	for(char& c : path)
+	{
+		if (c == '\\')
+		{
+			c = '/';
+		}
+	}
+}
+
 HumanFriendlyValue getHumanFriendlyValue(double v)
 {
 	if (v >= 1e9)
