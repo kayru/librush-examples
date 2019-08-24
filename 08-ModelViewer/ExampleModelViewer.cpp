@@ -78,6 +78,7 @@ ExampleModelViewer::ExampleModelViewer() : ExampleApp(), m_boundingBox(Vec3(0.0f
 
 	m_materialDescriptorSetDesc.textures = 1; // albedo texture
 	m_materialDescriptorSetDesc.constantBuffers = 1; // material constants
+	m_materialDescriptorSetDesc.stageFlags = GfxStageFlags::VertexPixel;
 
 	GfxShaderBindingDesc bindings;
 	bindings.constantBuffers = 1; // scene constants
@@ -190,6 +191,7 @@ void ExampleModelViewer::update()
 	m_cameraMan->update(&m_camera, dt, m_window->getKeyboardState(), m_window->getMouseState());
 
 	m_interpolatedCamera.blendTo(m_camera, 0.1f, 0.125f);
+	m_interpolatedCamera.blendTo(m_camera, 0.1f, 0.125f);
 
 	m_windowEvents.clear();
 
@@ -217,7 +219,13 @@ void ExampleModelViewer::update()
 			for (u32 i : textureData->patchList)
 			{
 				m_materials[i].albedoTexture = textureData->albedoTexture.get();
-				Gfx_SetTexture(m_materials[i].descriptorSet, 0, textureData->albedoTexture.get());
+				Gfx_UpdateDescriptorSet(m_materials[i].descriptorSet,
+					&m_materials[i].constantBuffer,
+					nullptr, // samplers
+					&m_materials[i].albedoTexture,
+					nullptr, // storage images
+					nullptr  // storage buffers
+				);
 			}
 		}
 	}
@@ -467,9 +475,13 @@ bool ExampleModelViewer::loadModelObj(const char* filename)
 		}
 
 		material.descriptorSet = Gfx_CreateDescriptorSet(m_materialDescriptorSetDesc);
-
-		Gfx_SetConstantBuffer(material.descriptorSet, 0, material.constantBuffer);
-		Gfx_SetTexture(material.descriptorSet, 0, m_defaultWhiteTexture);
+		Gfx_UpdateDescriptorSet(material.descriptorSet,
+			&material.constantBuffer,
+			nullptr, // samplers
+			&material.albedoTexture,
+			nullptr, // storage images
+			nullptr  // storage buffers
+		);
 
 		m_materials.push_back(std::move(material));
 	}
@@ -482,8 +494,13 @@ bool ExampleModelViewer::loadModelObj(const char* filename)
 		m_defaultMaterial.albedoTexture = m_defaultWhiteTexture.get();
 
 		m_defaultMaterial.descriptorSet = Gfx_CreateDescriptorSet(m_materialDescriptorSetDesc);
-		Gfx_SetConstantBuffer(m_defaultMaterial.descriptorSet, 0, m_defaultConstantBuffer);
-		Gfx_SetTexture(m_defaultMaterial.descriptorSet, 0, m_defaultWhiteTexture);
+		Gfx_UpdateDescriptorSet(m_defaultMaterial.descriptorSet,
+			&m_defaultMaterial.constantBuffer,
+			nullptr, // samplers
+			&m_defaultMaterial.albedoTexture,
+			nullptr, // storage images
+			nullptr  // storage buffers
+		);
 	}
 
 	RUSH_LOG("Converting mesh");
