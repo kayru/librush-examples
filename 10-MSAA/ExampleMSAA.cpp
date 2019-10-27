@@ -129,10 +129,11 @@ public:
 			for (ColorRGBA8 c : colors)
 			{
 				m_prim->drawTriangle(
-					vertices[vertIdx++],
-					vertices[vertIdx++],
-					vertices[vertIdx++],
+					vertices[vertIdx+0],
+					vertices[vertIdx+1],
+					vertices[vertIdx+2],
 					c);
+				vertIdx += 3;
 			}
 
 			m_prim->end2D();
