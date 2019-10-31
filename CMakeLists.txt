@@ -30,7 +30,7 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 			OUTPUT ${CMAKE_CFG_INTDIR}/${shaderName}.metal
 			COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CFG_INTDIR}
 			COMMAND ${GLSLC} -x hlsl -fentry-point=main -fshader-stage=${stage} -o ${CMAKE_CFG_INTDIR}/${shaderName}.bin ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
-			COMMAND ${spirv-cross} --metal ${CMAKE_CFG_INTDIR}/${shaderName}.bin > ${CMAKE_CFG_INTDIR}/${shaderName}.metal
+			COMMAND ${spirv-cross} --msl ${extra_args} ${CMAKE_CFG_INTDIR}/${shaderName}.bin > ${CMAKE_CFG_INTDIR}/${shaderName}.metal
 			MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
 		)
 	endfunction(hlsl_shader_compile_rule)
@@ -39,7 +39,7 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 			OUTPUT ${CMAKE_CFG_INTDIR}/${shaderName}.metal
 			COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CFG_INTDIR}
 			COMMAND ${GLSLC} -o ${CMAKE_CFG_INTDIR}/${shaderName}.bin ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
-			COMMAND ${spirv-cross} --metal ${CMAKE_CFG_INTDIR}/${shaderName}.bin > ${CMAKE_CFG_INTDIR}/${shaderName}.metal
+			COMMAND ${spirv-cross} --metal ${spirv-cross-args} ${CMAKE_CFG_INTDIR}/${shaderName}.bin > ${CMAKE_CFG_INTDIR}/${shaderName}.metal
 			MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
 		)
 	endfunction(glsl_shader_compile_rule)

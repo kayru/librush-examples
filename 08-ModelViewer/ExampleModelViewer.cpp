@@ -38,6 +38,7 @@ int main(int argc, char** argv)
 
 #ifdef RUSH_DEBUG
 	g_appCfg.debug = true;
+	Log::breakOnError = true;
 #endif
 
 	return Platform_Main<ExampleModelViewer>(g_appCfg);
@@ -75,10 +76,14 @@ ExampleModelViewer::ExampleModelViewer() : ExampleApp(), m_boundingBox(Vec3(0.0f
 
 	m_vf = Gfx_CreateVertexFormat(vfDesc);
 
+	m_materialDescriptorSetDesc.textures = 1; // albedo texture
+	m_materialDescriptorSetDesc.constantBuffers = 1; // material constants
+	m_materialDescriptorSetDesc.stageFlags = GfxStageFlags::VertexPixel;
+
 	GfxShaderBindingDesc bindings;
-	bindings.constantBuffers = 2; // scene constants, material constants
-	bindings.samplers        = 1; // linear sampler
-	bindings.textures        = 1; // albedo texture
+	bindings.constantBuffers = 1; // scene constants
+	bindings.samplers = 1; // linear sampler
+	bindings.descriptorSets[1] = m_materialDescriptorSetDesc;
 
 	m_technique = Gfx_CreateTechnique(GfxTechniqueDesc(m_ps, m_vs, m_vf, bindings));
 
@@ -186,6 +191,7 @@ void ExampleModelViewer::update()
 	m_cameraMan->update(&m_camera, dt, m_window->getKeyboardState(), m_window->getMouseState());
 
 	m_interpolatedCamera.blendTo(m_camera, 0.1f, 0.125f);
+	m_interpolatedCamera.blendTo(m_camera, 0.1f, 0.125f);
 
 	m_windowEvents.clear();
 
@@ -213,6 +219,13 @@ void ExampleModelViewer::update()
 			for (u32 i : textureData->patchList)
 			{
 				m_materials[i].albedoTexture = textureData->albedoTexture.get();
+				Gfx_UpdateDescriptorSet(m_materials[i].descriptorSet,
+					&m_materials[i].constantBuffer,
+					nullptr, // samplers
+					&m_materials[i].albedoTexture,
+					nullptr, // storage images
+					nullptr  // storage buffers
+				);
 			}
 		}
 	}
@@ -262,8 +275,7 @@ void ExampleModelViewer::render()
 		Gfx_SetTechnique(ctx, m_technique);
 		Gfx_SetVertexStream(ctx, 0, m_vertexBuffer);
 		Gfx_SetIndexStream(ctx, m_indexBuffer);
-		Gfx_SetConstantBuffer(ctx, 0, m_constantBuffer);
-
+		Gfx_SetConstantBuffer(ctx, 0, m_constantBuffer); // scene constants
 		Gfx_SetSampler(ctx, GfxStage::Pixel, 0, m_samplerStates.anisotropicWrap);
 
 		for (const MeshSegment& segment : m_segments)
@@ -271,9 +283,7 @@ void ExampleModelViewer::render()
 			const Material& material =
 			    (segment.material == 0xFFFFFFFF) ? m_defaultMaterial : m_materials[segment.material];
 
-			Gfx_SetConstantBuffer(ctx, 1, material.constantBuffer);
-			Gfx_SetTexture(ctx, GfxStage::Pixel, 0, material.albedoTexture);
-
+			Gfx_SetDescriptors(ctx, 1, material.descriptorSet);
 			Gfx_DrawIndexed(ctx, segment.indexCount, segment.indexOffset, 0, m_vertexCount);
 		}
 	}
@@ -464,7 +474,16 @@ bool ExampleModelViewer::loadModelObj(const char* filename)
 			}
 		}
 
-		m_materials.push_back(material);
+		material.descriptorSet = Gfx_CreateDescriptorSet(m_materialDescriptorSetDesc);
+		Gfx_UpdateDescriptorSet(material.descriptorSet,
+			&material.constantBuffer,
+			nullptr, // samplers
+			&material.albedoTexture,
+			nullptr, // storage images
+			nullptr  // storage buffers
+		);
+
+		m_materials.push_back(std::move(material));
 	}
 
 	{
@@ -473,6 +492,15 @@ bool ExampleModelViewer::loadModelObj(const char* filename)
 		m_defaultConstantBuffer = Gfx_CreateBuffer(materialCbDesc, &constants);
 		m_defaultMaterial.constantBuffer = m_defaultConstantBuffer.get();
 		m_defaultMaterial.albedoTexture = m_defaultWhiteTexture.get();
+
+		m_defaultMaterial.descriptorSet = Gfx_CreateDescriptorSet(m_materialDescriptorSetDesc);
+		Gfx_UpdateDescriptorSet(m_defaultMaterial.descriptorSet,
+			&m_defaultMaterial.constantBuffer,
+			nullptr, // samplers
+			&m_defaultMaterial.albedoTexture,
+			nullptr, // storage images
+			nullptr  // storage buffers
+		);
 	}
 
 	RUSH_LOG("Converting mesh");
@@ -640,7 +668,7 @@ bool ExampleModelViewer::loadModelNative(const char* filename)
 			}
 		}
 
-		m_materials.push_back(material);
+		m_materials.push_back(std::move(material));
 	}
 
 	{
