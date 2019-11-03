@@ -40,28 +40,28 @@ ExampleRayTracing::ExampleRayTracing() : ExampleApp()
 {
 	Gfx_SetPresentInterval(1);
 
-	m_camera.lookAt(Vec3(0, 0, 0), Vec3(0, 0, 1));
 	m_constantBuffer = Gfx_CreateBuffer(GfxBufferFlags::TransientConstant);
 
 	if (Gfx_GetCapability().rayTracingNV)
 	{
 		GfxRayTracingPipelineDesc pipelineDesc;
-		pipelineDesc.rayGen = loadShaderFromFile(RUSH_SHADER_NAME("Primary.rgen"));
-		pipelineDesc.miss = loadShaderFromFile(RUSH_SHADER_NAME("Primary.rmiss"));
+		pipelineDesc.rayGen     = loadShaderFromFile(RUSH_SHADER_NAME("Primary.rgen"));
+		pipelineDesc.miss       = loadShaderFromFile(RUSH_SHADER_NAME("Primary.rmiss"));
+		pipelineDesc.closestHit = loadShaderFromFile(RUSH_SHADER_NAME("Primary.rchit"));
 
-		pipelineDesc.bindings.constantBuffers = 1;
-		pipelineDesc.bindings.rwImages = 1;
+		pipelineDesc.bindings.constantBuffers        = 1;
+		pipelineDesc.bindings.rwImages               = 1;
 		pipelineDesc.bindings.accelerationStructures = 1;
 
 		m_rtPipeline = Gfx_CreateRayTracingPipeline(pipelineDesc);
 
 		// TODO: write a utility function to generate SBT easily and correctly
-		const size_t shaderHandleSize = Gfx_GetCapability().rtShaderHandleSize;
-		const size_t shaderCount = 2; // rgen + rmiss
+		const size_t     shaderHandleSize = Gfx_GetCapability().rtShaderHandleSize;
+		const size_t     shaderCount      = 1; // one hit group
 		DynamicArray<u8> sbt(shaderHandleSize * shaderCount);
-		memcpy(sbt.data() + shaderHandleSize * 0, Gfx_GetRayTracingShaderHandle(m_rtPipeline, GfxRayTracingShaderType::RayGen, 0), shaderHandleSize);
-		memcpy(sbt.data() + shaderHandleSize * 1, Gfx_GetRayTracingShaderHandle(m_rtPipeline, GfxRayTracingShaderType::Miss, 0), shaderHandleSize);
-		m_sbtBuffer = Gfx_CreateBuffer(GfxBufferFlags::None, shaderCount, shaderHandleSize, sbt.data());
+		memcpy(sbt.data() + shaderHandleSize * 0,
+		    Gfx_GetRayTracingShaderHandle(m_rtPipeline, GfxRayTracingShaderType::HitGroup, 0), shaderHandleSize);
+		m_sbtBuffer = Gfx_CreateBuffer(GfxBufferFlags::RayTracing, shaderCount, shaderHandleSize, sbt.data());
 	}
 }
 
@@ -83,13 +83,13 @@ void ExampleRayTracing::update()
 		m_outputImage = Gfx_CreateTexture(outputImageDesc);
 	}
 
-	const Mat4 matView = m_camera.buildViewMatrix();
-	const Mat4 matProj = m_camera.buildProjMatrix(caps.projectionFlags);
-	const Mat4 matViewProj = matView * matProj;
-
 	{
+		struct Constants
+		{
+			Tuple2i outputSize;
+		};
+
 		Constants* constants = Gfx_BeginUpdateBuffer<Constants>(ctx, m_constantBuffer);
-		constants->matViewProj = matViewProj;
 		constants->outputSize = outputImageDesc.getSize2D();
 		Gfx_EndUpdateBuffer(ctx, m_constantBuffer);
 	}
@@ -148,9 +148,9 @@ void ExampleRayTracing::update()
 void ExampleRayTracing::createScene(GfxContext* ctx)
 {
 	DynamicArray<Vec3> vertices;
-	vertices.push_back(Vec3(-1, -1, 1));
-	vertices.push_back(Vec3(0, 1, 1));
-	vertices.push_back(Vec3(1, -1, 1));
+	vertices.push_back(Vec3(-1, -1, 1) * 0.5f);
+	vertices.push_back(Vec3(0, 1, 1) * 0.5f);
+	vertices.push_back(Vec3(1, -1, 1) * 0.5f);
 
 	DynamicArray<u32> indices;
 	indices.push_back(0);
@@ -184,7 +184,7 @@ void ExampleRayTracing::createScene(GfxContext* ctx)
 	tlasDesc.instanceCount = 1;
 	m_tlas                 = Gfx_CreateAccelerationStructure(tlasDesc);
 
-	GfxOwn<GfxBuffer> instanceBuffer = Gfx_CreateBuffer(GfxBufferDesc(GfxBufferFlags::Transient, 0, 0));
+	GfxOwn<GfxBuffer> instanceBuffer = Gfx_CreateBuffer(GfxBufferFlags::Transient);
 	{
 		auto instanceData = Gfx_BeginUpdateBuffer<GfxRayTracingInstanceDesc>(ctx, instanceBuffer.get(), tlasDesc.instanceCount);
 		instanceData[0].init();

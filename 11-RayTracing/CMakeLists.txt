@@ -3,6 +3,7 @@ set(app 11-RayTracing)
 set(shaders
 	Primary.rgen
 	Primary.rmiss
+	Primary.rchit
 )
 
 set(shaderDependencies
@@ -15,7 +16,7 @@ add_executable(${app}
 	ExampleRayTracing.cpp
 )
 
-target_link_libraries(${app} Common Rush stb tiny_obj_loader)
+target_link_libraries(${app} Common Rush)
 target_compile_definitions(${app} PRIVATE RUSH_USING_NAMESPACE)
 
 function(rt_shader_compile_rule shaderName dependencies)

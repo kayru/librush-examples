@@ -10,8 +10,9 @@ void main()
 	ivec2 pixelIndex = ivec2(gl_LaunchIDNV.xy);
 	vec2 pixelPos = vec2(pixelIndex)/vec2(outputSize);
 
-	uint rayFlags = gl_RayFlagsOpaqueNV | gl_RayFlagsTerminateOnFirstHitNV | gl_RayFlagsSkipClosestHitShaderNV;
+	uint rayFlags = gl_RayFlagsOpaqueNV;
 
+	payload.color = vec3(0,0,0);
 	payload.hitT = 0;
 
 	RayDesc ray;
@@ -37,7 +38,11 @@ void main()
 
 	if (payload.hitT >= 0)
 	{
-		result.b = 1;
+		result.rgb = payload.color;
+	}
+	else
+	{
+		result.rgb *= 0.25;
 	}
 
 	imageStore(outputImage, pixelIndex, result);

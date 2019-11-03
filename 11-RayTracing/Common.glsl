@@ -5,7 +5,6 @@
 
 layout(set=0, binding=0) uniform Constants
 {
-	mat4 matViewProj;
 	ivec2 outputSize;
 };
 layout(set=0, binding=1, rgba16f) uniform image2D outputImage;
@@ -15,6 +14,7 @@ layout(set=0, binding=2) uniform accelerationStructureNV TLAS;
 
 struct DefaultPayload
 {
+	vec3 color;
 	float hitT;
 };
 

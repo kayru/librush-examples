@@ -30,14 +30,6 @@ private:
 
 	void createScene(GfxContext* ctx);
 
-	Camera m_camera;
-
-	struct Constants
-	{
-		Mat4 matViewProj;
-		Tuple2i outputSize;
-	};
-
 	GfxOwn<GfxTexture> m_outputImage;
 	GfxOwn<GfxBuffer> m_constantBuffer;
 
