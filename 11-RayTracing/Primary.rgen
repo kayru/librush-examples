@@ -8,18 +8,18 @@ layout(location = 0) rayPayloadNV DefaultPayload payload;
 void main()
 {
 	ivec2 pixelIndex = ivec2(gl_LaunchIDNV.xy);
+	vec2 pixelPos = vec2(pixelIndex)/vec2(outputSize);
 
 	uint rayFlags = gl_RayFlagsOpaqueNV | gl_RayFlagsTerminateOnFirstHitNV | gl_RayFlagsSkipClosestHitShaderNV;
 
 	payload.hitT = 0;
 
 	RayDesc ray;
-	ray.origin = vec3(0,0,0);
+	ray.origin = vec3((pixelPos-0.5) * vec2(2,-2), 0);
 	ray.direction = vec3(0,0,1);
 	ray.minT = 0;
 	ray.maxT = 1e9;
 
-	/*
 	traceNV(TLAS,
 		rayFlags,		// uint rayFlags
 		~0u, 			// uint cullMask
@@ -32,8 +32,13 @@ void main()
 		ray.maxT,		// float Tmax
 		0				// int payload
 	);
-	*/
 
-	vec4 result = vec4(vec2(pixelIndex)/vec2(outputSize), 0, 1);
+	vec4 result = vec4(pixelPos, 0, 1);
+
+	if (payload.hitT >= 0)
+	{
+		result.b = 1;
+	}
+
 	imageStore(outputImage, pixelIndex, result);
 }

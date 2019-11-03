@@ -51,7 +51,7 @@ ExampleRayTracing::ExampleRayTracing() : ExampleApp()
 
 		pipelineDesc.bindings.constantBuffers = 1;
 		pipelineDesc.bindings.rwImages = 1;
-		//pipelineDesc.bindings.accelerationStructures = 1;
+		pipelineDesc.bindings.accelerationStructures = 1;
 
 		m_rtPipeline = Gfx_CreateRayTracingPipeline(pipelineDesc);
 
@@ -67,7 +67,6 @@ ExampleRayTracing::ExampleRayTracing() : ExampleApp()
 
 ExampleRayTracing::~ExampleRayTracing()
 {
-	Gfx_Finish(); // TODO: enqueue all resource destruction to avoid wait-for-idle
 }
 
 void ExampleRayTracing::update()
@@ -99,6 +98,11 @@ void ExampleRayTracing::update()
 
 	if (Gfx_GetCapability().rayTracingNV)
 	{
+		if (!m_tlas.valid())
+		{
+			createScene(ctx);
+		}
+
 		GfxMarkerScope markerRT(ctx, "RT");
 		Gfx_SetConstantBuffer(ctx, 0, m_constantBuffer);
 		Gfx_SetStorageImage(ctx, 0, m_outputImage);
@@ -121,7 +125,6 @@ void ExampleRayTracing::update()
 
 		m_prim->begin2D(m_window->getSize());
 
-
 		if (Gfx_GetCapability().rayTracingNV)
 		{
 			m_prim->setTexture(m_outputImage);
@@ -140,5 +143,56 @@ void ExampleRayTracing::update()
 		Gfx_EndPass(ctx);
 	}
 
+}
+
+void ExampleRayTracing::createScene(GfxContext* ctx)
+{
+	DynamicArray<Vec3> vertices;
+	vertices.push_back(Vec3(-1, -1, 1));
+	vertices.push_back(Vec3(0, 1, 1));
+	vertices.push_back(Vec3(1, -1, 1));
+
+	DynamicArray<u32> indices;
+	indices.push_back(0);
+	indices.push_back(1);
+	indices.push_back(2);
+
+	GfxOwn<GfxBuffer> vb = Gfx_CreateBuffer(GfxBufferFlags::None, GfxFormat::GfxFormat_RGB32_Float, vertices.size(), u32(sizeof(Vec3)), vertices.data());
+	GfxOwn<GfxBuffer> ib = Gfx_CreateBuffer(GfxBufferFlags::None, GfxFormat::GfxFormat_R32_Uint, indices.size(), 4, indices.data());
+
+	DynamicArray<GfxRayTracingGeometryDesc> geometries;
+	{
+		GfxRayTracingGeometryDesc geometryDesc;
+		geometryDesc.indexBuffer  = ib.get();
+		geometryDesc.indexFormat  = GfxFormat::GfxFormat_R32_Uint;
+		geometryDesc.indexCount   = u32(indices.size());
+		geometryDesc.vertexBuffer = vb.get();
+		geometryDesc.vertexFormat = GfxFormat::GfxFormat_RGB32_Float;
+		geometryDesc.vertexStride = u32(sizeof(Vec3));
+		geometryDesc.vertexCount  = u32(vertices.size());
+		geometries.push_back(geometryDesc);
+	}
+
+	GfxAccelerationStructureDesc blasDesc;
+	blasDesc.type         = GfxAccelerationStructureType::BottomLevel;
+	blasDesc.geometyCount = u32(geometries.size());
+	blasDesc.geometries   = geometries.data();
+	m_blas                = Gfx_CreateAccelerationStructure(blasDesc);
+
+	GfxAccelerationStructureDesc tlasDesc;
+	tlasDesc.type          = GfxAccelerationStructureType::TopLevel;
+	tlasDesc.instanceCount = 1;
+	m_tlas                 = Gfx_CreateAccelerationStructure(tlasDesc);
+
+	GfxOwn<GfxBuffer> instanceBuffer = Gfx_CreateBuffer(GfxBufferDesc(GfxBufferFlags::Transient, 0, 0));
+	{
+		auto instanceData = Gfx_BeginUpdateBuffer<GfxRayTracingInstanceDesc>(ctx, instanceBuffer.get(), tlasDesc.instanceCount);
+		instanceData[0].init();
+		instanceData[0].accelerationStructureHandle = Gfx_GetAccelerationStructureHandle(m_blas);
+		Gfx_EndUpdateBuffer(ctx, instanceBuffer);
+	}
+
+	Gfx_BuildAccelerationStructure(ctx, m_blas);
+	Gfx_BuildAccelerationStructure(ctx, m_tlas, instanceBuffer);
 }
 

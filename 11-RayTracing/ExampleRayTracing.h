@@ -28,6 +28,8 @@ public:
 
 private:
 
+	void createScene(GfxContext* ctx);
+
 	Camera m_camera;
 
 	struct Constants
