@@ -276,7 +276,7 @@ void ExampleModelViewer::render()
 		Gfx_SetVertexStream(ctx, 0, m_vertexBuffer);
 		Gfx_SetIndexStream(ctx, m_indexBuffer);
 		Gfx_SetConstantBuffer(ctx, 0, m_constantBuffer); // scene constants
-		Gfx_SetSampler(ctx, GfxStage::Pixel, 0, m_samplerStates.anisotropicWrap);
+		Gfx_SetSampler(ctx, 0, m_samplerStates.anisotropicWrap);
 
 		for (const MeshSegment& segment : m_segments)
 		{
