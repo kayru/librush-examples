@@ -1,0 +1,56 @@
+#version 460
+#extension GL_NV_ray_tracing : enable
+
+#include "Common.glsl"
+
+layout(location = 0) rayPayloadNV DefaultPayload payload;
+
+vec3 getCameraViewVector(vec2 uv)
+{
+	vec3 viewVector = vec3((uv-0.5) * 2, 1);
+	viewVector.x /= matProj[0].x;
+	viewVector.y /= matProj[1].y;
+	return normalize(viewVector * transpose(mat3(matView)));
+}
+
+void main()
+{
+	ivec2 pixelIndex = ivec2(gl_LaunchIDNV.xy);
+	vec2 pixelUV = vec2(pixelIndex)/vec2(outputSize);
+
+	uint rayFlags = gl_RayFlagsOpaqueNV;
+
+	payload.hitT = 0;
+
+	RayDesc ray;
+	ray.origin = cameraPosition.xyz;
+	ray.direction = getCameraViewVector(pixelUV);
+	ray.minT = 0;
+	ray.maxT = 1e9;
+
+	traceNV(TLAS,
+		rayFlags,		// uint rayFlags
+		~0u, 			// uint cullMask
+		0u,	 			// uint sbtRecordOffset
+		1u, 			// uint sbtRecordStride
+		0u,				// uint missIndex
+		ray.origin,		// vec3 origin
+		ray.minT,	    // float Tmin
+		ray.direction,  // vec3 direction
+		ray.maxT,		// float Tmax
+		0				// int payload
+	);
+
+	vec4 result = vec4(pixelUV, 0, 1);
+
+	if (payload.hitT >= 0)
+	{
+		result.rgb = payload.albedo;
+	}
+	else
+	{
+		result.rgb = normalize(ray.direction) * 0.5 + 0.5;
+	}
+
+	imageStore(outputImage, pixelIndex, result);
+}

@@ -34,7 +34,7 @@ private:
 	bool loadModel(const char* filename);
 	bool loadModelObj(const char* filename);
 
-	void enqueueLoadTexture(const std::string& filename, u32 materialId);
+	u32 enqueueLoadTexture(const std::string& filename);
 
 	Timer m_timer;
 
@@ -49,22 +49,27 @@ private:
 
 	CameraManipulator* m_cameraMan;
 
-	GfxOwn<GfxTexture> m_defaultWhiteTexture;
+	u32 m_defaultWhiteTextureId;
 
-	GfxOwn<GfxBuffer> m_vertexBuffer;
 	GfxOwn<GfxBuffer> m_indexBuffer;
+	GfxOwn<GfxBuffer> m_vertexBuffer;
 	GfxOwn<GfxBuffer> m_constantBuffer;
 	u32 m_indexCount = 0;
 	u32 m_vertexCount = 0;
 
-	struct Constants
+	struct SceneConstants
 	{
+		Mat4 matView = Mat4::identity();
+		Mat4 matProj = Mat4::identity();
 		Mat4 matViewProj = Mat4::identity();
-		Mat4 matWorld = Mat4::identity();
+		Mat4 matViewProjInv = Mat4::identity();
+		Vec4 cameraPosition = Vec4(0.0);
+		Tuple2i outputSize = {};
+		u32 frameIndex;
+		u32 padding;
 	};
 
 	Mat4 m_worldTransform = Mat4::identity();
-
 	Box3 m_boundingBox;
 
 	struct Vertex
@@ -77,26 +82,16 @@ private:
 	std::string m_statusString;
 	bool m_valid = false;
 
-	std::unordered_map<u64, GfxOwn<GfxBuffer>> m_materialConstantBuffers;
-
 	struct MaterialConstants
 	{
 		Vec4 baseColor = Vec4(1.0f);
-		u32 albedoTextureId = ~0u;
+		u32 albedoTextureId = 0;
+		u32 firstIndex = 0;
+		u32 padding0 = 0;
+		u32 padding1 = 0;
 	};
 
-	struct Material
-	{
-		GfxTexture albedoTexture;
-		GfxBuffer constantBuffer;
-
-		GfxOwn<GfxDescriptorSet> descriptorSet;
-	};
-
-	GfxDescriptorSetDesc m_materialDescriptorSetDesc;
-
-	std::vector<Material> m_materials;
-	Material m_defaultMaterial;
+	std::vector<MaterialConstants> m_materials;
 	GfxOwn<GfxBuffer> m_defaultConstantBuffer;
 
 	struct MeshSegment
@@ -116,17 +111,21 @@ private:
 	{
 		GfxTextureDesc     desc;
 		std::vector<u8>    mips[16];
-		std::vector<u32>   patchList;
+		u32                descriptorIndex;
 		std::string        filename;
-		GfxOwn<GfxTexture> albedoTexture;
 	};
+
+	std::vector<GfxOwn<GfxTexture>> m_textureDescriptors;
 
 	std::unordered_map<std::string, TextureData*> m_textures;
 	std::vector<TextureData*>                     m_pendingTextures;
 	std::vector<TextureData*>                     m_loadedTextures;
 
-	std::vector<std::thread> m_loadingThreads;
-	bool        m_loadingThreadShouldExit = false;
+	static constexpr u32     MaxTextures = 255;
+	GfxOwn<GfxDescriptorSet> m_materialDescriptorSet;
+
+	bool m_loadingThreadShouldExit = false;
+	u32 m_frameIndex = 0;
 
 	std::mutex m_loadingMutex;
 
@@ -134,6 +133,8 @@ private:
 	GfxOwn<GfxAccelerationStructure> m_blas;
 	GfxOwn<GfxAccelerationStructure> m_tlas;
 	GfxOwn<GfxBuffer>                m_sbtBuffer;
+	GfxOwn<GfxTexture>               m_outputImage;
 
 	void loadingThreadFunction();
+	void createRayTracingScene(GfxContext* ctx);
 };
