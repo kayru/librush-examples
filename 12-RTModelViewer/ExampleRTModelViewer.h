@@ -45,8 +45,6 @@ private:
 	} m_stats;
 
 	Camera m_camera;
-	Camera m_interpolatedCamera;
-
 	CameraManipulator* m_cameraMan;
 
 	u32 m_defaultWhiteTextureId;

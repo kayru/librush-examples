@@ -119,7 +119,6 @@ ExampleRTModelViewer::ExampleRTModelViewer() : ExampleApp(), m_boundingBox(Vec3(
 
 	m_camera = Camera(aspect, fov, 0.25f, 10000.0f);
 	m_camera.lookAt(Vec3(m_boundingBox.m_max) + Vec3(2.0f), m_boundingBox.center());
-	m_interpolatedCamera = m_camera;
 
 	m_cameraMan = new CameraManipulator();
 }
@@ -172,9 +171,6 @@ void ExampleRTModelViewer::update()
 
 	m_cameraMan->update(&m_camera, dt, m_window->getKeyboardState(), m_window->getMouseState());
 
-	m_interpolatedCamera.blendTo(m_camera, 0.1f, 0.125f);
-	m_interpolatedCamera.blendTo(m_camera, 0.1f, 0.125f);
-
 	m_frameIndex++;
 
 	if (m_camera.getPosition() != oldCamera.getPosition()
@@ -215,15 +211,15 @@ void ExampleRTModelViewer::render()
 {
 	const GfxCapability& caps = Gfx_GetCapability();
 
-	Mat4 matView = m_interpolatedCamera.buildViewMatrix();
-	Mat4 matProj = m_interpolatedCamera.buildProjMatrix(caps.projectionFlags);
+	Mat4 matView = m_camera.buildViewMatrix();
+	Mat4 matProj = m_camera.buildProjMatrix(caps.projectionFlags);
 
 	SceneConstants constants = {};
 	constants.matView = matView.transposed();
 	constants.matProj = matProj.transposed();
 	constants.matViewProj = (matView * matProj).transposed();
 	constants.matViewProjInv = (matView * matProj).inverse().transposed();
-	constants.cameraPosition = Vec4(m_interpolatedCamera.getPosition());
+	constants.cameraPosition = Vec4(m_camera.getPosition());
 	constants.frameIndex = m_frameIndex;
 
 	GfxContext* ctx = Platform_GetGfxContext();
@@ -232,7 +228,7 @@ void ExampleRTModelViewer::render()
 	if (!m_outputImage.valid() || outputImageDesc.getSize2D() != m_window->getSize())
 	{
 		outputImageDesc = GfxTextureDesc::make2D(
-			m_window->getSize(), GfxFormat_RGBA16_Float, GfxUsageFlags::StorageImage_ShaderResource);
+			m_window->getSize(), GfxFormat_RGBA32_Float, GfxUsageFlags::StorageImage_ShaderResource);
 
 		m_outputImage = Gfx_CreateTexture(outputImageDesc);
 	}

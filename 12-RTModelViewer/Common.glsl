@@ -12,13 +12,14 @@ uniform SceneConstants
 	mat4 matViewProjInv;
 	vec4 cameraPosition;
 	ivec2 outputSize;
-	uint padding[2];
+	uint frameIndex;
+	uint padding;
 };
 
 layout(set=0, binding=1)
 uniform sampler defaultSampler;
 
-layout(set=0, binding=2, rgba16f)
+layout(set=0, binding=2, rgba32f)
 uniform image2D outputImage;
 
 layout(set=0, binding=3, std430)

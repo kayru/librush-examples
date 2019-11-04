@@ -13,18 +13,43 @@ vec3 getCameraViewVector(vec2 uv)
 	return normalize(viewVector * transpose(mat3(matView)));
 }
 
+float randomFloat(inout uint seed)
+{
+	seed = 214013 * seed + 2531011;
+	return float(seed >> 16) * (1.0f / 65535.0f);
+}
+
+uint hashFnv1(uint x)
+{
+	uint state = 0x811c9dc5;
+	for (uint i = 0; i < 4; ++i)
+	{
+		state *= 0x01000193;
+		state ^= (x & 0xFF);
+		x = x >> 8;
+	}
+	return state;
+}
+
 void main()
 {
 	ivec2 pixelIndex = ivec2(gl_LaunchIDNV.xy);
 	vec2 pixelUV = vec2(pixelIndex)/vec2(outputSize);
 
+	uint pixelLinearIndex = pixelIndex.x + pixelIndex.y * outputSize.y;
+	uint randomSeed = hashFnv1(pixelLinearIndex + pixelLinearIndex * 1294974679 + frameIndex);
+
 	uint rayFlags = gl_RayFlagsOpaqueNV;
 
 	payload.hitT = 0;
 
+	vec2 pixelJitter;
+	pixelJitter.x = (randomFloat(randomSeed) - 0.5) / outputSize.x;
+	pixelJitter.y = (randomFloat(randomSeed) - 0.5) / outputSize.y;
+
 	RayDesc ray;
 	ray.origin = cameraPosition.xyz;
-	ray.direction = getCameraViewVector(pixelUV);
+	ray.direction = getCameraViewVector(pixelUV + pixelJitter);
 	ray.minT = 0;
 	ray.maxT = 1e9;
 
@@ -50,6 +75,12 @@ void main()
 	else
 	{
 		result.rgb = normalize(ray.direction) * 0.5 + 0.5;
+	}
+
+	if (frameIndex > 0)
+	{
+		vec4 oldValue = imageLoad(outputImage, pixelIndex);
+		result.rgb = mix(oldValue.rgb, result.rgb, 1.0 / (frameIndex+1));
 	}
 
 	imageStore(outputImage, pixelIndex, result);
