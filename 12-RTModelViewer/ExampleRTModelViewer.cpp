@@ -28,8 +28,8 @@ int main(int argc, char** argv)
 {
 	g_appCfg.name = "RTModelViewer (" RUSH_RENDER_API_NAME ")";
 
-	g_appCfg.width     = 1280;
-	g_appCfg.height    = 720;
+	g_appCfg.width     = 1920;
+	g_appCfg.height    = 1080;
 	g_appCfg.argc      = argc;
 	g_appCfg.argv      = argv;
 	g_appCfg.resizable = true;
@@ -371,6 +371,7 @@ void ExampleRTModelViewer::loadingThreadFunction()
 			else
 			{
 				RUSH_LOG("Failed to load texture '%s'", pendingLoad->filename.c_str());
+				m_loadedTextures.push_back(nullptr);
 			}
 		}
 		else
@@ -410,6 +411,11 @@ u32 ExampleRTModelViewer::enqueueLoadTexture(const std::string& filename)
 
 }
 
+inline float convertDiffuseColor(float v)
+{
+	return v == 0 ? 0.5 : v;
+}
+
 bool ExampleRTModelViewer::loadModelObj(const char* filename)
 {
 	std::vector<tinyobj::shape_t>    shapes;
@@ -429,9 +435,9 @@ bool ExampleRTModelViewer::loadModelObj(const char* filename)
 	for (auto& objMaterial : materials)
 	{
 		MaterialConstants constants;
-		constants.baseColor.x = objMaterial.diffuse[0];
-		constants.baseColor.y = objMaterial.diffuse[1];
-		constants.baseColor.z = objMaterial.diffuse[2];
+		constants.baseColor.x = convertDiffuseColor(objMaterial.diffuse[0]);
+		constants.baseColor.y = convertDiffuseColor(objMaterial.diffuse[1]);
+		constants.baseColor.z = convertDiffuseColor(objMaterial.diffuse[2]);
 		constants.baseColor.w = 1.0f;
 		constants.albedoTextureId = m_defaultWhiteTextureId;
 
@@ -584,8 +590,6 @@ bool ExampleRTModelViewer::loadModelObj(const char* filename)
 			it.join();
 		}
 
-		RUSH_ASSERT(textureCount == u32(m_loadedTextures.size()));
-
 		RUSH_LOG("Uploading textures to GPU");
 
 		while (!m_loadedTextures.empty())
@@ -606,21 +610,19 @@ bool ExampleRTModelViewer::loadModelObj(const char* filename)
 
 				u32 descriptorIndex = textureData->descriptorIndex;
 				m_textureDescriptors[descriptorIndex] = Gfx_CreateTexture(textureData->desc, mipData, textureData->desc.mips);
-
 			}
 		}
 	}
 
 	std::vector<GfxTexture> textureDescriptors;
-	textureDescriptors.resize(MaxTextures);
+	textureDescriptors.resize(MaxTextures, m_textureDescriptors[m_defaultWhiteTextureId].get());
 
 	for (size_t i = 0; i < m_textureDescriptors.size(); ++i)
 	{
-		textureDescriptors[i] = m_textureDescriptors[i].get();
-	}
-	for (size_t i = m_textureDescriptors.size(); i < MaxTextures; ++i)
-	{
-		textureDescriptors[i] = m_textureDescriptors[m_defaultWhiteTextureId].get();
+		if (m_textureDescriptors[i].get().valid())
+		{
+			textureDescriptors[i] = m_textureDescriptors[i].get();
+		}
 	}
 
 	Gfx_UpdateDescriptorSet(m_materialDescriptorSet,

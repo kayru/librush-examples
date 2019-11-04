@@ -68,6 +68,7 @@ struct DefaultPayload
 	float hitT;
 	vec3 albedo;
 	vec3 normal;
+	vec3 geoNormal;
 };
 
 struct RayDesc

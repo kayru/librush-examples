@@ -3,6 +3,8 @@
 
 #include "Common.glsl"
 
+#define M_PI 3.14159265358979323846264338327950288
+
 layout(location = 0) rayPayloadNV DefaultPayload payload;
 
 vec3 getCameraViewVector(vec2 uv)
@@ -19,6 +21,13 @@ float randomFloat(inout uint seed)
 	return float(seed >> 16) * (1.0f / 65535.0f);
 }
 
+vec2 randomFloat2(inout uint seed)
+{
+	float x = randomFloat(seed);
+	float y = randomFloat(seed);
+	return vec2(x, y);
+}
+
 uint hashFnv1(uint x)
 {
 	uint state = 0x811c9dc5;
@@ -31,28 +40,33 @@ uint hashFnv1(uint x)
 	return state;
 }
 
-void main()
+vec3 mapToCosineHemisphere(vec2 uv)
 {
-	ivec2 pixelIndex = ivec2(gl_LaunchIDNV.xy);
-	vec2 pixelUV = vec2(pixelIndex)/vec2(outputSize);
+	float phi = uv.x * M_PI * 2.0;
+	vec2 scTheta = vec2(sqrt(uv.y), sqrt(1.0-uv.x));
+	vec2 scPhi = vec2(sin(phi), cos(phi));
 
-	uint pixelLinearIndex = pixelIndex.x + pixelIndex.y * outputSize.y;
-	uint randomSeed = hashFnv1(pixelLinearIndex + pixelLinearIndex * 1294974679 + frameIndex);
+	return vec3(
+		scPhi.x * scTheta.x, 
+		scPhi.y * scTheta.x, 
+		scTheta.y);
+}
 
+vec3 mapToUniformSphere(vec2 uv)
+{
+	float z = 1.0 - 2.0 * uv.x;
+	float r = sqrt(1.0 - z*z);
+	float phi = 2.0f * M_PI * uv.y;
+	float x = cos(phi);
+	float y = sin(phi);
+	return vec3(x,y,z);
+}
+
+bool traceRay(RayDesc ray)
+{
 	uint rayFlags = gl_RayFlagsOpaqueNV;
 
 	payload.hitT = 0;
-
-	vec2 pixelJitter;
-	pixelJitter.x = (randomFloat(randomSeed) - 0.5) / outputSize.x;
-	pixelJitter.y = (randomFloat(randomSeed) - 0.5) / outputSize.y;
-
-	RayDesc ray;
-	ray.origin = cameraPosition.xyz;
-	ray.direction = getCameraViewVector(pixelUV + pixelJitter);
-	ray.minT = 0;
-	ray.maxT = 1e9;
-
 	traceNV(TLAS,
 		rayFlags,		// uint rayFlags
 		~0u, 			// uint cullMask
@@ -66,22 +80,131 @@ void main()
 		0				// int payload
 	);
 
-	vec4 result = vec4(pixelUV, 0, 1);
+	return payload.hitT >= 0;
+}
 
-	if (payload.hitT >= 0)
+bool traceShadowRay(RayDesc ray)
+{
+	uint rayFlags = gl_RayFlagsOpaqueNV | gl_RayFlagsTerminateOnFirstHitNV | gl_RayFlagsSkipClosestHitShaderNV;
+
+	float oldHitT = payload.hitT;
+	payload.hitT = 0;
+	traceNV(TLAS,
+		rayFlags,		// uint rayFlags
+		~0u, 			// uint cullMask
+		0u,	 			// uint sbtRecordOffset
+		1u, 			// uint sbtRecordStride
+		0u,				// uint missIndex
+		ray.origin,		// vec3 origin
+		ray.minT,	    // float Tmin
+		ray.direction,  // vec3 direction
+		ray.maxT,		// float Tmax
+		0				// int payload
+	);
+
+	bool isHit = payload.hitT >= 0;
+	payload.hitT = oldHitT;
+	return isHit;
+}
+
+float nudgeULP(float x, int delta)
+{
+	return uintBitsToFloat(floatBitsToUint(x) + delta);
+}
+
+float max3(vec3 v)
+{
+	return max(max(v.x, v.y), v.z);
+}
+
+vec3 getSunDirection()
+{
+	return normalize(vec3(3, 5, 3));
+}
+
+vec3 getSunColor()
+{
+	return vec3(0.95, 0.90, 0.8) * 2;
+}
+
+vec3 getSkyColor(vec3 dir)
+{
+	vec3 colorT = vec3(0.5, 0.66, 0.9) * 1.5;
+	vec3 colorB = vec3(0.15, 0.18, 0.15);
+	float a = dir.y * 0.5 + 0.5;
+	return mix(colorB, colorT, a);
+}
+
+void main()
+{
+	ivec2 pixelIndex = ivec2(gl_LaunchIDNV.xy);
+	vec2 pixelUV = vec2(pixelIndex)/vec2(outputSize);
+
+	uint pixelLinearIndex = pixelIndex.x + pixelIndex.y * outputSize.y;
+	uint randomSeed = hashFnv1(pixelLinearIndex + pixelLinearIndex * 1294974679 + frameIndex);
+
+	vec2 pixelJitter;
+	pixelJitter.x = (randomFloat(randomSeed) - 0.5) / outputSize.x;
+	pixelJitter.y = (randomFloat(randomSeed) - 0.5) / outputSize.y;
+
+	vec3 result = vec3(0);
+	vec3 weight = vec3(1);
+
+	const uint maxPathLength = 5;
+	for(uint i=0; i<maxPathLength; ++i)
 	{
-		result.rgb = payload.albedo;
-	}
-	else
-	{
-		result.rgb = normalize(ray.direction) * 0.5 + 0.5;
+		RayDesc ray;
+		ray.minT = 0;
+		ray.maxT = 1e9;
+
+		if (i == 0)
+		{
+			ray.origin = cameraPosition.xyz;
+			ray.direction = getCameraViewVector(pixelUV + pixelJitter);
+		}
+		else
+		{
+			ray.origin = ray.origin + ray.direction * payload.hitT;
+			ray.origin += payload.geoNormal * max3(abs(ray.origin)) * 1e-4;	
+			ray.direction = normalize(payload.normal + mapToUniformSphere(randomFloat2(randomSeed)));
+		}
+
+		bool isHit = traceRay(ray);
+
+		if (isHit)
+		{
+			weight *= payload.albedo;
+
+			vec3 L = getSunDirection();
+			float cosTheta = dot(payload.normal, L);
+			if (cosTheta > 0)
+			{
+				RayDesc shadowRay;
+				shadowRay.origin = ray.origin + ray.direction * payload.hitT;
+				shadowRay.origin += payload.geoNormal * max3(abs(shadowRay.origin)) * 1e-4;
+				shadowRay.direction = L;
+				shadowRay.minT = 0.0;
+				shadowRay.maxT = 1e9;
+
+				bool isLightOccluded = traceShadowRay(shadowRay);
+				if (!isLightOccluded)
+				{
+					result += weight * getSunColor() * cosTheta;
+				}
+			}
+		}
+		else
+		{
+			result += weight * getSkyColor(ray.direction);
+			break;
+		}
 	}
 
 	if (frameIndex > 0)
 	{
-		vec4 oldValue = imageLoad(outputImage, pixelIndex);
-		result.rgb = mix(oldValue.rgb, result.rgb, 1.0 / (frameIndex+1));
+		vec3 oldValue = imageLoad(outputImage, pixelIndex).rgb;
+		result = mix(oldValue, result, 1.0 / (frameIndex+1));
 	}
 
-	imageStore(outputImage, pixelIndex, result);
+	imageStore(outputImage, pixelIndex, vec4(result, 1));
 }

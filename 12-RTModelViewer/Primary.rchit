@@ -33,8 +33,18 @@ void main()
 	triVertices[2] = vertexBuffer[triIndices[2]];
 
 	vec2 uv = INTERPOLATE(triVertices, getTexcoord, barycentrics);
+
 	payload.albedo.rgb = texture(sampler2D(textureDescriptors[materialConstants.albedoTextureId], defaultSampler), uv).rgb;
 	payload.albedo *= materialConstants.baseColor.rgb;
 
 	payload.normal = normalize(INTERPOLATE(triVertices, getNormal, barycentrics));
+
+	payload.geoNormal = cross(getPosition(triVertices[1]) - getPosition(triVertices[0]), getPosition(triVertices[2]) - getPosition(triVertices[0]));
+	payload.geoNormal = normalize(payload.geoNormal);
+
+	if (gl_HitKindNV == 255)
+	{
+		payload.normal = -payload.normal;
+		payload.geoNormal = -payload.geoNormal;
+	}
 }
