@@ -61,7 +61,7 @@ ExampleRayTracing::ExampleRayTracing() : ExampleApp()
 		DynamicArray<u8> sbt(shaderHandleSize * shaderCount);
 		memcpy(sbt.data() + shaderHandleSize * 0,
 		    Gfx_GetRayTracingShaderHandle(m_rtPipeline, GfxRayTracingShaderType::HitGroup, 0), shaderHandleSize);
-		m_sbtBuffer = Gfx_CreateBuffer(GfxBufferFlags::RayTracing, shaderCount, shaderHandleSize, sbt.data());
+		m_sbtBuffer = Gfx_CreateBuffer(GfxBufferFlags::RayTracing, shaderCount, u32(shaderHandleSize), sbt.data());
 	}
 }
 
@@ -157,8 +157,8 @@ void ExampleRayTracing::createScene(GfxContext* ctx)
 	indices.push_back(1);
 	indices.push_back(2);
 
-	GfxOwn<GfxBuffer> vb = Gfx_CreateBuffer(GfxBufferFlags::None, GfxFormat::GfxFormat_RGB32_Float, vertices.size(), u32(sizeof(Vec3)), vertices.data());
-	GfxOwn<GfxBuffer> ib = Gfx_CreateBuffer(GfxBufferFlags::None, GfxFormat::GfxFormat_R32_Uint, indices.size(), 4, indices.data());
+	GfxOwn<GfxBuffer> vb = Gfx_CreateBuffer(GfxBufferFlags::None, GfxFormat::GfxFormat_RGB32_Float, u32(vertices.size()), u32(sizeof(Vec3)), vertices.data());
+	GfxOwn<GfxBuffer> ib = Gfx_CreateBuffer(GfxBufferFlags::None, GfxFormat::GfxFormat_R32_Uint, u32(indices.size()), 4, indices.data());
 
 	DynamicArray<GfxRayTracingGeometryDesc> geometries;
 	{

@@ -413,7 +413,7 @@ u32 ExampleRTModelViewer::enqueueLoadTexture(const std::string& filename)
 
 inline float convertDiffuseColor(float v)
 {
-	return v == 0 ? 0.5 : v;
+	return v == 0.0f ? 0.5f : v;
 }
 
 bool ExampleRTModelViewer::loadModelObj(const char* filename)
