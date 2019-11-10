@@ -1,9 +1,11 @@
 set(app 12-PathTracer)
 
 set(shaders
+	Blit.vert
+	BlitTonemap.frag
+	PathTracer.rchit
 	PathTracer.rgen
 	PathTracer.rmiss
-	PathTracer.rchit
 )
 
 set(shaderDependencies

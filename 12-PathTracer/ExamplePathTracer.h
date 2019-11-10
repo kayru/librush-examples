@@ -132,6 +132,7 @@ private:
 	GfxOwn<GfxAccelerationStructure> m_tlas;
 	GfxOwn<GfxBuffer>                m_sbtBuffer;
 	GfxOwn<GfxTexture>               m_outputImage;
+	GfxOwn<GfxTechnique>             m_blitTonemap;
 
 	void loadingThreadFunction();
 	void createRayTracingScene(GfxContext* ctx);

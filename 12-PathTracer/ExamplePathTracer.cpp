@@ -73,19 +73,33 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 	GfxBufferDesc cbDesc(GfxBufferFlags::TransientConstant, GfxFormat_Unknown, 1, sizeof(SceneConstants));
 	m_constantBuffer = Gfx_CreateBuffer(cbDesc);
 
-	GfxRayTracingPipelineDesc pipelineDesc;
-	pipelineDesc.rayGen = loadShaderFromFile(RUSH_SHADER_NAME("PathTracer.rgen"));
-	pipelineDesc.miss = loadShaderFromFile(RUSH_SHADER_NAME("PathTracer.rmiss"));
-	pipelineDesc.closestHit = loadShaderFromFile(RUSH_SHADER_NAME("PathTracer.rchit"));
+	{
+		GfxRayTracingPipelineDesc pipelineDesc;
+		pipelineDesc.rayGen = loadShaderFromFile(RUSH_SHADER_NAME("PathTracer.rgen"));
+		pipelineDesc.miss = loadShaderFromFile(RUSH_SHADER_NAME("PathTracer.rmiss"));
+		pipelineDesc.closestHit = loadShaderFromFile(RUSH_SHADER_NAME("PathTracer.rchit"));
 
-	pipelineDesc.bindings.constantBuffers = 1; // scene constants
-	pipelineDesc.bindings.samplers = 1; // default sampler
-	pipelineDesc.bindings.rwImages = 1; // output image
-	pipelineDesc.bindings.rwBuffers = 2; // IB + VB
-	pipelineDesc.bindings.descriptorSets[1] = materialDescriptorSetDesc;
-	pipelineDesc.bindings.accelerationStructures = 1; // TLAS
+		pipelineDesc.bindings.constantBuffers = 1; // scene constants
+		pipelineDesc.bindings.samplers = 1; // default sampler
+		pipelineDesc.bindings.rwImages = 1; // output image
+		pipelineDesc.bindings.rwBuffers = 2; // IB + VB
+		pipelineDesc.bindings.descriptorSets[1] = materialDescriptorSetDesc;
+		pipelineDesc.bindings.accelerationStructures = 1; // TLAS
 
-	m_rtPipeline = Gfx_CreateRayTracingPipeline(pipelineDesc);
+		m_rtPipeline = Gfx_CreateRayTracingPipeline(pipelineDesc);
+	}
+
+	{
+		auto vs = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("Blit.vert")));
+		auto ps = Gfx_CreatePixelShader(loadShaderFromFile(RUSH_SHADER_NAME("BlitTonemap.frag")));
+
+		GfxTechniqueDesc desc;
+		desc.vs = vs.get();
+		desc.ps = ps.get();
+		desc.bindings.samplers = 1; // linear sampler
+		desc.bindings.textures = 1; // input texture
+		m_blitTonemap = Gfx_CreateTechnique(desc);
+	}
 
 	if (g_appCfg.argc >= 2)
 	{
@@ -273,16 +287,24 @@ void ExamplePathTracer::render()
 	Gfx_SetRasterizerState(ctx, m_rasterizerStates.solidCullCW);
 
 	{
+		GfxMarkerScope markerFrame(ctx, "Tonemap");
+
+		Gfx_SetDepthStencilState(ctx, m_depthStencilStates.disable);
+		Gfx_SetRasterizerState(ctx, m_rasterizerStates.solidNoCull);
+		Gfx_SetBlendState(ctx, m_blendStates.opaque);
+		Gfx_SetTechnique(ctx, m_blitTonemap);
+		Gfx_SetSampler(ctx, 0, m_samplerStates.linearClamp);
+		Gfx_SetTexture(ctx, 0, m_outputImage);
+		Gfx_Draw(ctx, 0, 3);
+	}
+
+	{
 		GfxMarkerScope markerFrame(ctx, "UI");
 
 		Gfx_SetBlendState(ctx, m_blendStates.lerp);
 		Gfx_SetDepthStencilState(ctx, m_depthStencilStates.disable);
 
 		m_prim->begin2D(m_window->getSize());
-
-		m_prim->setTexture(m_outputImage);
-		Box2 rect(Vec2(0.0f), m_window->getSizeFloat());
-		m_prim->drawTexturedQuad(rect);
 
 		m_font->setScale(2.0f);
 		m_font->draw(m_prim, Vec2(10.0f), m_statusString.c_str());
