@@ -1,4 +1,4 @@
-#include "ExampleRTModelViewer.h"
+#include "ExamplePathTracer.h"
 
 #include <Rush/GfxBitmapFont.h>
 #include <Rush/GfxPrimitiveBatch.h>
@@ -26,7 +26,7 @@ static AppConfig g_appCfg;
 
 int main(int argc, char** argv)
 {
-	g_appCfg.name = "RTModelViewer (" RUSH_RENDER_API_NAME ")";
+	g_appCfg.name = "PathTracer (" RUSH_RENDER_API_NAME ")";
 
 	g_appCfg.width     = 1920;
 	g_appCfg.height    = 1080;
@@ -39,7 +39,7 @@ int main(int argc, char** argv)
 	Log::breakOnError = true;
 #endif
 
-	return Platform_Main<ExampleRTModelViewer>(g_appCfg);
+	return Platform_Main<ExamplePathTracer>(g_appCfg);
 }
 
 struct TimingScope
@@ -52,7 +52,7 @@ struct TimingScope
 	Timer                      m_timer;
 };
 
-ExampleRTModelViewer::ExampleRTModelViewer() : ExampleApp(), m_boundingBox(Vec3(0.0f), Vec3(0.0f))
+ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f), Vec3(0.0f))
 {
 	Gfx_SetPresentInterval(1);
 
@@ -73,9 +73,9 @@ ExampleRTModelViewer::ExampleRTModelViewer() : ExampleApp(), m_boundingBox(Vec3(
 	m_constantBuffer = Gfx_CreateBuffer(cbDesc);
 
 	GfxRayTracingPipelineDesc pipelineDesc;
-	pipelineDesc.rayGen = loadShaderFromFile(RUSH_SHADER_NAME("Primary.rgen"));
-	pipelineDesc.miss = loadShaderFromFile(RUSH_SHADER_NAME("Primary.rmiss"));
-	pipelineDesc.closestHit = loadShaderFromFile(RUSH_SHADER_NAME("Primary.rchit"));
+	pipelineDesc.rayGen = loadShaderFromFile(RUSH_SHADER_NAME("PathTracer.rgen"));
+	pipelineDesc.miss = loadShaderFromFile(RUSH_SHADER_NAME("PathTracer.rmiss"));
+	pipelineDesc.closestHit = loadShaderFromFile(RUSH_SHADER_NAME("PathTracer.rchit"));
 
 	pipelineDesc.bindings.constantBuffers = 1; // scene constants
 	pipelineDesc.bindings.samplers = 1; // default sampler
@@ -111,7 +111,7 @@ ExampleRTModelViewer::ExampleRTModelViewer() : ExampleApp(), m_boundingBox(Vec3(
 	}
 	else
 	{
-		m_statusString = "Usage: ExampleRTModelViewer <filename.obj>";
+		m_statusString = "Usage: ExamplePathTracer <filename.obj>";
 	}
 
 	float aspect = m_window->getAspect();
@@ -123,7 +123,7 @@ ExampleRTModelViewer::ExampleRTModelViewer() : ExampleApp(), m_boundingBox(Vec3(
 	m_cameraMan = new CameraManipulator();
 }
 
-ExampleRTModelViewer::~ExampleRTModelViewer()
+ExamplePathTracer::~ExamplePathTracer()
 {
 	for (const auto& it : m_textures)
 	{
@@ -135,7 +135,7 @@ ExampleRTModelViewer::~ExampleRTModelViewer()
 	delete m_cameraMan;
 }
 
-void ExampleRTModelViewer::update()
+void ExamplePathTracer::update()
 {
 	TimingScope timingScope(m_stats.cpuTotal);
 
@@ -186,7 +186,7 @@ void ExampleRTModelViewer::update()
 	render();
 }
 
-void ExampleRTModelViewer::createRayTracingScene(GfxContext* ctx)
+void ExamplePathTracer::createRayTracingScene(GfxContext* ctx)
 {
 	GfxAccelerationStructureDesc tlasDesc;
 	tlasDesc.type = GfxAccelerationStructureType::TopLevel;
@@ -207,7 +207,7 @@ void ExampleRTModelViewer::createRayTracingScene(GfxContext* ctx)
 	Gfx_BuildAccelerationStructure(ctx, m_tlas, instanceBuffer);
 }
 
-void ExampleRTModelViewer::render()
+void ExamplePathTracer::render()
 {
 	const GfxCapability& caps = Gfx_GetCapability();
 
@@ -302,7 +302,7 @@ void ExampleRTModelViewer::render()
 	Gfx_EndPass(ctx);
 }
 
-void ExampleRTModelViewer::loadingThreadFunction()
+void ExamplePathTracer::loadingThreadFunction()
 {
 	bool hasWork = true;
 	while(hasWork)
@@ -382,7 +382,7 @@ void ExampleRTModelViewer::loadingThreadFunction()
 	}
 }
 
-u32 ExampleRTModelViewer::enqueueLoadTexture(const std::string& filename)
+u32 ExamplePathTracer::enqueueLoadTexture(const std::string& filename)
 {
 	auto it = m_textures.find(filename);
 
@@ -416,7 +416,7 @@ inline float convertDiffuseColor(float v)
 	return v == 0.0f ? 0.5f : v;
 }
 
-bool ExampleRTModelViewer::loadModelObj(const char* filename)
+bool ExamplePathTracer::loadModelObj(const char* filename)
 {
 	std::vector<tinyobj::shape_t>    shapes;
 	std::vector<tinyobj::material_t> materials;
@@ -692,7 +692,7 @@ bool ExampleRTModelViewer::loadModelObj(const char* filename)
 	return true;
 }
 
-bool ExampleRTModelViewer::loadModel(const char* filename)
+bool ExamplePathTracer::loadModel(const char* filename)
 {
 	RUSH_LOG("Loading model '%s'", filename);
 

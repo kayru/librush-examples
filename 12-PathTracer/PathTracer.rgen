@@ -165,7 +165,7 @@ void main()
 		else
 		{
 			ray.origin = ray.origin + ray.direction * payload.hitT;
-			ray.origin += payload.geoNormal * max3(abs(ray.origin)) * 1e-4;	
+			ray.origin += payload.geoNormal * max3(abs(ray.origin)) * 1e-4;
 			ray.direction = normalize(payload.normal + mapToUniformSphere(randomFloat2(randomSeed)));
 		}
 

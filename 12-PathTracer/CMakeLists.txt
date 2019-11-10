@@ -1,9 +1,9 @@
-set(app 12-RTModelViewer)
+set(app 12-PathTracer)
 
 set(shaders
-	Primary.rgen
-	Primary.rmiss
-	Primary.rchit
+	PathTracer.rgen
+	PathTracer.rmiss
+	PathTracer.rchit
 )
 
 set(shaderDependencies
@@ -12,8 +12,8 @@ set(shaderDependencies
 
 add_executable(${app}
 	${shaders}
-	ExampleRTModelViewer.h
-	ExampleRTModelViewer.cpp
+	ExamplePathTracer.h
+	ExamplePathTracer.cpp
 )
 
 target_link_libraries(${app} Common Rush stb tiny_obj_loader)

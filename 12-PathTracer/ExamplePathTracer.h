@@ -18,12 +18,12 @@
 #include <thread>
 #include <unordered_map>
 
-class ExampleRTModelViewer : public ExampleApp
+class ExamplePathTracer : public ExampleApp
 {
 public:
 
-	ExampleRTModelViewer();
-	~ExampleRTModelViewer();
+	ExamplePathTracer();
+	~ExamplePathTracer();
 
 	void update() override;
 
