@@ -10,6 +10,7 @@ set(shaders
 
 set(shaderDependencies
 	Common.glsl
+	BRDF.glsl
 )
 
 add_executable(${app}

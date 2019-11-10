@@ -95,9 +95,11 @@ private:
 	{
 		Vec4 baseColor = Vec4(1.0f);
 		u32 albedoTextureId = 0;
+		u32 specularTextureId = 0;
 		u32 firstIndex = 0;
 		AlphaMode alphaMode = AlphaMode::Opaque;
-		u32 padding1 = 0;
+		float metallicFactor = 0;
+		float roughnessFactor = 1;
 	};
 
 	std::vector<MaterialConstants> m_materials;
@@ -130,7 +132,7 @@ private:
 	std::vector<TextureData*>                     m_pendingTextures;
 	std::vector<TextureData*>                     m_loadedTextures;
 
-	static constexpr u32     MaxTextures = 255;
+	static constexpr u32     MaxTextures = 1024;
 	GfxOwn<GfxDescriptorSet> m_materialDescriptorSet;
 
 	bool m_loadingThreadShouldExit = false;

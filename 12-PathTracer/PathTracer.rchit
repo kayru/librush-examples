@@ -37,6 +37,10 @@ void main()
 	payload.albedo.rgb = texture(sampler2D(textureDescriptors[materialConstants.albedoTextureId], defaultSampler), uv).rgb;
 	payload.albedo *= materialConstants.baseColor.rgb;
 
+	vec4 specularSample = texture(sampler2D(textureDescriptors[materialConstants.specularTextureId], defaultSampler), uv);
+	payload.metalness = materialConstants.metallicFactor * specularSample.b;
+	payload.roughness = materialConstants.roughnessFactor * specularSample.g;
+
 	payload.normal = normalize(INTERPOLATE(triVertices, getNormal, barycentrics));
 
 	payload.geoNormal = cross(getPosition(triVertices[1]) - getPosition(triVertices[0]), getPosition(triVertices[2]) - getPosition(triVertices[0]));

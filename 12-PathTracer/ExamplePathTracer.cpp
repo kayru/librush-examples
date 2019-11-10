@@ -550,6 +550,9 @@ bool ExamplePathTracer::loadModelGLTF(const char* filename)
 			constants.baseColor[1] = inMaterial.pbr_metallic_roughness.base_color_factor[1];
 			constants.baseColor[2] = inMaterial.pbr_metallic_roughness.base_color_factor[2];
 
+			constants.metallicFactor = inMaterial.pbr_metallic_roughness.metallic_factor;
+			constants.roughnessFactor = inMaterial.pbr_metallic_roughness.roughness_factor;
+
 			if (auto texture = inMaterial.pbr_metallic_roughness.base_color_texture.texture)
 			{
 				if (texture->image && texture->image->uri)
@@ -557,6 +560,16 @@ bool ExamplePathTracer::loadModelGLTF(const char* filename)
 					std::string filename = directory + std::string(texture->image->uri);
 					fixDirectorySeparatorsInplace(filename);
 					constants.albedoTextureId = enqueueLoadTexture(filename);
+				}
+			}
+
+			if (auto texture = inMaterial.pbr_metallic_roughness.metallic_roughness_texture.texture)
+			{
+				if (texture->image && texture->image->uri)
+				{
+					std::string filename = directory + std::string(texture->image->uri);
+					fixDirectorySeparatorsInplace(filename);
+					constants.specularTextureId = enqueueLoadTexture(filename);
 				}
 			}
 		}
