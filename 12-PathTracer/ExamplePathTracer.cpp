@@ -65,6 +65,7 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 	m_textureDescriptors.push_back(Gfx_CreateTexture(textureDesc, whiteTexturePixels));
 
 	GfxDescriptorSetDesc materialDescriptorSetDesc;
+	materialDescriptorSetDesc.flags = GfxDescriptorSetFlags::TextureArray;
 	materialDescriptorSetDesc.stageFlags = GfxStageFlags::RayTracing;
 	materialDescriptorSetDesc.textures = MaxTextures;
 	m_materialDescriptorSet = Gfx_CreateDescriptorSet(materialDescriptorSetDesc);
