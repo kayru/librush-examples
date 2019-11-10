@@ -15,6 +15,7 @@
 #include <stb_image.h>
 #include <stb_image_resize.h>
 #include <tiny_obj_loader.h>
+#include <cgltf.h>
 
 #include <chrono>
 
@@ -92,10 +93,12 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 	{
 		auto vs = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("Blit.vert")));
 		auto ps = Gfx_CreatePixelShader(loadShaderFromFile(RUSH_SHADER_NAME("BlitTonemap.frag")));
+		auto vf = Gfx_CreateVertexFormat({});
 
 		GfxTechniqueDesc desc;
 		desc.vs = vs.get();
 		desc.ps = ps.get();
+		desc.vf = vf.get();
 		desc.bindings.samplers = 1; // linear sampler
 		desc.bindings.textures = 1; // input texture
 		m_blitTonemap = Gfx_CreateTechnique(desc);
@@ -271,9 +274,9 @@ void ExamplePathTracer::render()
 		Gfx_SetStorageBuffer(ctx, 1, m_vertexBuffer);
 		Gfx_SetDescriptors(ctx, 1, m_materialDescriptorSet);
 		Gfx_TraceRays(ctx, m_rtPipeline, m_tlas, m_sbtBuffer, outputImageDesc.width, outputImageDesc.height);
-
-		Gfx_AddImageBarrier(ctx, m_outputImage, GfxResourceState_ShaderRead);
 	}
+
+	Gfx_AddImageBarrier(ctx, m_outputImage, GfxResourceState_ShaderRead);
 
 	GfxPassDesc passDesc;
 	passDesc.flags = GfxPassFlags::ClearAll;
@@ -439,6 +442,286 @@ inline float convertDiffuseColor(float v)
 	return v == 0.0f ? 0.5f : v;
 }
 
+template <typename T>
+const T* getDataPtr(const cgltf_accessor* attr)
+{
+	const char* buffer = (const char*)(attr->buffer_view->buffer->data);
+	return reinterpret_cast<const T*>(&buffer[attr->offset + attr->buffer_view->offset]);
+}
+
+inline Vec3 mulPosition(Vec3 v, float transform[16])
+{
+	Vec3 r;
+	r.x = v.x * transform[0] + v.y * transform[4] + v.z * transform[8] + transform[12];
+	r.y = v.x * transform[1] + v.y * transform[5] + v.z * transform[9] + transform[13];
+	r.z = v.x * transform[2] + v.y * transform[6] + v.z * transform[10] + transform[14];
+	return r;
+}
+
+inline Vec3 mulNormal(Vec3 v, float transform[16])
+{
+	Vec3 r;
+	r.x = v.x * transform[0] + v.y * transform[4] + v.z * transform[8];
+	r.y = v.x * transform[1] + v.y * transform[5] + v.z * transform[9];
+	r.z = v.x * transform[2] + v.y * transform[6] + v.z * transform[10];
+	return r;
+}
+
+static const char* toString(cgltf_result v)
+{
+	switch (v)
+	{
+		case cgltf_result_success: return "success";
+		case cgltf_result_data_too_short: return "data_too_short";
+		case cgltf_result_unknown_format: return "unknown_format";
+		case cgltf_result_invalid_json: return "invalid_json";
+		case cgltf_result_invalid_gltf: return "invalid_gltf";
+		case cgltf_result_invalid_options: return "invalid_options";
+		case cgltf_result_file_not_found: return "file_not_found";
+		case cgltf_result_io_error: return "io_error";
+		case cgltf_result_out_of_memory: return "out_of_memory";
+		default: return "[unknown]";
+	}
+}
+
+bool ExamplePathTracer::loadModelGLTF(const char* filename)
+{
+	std::string directory = directoryFromFilename(filename);
+
+	cgltf_options options = {};
+	cgltf_data* data = nullptr;
+	cgltf_result result = cgltf_parse_file(&options, filename, &data);
+	if (result != cgltf_result_success)
+	{
+		RUSH_LOG_ERROR("GLTF loader error: %s (%d)", toString(result), (int)result);
+		cgltf_free(data);
+		return false;
+	}
+
+	result = cgltf_load_buffers(&options, data, filename);
+	if (result != cgltf_result_success)
+	{
+		RUSH_LOG_ERROR("GLTF loader error: %s (%d)", toString(result), (int)result);
+		cgltf_free(data);
+		return false;
+	}
+
+	RUSH_LOG("Converting mesh from GLTF");
+
+	std::unordered_map<const void*, u32> materialMap;
+
+	{
+		MaterialConstants constants;
+		constants.albedoTextureId = m_defaultWhiteTextureId;
+		constants.baseColor = Vec4(1.0f);
+		m_materials.push_back(constants);
+	}
+
+	for (u32 i=0; i<data->materials_count; ++i)
+	{
+		const cgltf_material& inMaterial = data->materials[i];
+
+		MaterialConstants constants;
+		constants.albedoTextureId = m_defaultWhiteTextureId;
+
+		switch (inMaterial.alpha_mode)
+		{
+		default:
+		case cgltf_alpha_mode_opaque:
+			constants.alphaMode = AlphaMode::Opaque;
+			break;
+		case cgltf_alpha_mode_blend:
+			constants.alphaMode = AlphaMode::Blend;
+			break;
+		case cgltf_alpha_mode_mask:
+			constants.alphaMode = AlphaMode::Mask;
+			break;
+		}
+
+		if (inMaterial.name && !strcmp(inMaterial.name, "outline"))
+		{
+			// hack to skip outline rendering
+			constants.alphaMode = AlphaMode::Blend;
+		}
+
+		if (inMaterial.has_pbr_metallic_roughness)
+		{
+			constants.baseColor[0] = inMaterial.pbr_metallic_roughness.base_color_factor[0];
+			constants.baseColor[1] = inMaterial.pbr_metallic_roughness.base_color_factor[1];
+			constants.baseColor[2] = inMaterial.pbr_metallic_roughness.base_color_factor[2];
+
+			if (auto texture = inMaterial.pbr_metallic_roughness.base_color_texture.texture)
+			{
+				if (texture->image && texture->image->uri)
+				{
+					std::string filename = directory + std::string(texture->image->uri);
+					fixDirectorySeparatorsInplace(filename);
+					constants.albedoTextureId = enqueueLoadTexture(filename);
+				}
+			}
+		}
+		else if (inMaterial.has_pbr_specular_glossiness)
+		{
+			constants.baseColor[0] = inMaterial.pbr_specular_glossiness.diffuse_factor[0];
+			constants.baseColor[1] = inMaterial.pbr_specular_glossiness.diffuse_factor[1];
+			constants.baseColor[2] = inMaterial.pbr_specular_glossiness.diffuse_factor[2];
+		}
+
+		constants.baseColor[0] = convertDiffuseColor(constants.baseColor[0]);
+		constants.baseColor[1] = convertDiffuseColor(constants.baseColor[1]);
+		constants.baseColor[2] = convertDiffuseColor(constants.baseColor[2]);
+
+		materialMap[&inMaterial] = u32(m_materials.size());
+
+		m_materials.push_back(constants);
+	}
+
+	m_boundingBox.expandInit();
+
+	for (u32 ni = 0; ni < data->nodes_count; ++ni)
+	{
+		const cgltf_node& node = data->nodes[ni];
+		if (!node.mesh)
+		{
+			continue;
+		}
+
+		float transform[16];
+		cgltf_node_transform_world(&node, transform);
+
+		const cgltf_mesh& mesh = *node.mesh;
+
+		for (u32 pi = 0; pi < mesh.primitives_count; ++pi)
+		{
+			const cgltf_primitive& prim = mesh.primitives[pi];
+			const cgltf_accessor* aidx = prim.indices;
+			const cgltf_accessor* apos = nullptr;
+			const cgltf_accessor* anor = nullptr;
+			const cgltf_accessor* atex = nullptr;
+
+			for (u32 ai = 0; ai < prim.attributes_count; ++ai)
+			{
+				const cgltf_attribute& attr = prim.attributes[ai];
+				if (attr.type == cgltf_attribute_type_position && attr.index == 0)
+				{
+					apos = attr.data;
+				}
+				else if (attr.type == cgltf_attribute_type_normal && attr.index == 0)
+				{
+					anor = attr.data;
+				}
+				else if (attr.type == cgltf_attribute_type_texcoord && attr.index == 0)
+				{
+					atex = attr.data;
+				}
+			}
+
+			const u32 firstIndex = u32(m_indices.size());
+			const u32 firstVertex = u32(m_vertices.size());
+
+			MeshSegment seg;
+			seg.material = materialMap[prim.material];
+			seg.indexOffset = firstIndex;
+			seg.indexCount = u32(aidx->count);
+
+			if (m_materials[seg.material].alphaMode == AlphaMode::Blend)
+			{
+				continue; // transparent materials not implemented
+			}
+
+			m_segments.push_back(seg);
+
+			if (!aidx || !apos)
+			{
+				continue;
+			}
+
+			if (aidx->component_type == cgltf_component_type_r_32u)
+			{
+				auto ptr = getDataPtr<u32>(aidx);
+				for (u32 i = 0; i < aidx->count; ++i)
+				{
+					m_indices.push_back(firstVertex + ptr[i]);
+				}
+			}
+			else
+			{
+				auto ptr = getDataPtr<u16>(aidx);
+				for (u32 i = 0; i < aidx->count; ++i)
+				{
+					m_indices.push_back(firstVertex + ptr[i]);
+				}
+			}
+
+			// convert winding due to coordinate system difference
+			const u64 triCount = (m_indices.size() - firstIndex) / 3;
+			for (u64 i = 0; i < triCount; ++i)
+			{
+				std::swap(m_indices[firstIndex + i * 3 + 1], m_indices[firstIndex + i * 3 + 2]);
+			}
+
+			// positions
+
+			if (apos)
+			{
+				auto ptr = getDataPtr<float>(apos);
+				for (u32 i = 0; i < apos->count; ++i)
+				{
+					Vertex v = {};
+					v.position = mulPosition(Vec3(ptr), transform);
+					v.position.x = -v.position.x;
+					m_vertices.push_back(v);
+					ptr += apos->stride / 4;
+					m_boundingBox.expand(v.position);
+				}
+			}
+
+			// normals
+
+			bool haveNormals = false;
+			if (anor && anor->count == apos->count)
+			{
+				haveNormals = true;
+				auto ptr = getDataPtr<float>(anor);
+				for (u32 i = 0; i < anor->count; ++i)
+				{
+					m_vertices[firstVertex + i].normal = mulNormal(Vec3(ptr), transform);
+					m_vertices[firstVertex + i].normal.x = -m_vertices[firstVertex + i].normal.x;
+					ptr += anor->stride / 4;
+				}
+			}
+
+			// texcoords
+
+			bool haveTexcoords = false;
+			if (atex && atex->count == apos->count)
+			{
+				haveTexcoords = true;
+				auto ptr = getDataPtr<float>(atex);
+				for (u32 i = 0; i < atex->count; ++i)
+				{
+					m_vertices[firstVertex + i].texcoord = Vec2(ptr);
+					ptr += atex->stride / 4;
+				}
+			}
+
+			if (!haveNormals)
+			{
+				// TODO: compute face normals
+			}
+		}
+	}
+
+	cgltf_free(data);
+
+	m_vertexCount = (u32)m_vertices.size();
+	m_indexCount = (u32)m_indices.size();
+
+	createGpuScene();
+
+	return true;
+}
+
 bool ExamplePathTracer::loadModelObj(const char* filename)
 {
 	std::vector<tinyobj::shape_t>    shapes;
@@ -454,7 +737,8 @@ bool ExamplePathTracer::loadModelObj(const char* filename)
 		return false;
 	}
 
-	const GfxBufferDesc materialCbDesc(GfxBufferFlags::Constant, GfxFormat_Unknown, 1, sizeof(MaterialConstants));
+	RUSH_LOG("Converting mesh from OBJ");
+
 	for (auto& objMaterial : materials)
 	{
 		MaterialConstants constants;
@@ -482,16 +766,11 @@ bool ExamplePathTracer::loadModelObj(const char* filename)
 		m_materials.push_back(constants);
 	}
 
-	RUSH_LOG("Converting mesh");
-
-	std::vector<Vertex> vertices;
-	std::vector<u32>    indices;
-
 	m_boundingBox.expandInit();
 
 	for (const auto& shape : shapes)
 	{
-		u32         firstVertex = (u32)vertices.size();
+		u32         firstVertex = (u32)m_vertices.size();
 		const auto& mesh        = shape.mesh;
 
 		const u32 vertexCount = (u32)mesh.positions.size() / 3;
@@ -537,7 +816,7 @@ bool ExamplePathTracer::loadModelObj(const char* filename)
 
 			//v.normal = Vec3(1, 0, 0);
 
-			vertices.push_back(v);
+			m_vertices.push_back(v);
 		}
 
 		if (!haveNormals)
@@ -549,22 +828,22 @@ bool ExamplePathTracer::loadModelObj(const char* filename)
 				u32 idxB = firstVertex + mesh.indices[i * 3 + 2];
 				u32 idxC = firstVertex + mesh.indices[i * 3 + 1];
 
-				Vec3 a = vertices[idxA].position;
-				Vec3 b = vertices[idxB].position;
-				Vec3 c = vertices[idxC].position;
+				Vec3 a = m_vertices[idxA].position;
+				Vec3 b = m_vertices[idxB].position;
+				Vec3 c = m_vertices[idxC].position;
 
 				Vec3 normal = cross(b - a, c - b);
 
 				normal = normalize(normal);
 
-				vertices[idxA].normal += normal;
-				vertices[idxB].normal += normal;
-				vertices[idxC].normal += normal;
+				m_vertices[idxA].normal += normal;
+				m_vertices[idxB].normal += normal;
+				m_vertices[idxC].normal += normal;
 			}
 
-			for (u32 i = firstVertex; i < (u32)vertices.size(); ++i)
+			for (u32 i = firstVertex; i < (u32)m_vertices.size(); ++i)
 			{
-				vertices[i].normal = normalize(vertices[i].normal);
+				m_vertices[i].normal = normalize(m_vertices[i].normal);
 			}
 		}
 
@@ -578,21 +857,37 @@ bool ExamplePathTracer::loadModelObj(const char* filename)
 				currentMaterialId = mesh.material_ids[triangleIt];
 				m_segments.push_back(MeshSegment());
 				m_segments.back().material    = max(0,currentMaterialId);
-				m_segments.back().indexOffset = (u32)indices.size();
+				m_segments.back().indexOffset = (u32)m_indices.size();
 				m_segments.back().indexCount  = 0;
 			}
 
-			indices.push_back(mesh.indices[triangleIt * 3 + 0] + firstVertex);
-			indices.push_back(mesh.indices[triangleIt * 3 + 2] + firstVertex);
-			indices.push_back(mesh.indices[triangleIt * 3 + 1] + firstVertex);
+			m_indices.push_back(mesh.indices[triangleIt * 3 + 0] + firstVertex);
+			m_indices.push_back(mesh.indices[triangleIt * 3 + 2] + firstVertex);
+			m_indices.push_back(mesh.indices[triangleIt * 3 + 1] + firstVertex);
 
 			m_segments.back().indexCount += 3;
 		}
 
-		m_vertexCount = (u32)vertices.size();
-		m_indexCount  = (u32)indices.size();
+		m_vertexCount = (u32)m_vertices.size();
+		m_indexCount  = (u32)m_indices.size();
 	}
-	
+
+	createGpuScene();
+
+	return true;
+}
+
+void ExamplePathTracer::createGpuScene()
+{
+	RUSH_LOG("Uploading mesh to GPU");
+
+	GfxBufferDesc vbDesc(GfxBufferFlags::Storage, GfxFormat_Unknown, m_vertexCount, sizeof(Vertex));
+	m_vertexBuffer = Gfx_CreateBuffer(vbDesc, m_vertices.data());
+
+	const u32 ibStride = 4;
+	GfxBufferDesc ibDesc(GfxBufferFlags::Storage, GfxFormat_R32_Uint, m_indexCount, ibStride);
+	m_indexBuffer = Gfx_CreateBuffer(ibDesc, m_indices.data());
+
 	if (!m_pendingTextures.empty())
 	{
 		const u32 textureCount = u32(m_pendingTextures.size());
@@ -655,15 +950,7 @@ bool ExamplePathTracer::loadModelObj(const char* filename)
 		nullptr, // storage images
 		nullptr  // storage buffers
 	);
-	
-	RUSH_LOG("Uploading mesh to GPU");
 
-	GfxBufferDesc vbDesc(GfxBufferFlags::Storage, GfxFormat_Unknown, m_vertexCount, sizeof(Vertex));
-	m_vertexBuffer = Gfx_CreateBuffer(vbDesc, vertices.data());
-
-	const u32 ibStride = 4;
-	GfxBufferDesc ibDesc(GfxBufferFlags::Storage, GfxFormat_R32_Uint, m_indexCount, ibStride);
-	m_indexBuffer = Gfx_CreateBuffer(ibDesc, indices.data());
 
 	RUSH_LOG("Creating ray tracing data");
 
@@ -675,11 +962,11 @@ bool ExamplePathTracer::loadModelObj(const char* filename)
 	const u32 sbtRecordSize = alignCeiling(u32(shaderHandleSize + sizeof(MaterialConstants)), shaderHandleSize);
 
 	DynamicArray<u8> sbtData;
-	sbtData.resize(m_segments.size()* sbtRecordSize);
+	sbtData.resize(m_segments.size() * sbtRecordSize);
 
 	const u8* hitGroupHandle = Gfx_GetRayTracingShaderHandle(m_rtPipeline, GfxRayTracingShaderType::HitGroup, 0);
 
-	for (size_t i=0; i<m_segments.size(); ++i)
+	for (size_t i = 0; i < m_segments.size(); ++i)
 	{
 		const auto& segment = m_segments[i];
 
@@ -711,8 +998,6 @@ bool ExamplePathTracer::loadModelObj(const char* filename)
 	blasDesc.geometyCount = u32(geometries.size());
 	blasDesc.geometries = geometries.data();
 	m_blas = Gfx_CreateAccelerationStructure(blasDesc);
-
-	return true;
 }
 
 bool ExamplePathTracer::loadModel(const char* filename)
@@ -722,6 +1007,10 @@ bool ExamplePathTracer::loadModel(const char* filename)
 	if (endsWith(filename, ".obj"))
 	{
 		return loadModelObj(filename);
+	}
+	if (endsWith(filename, ".gltf"))
+	{
+		return loadModelGLTF(filename);
 	}
 	else
 	{

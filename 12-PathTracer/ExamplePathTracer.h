@@ -33,6 +33,7 @@ private:
 
 	bool loadModel(const char* filename);
 	bool loadModelObj(const char* filename);
+	bool loadModelGLTF(const char* filename);
 
 	u32 enqueueLoadTexture(const std::string& filename);
 
@@ -48,6 +49,16 @@ private:
 	CameraManipulator* m_cameraMan;
 
 	u32 m_defaultWhiteTextureId;
+
+	struct Vertex
+	{
+		Vec3 position;
+		Vec3 normal;
+		Vec2 texcoord;
+	};
+
+	std::vector<Vertex> m_vertices;
+	std::vector<u32>    m_indices;
 
 	GfxOwn<GfxBuffer> m_indexBuffer;
 	GfxOwn<GfxBuffer> m_vertexBuffer;
@@ -70,22 +81,22 @@ private:
 	Mat4 m_worldTransform = Mat4::identity();
 	Box3 m_boundingBox;
 
-	struct Vertex
-	{
-		Vec3 position;
-		Vec3 normal;
-		Vec2 texcoord;
-	};
-
 	std::string m_statusString;
 	bool m_valid = false;
+
+	enum class AlphaMode : u32
+	{
+		Opaque,
+		Mask,
+		Blend
+	};
 
 	struct MaterialConstants
 	{
 		Vec4 baseColor = Vec4(1.0f);
 		u32 albedoTextureId = 0;
 		u32 firstIndex = 0;
-		u32 padding0 = 0;
+		AlphaMode alphaMode = AlphaMode::Opaque;
 		u32 padding1 = 0;
 	};
 
@@ -136,4 +147,6 @@ private:
 
 	void loadingThreadFunction();
 	void createRayTracingScene(GfxContext* ctx);
+
+	void createGpuScene();
 };
