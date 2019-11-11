@@ -132,11 +132,7 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 		m_statusString = "Usage: ExamplePathTracer <filename.obj>";
 	}
 
-	float aspect = m_window->getAspect();
-	float fov    = 1.0f;
-
-	m_camera = Camera(aspect, fov, 0.25f, 10000.0f);
-	m_camera.lookAt(Vec3(m_boundingBox.m_max) + Vec3(2.0f), m_boundingBox.center());
+	resetCamera();
 
 	m_cameraMan = new CameraManipulator();
 }
@@ -158,6 +154,8 @@ void ExamplePathTracer::update()
 	TimingScope timingScope(m_stats.cpuTotal);
 
 	m_stats.gpuTotal.add(Gfx_Stats().lastFrameGpuTime);
+	m_totalGpuRenderTime += Gfx_Stats().lastFrameGpuTime;
+
 	Gfx_ResetStats();
 
 	const float dt = (float)m_timer.time();
@@ -197,6 +195,7 @@ void ExamplePathTracer::update()
 		|| m_camera.getFov() != oldCamera.getFov())
 	{
 		m_frameIndex = 0;
+		m_totalGpuRenderTime = 0;
 	}
 
 	m_windowEvents.clear();
@@ -317,9 +316,13 @@ void ExamplePathTracer::render()
 		const GfxStats& stats = Gfx_Stats();
 		sprintf_s(timingString,
 		    "GPU time: %.2f ms\n"
-		    "CPU time: %.2f ms\n",
+		    "CPU time: %.2f ms\n"
+		    "Total render time: %.2f sec\n"
+		    "Samples per pixel: %d\n",
 		    m_stats.gpuTotal.get() * 1000.0f,
-		    m_stats.cpuTotal.get() * 1000.0f);
+		    m_stats.cpuTotal.get() * 1000.0f,
+		    m_totalGpuRenderTime,
+		    m_frameIndex);
 		m_font->draw(m_prim, Vec2(10.0f, 30.0f), timingString);
 
 		m_prim->end2D();
@@ -1011,6 +1014,14 @@ void ExamplePathTracer::createGpuScene()
 	blasDesc.geometyCount = u32(geometries.size());
 	blasDesc.geometries = geometries.data();
 	m_blas = Gfx_CreateAccelerationStructure(blasDesc);
+}
+
+void ExamplePathTracer::resetCamera()
+{
+	float aspect = m_window->getAspect();
+	float fov = 1.0f;
+	m_camera = Camera(aspect, fov, 0.25f, 10000.0f);
+	m_camera.lookAt(Vec3(m_boundingBox.m_max) + Vec3(2.0f), m_boundingBox.center());
 }
 
 bool ExamplePathTracer::loadModel(const char* filename)

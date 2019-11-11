@@ -123,26 +123,51 @@ uint hashFnv1(uint x)
 	return state;
 }
 
+// Point on hemisphere surface around Z+ with cosine weighted distribution
 vec3 mapToCosineHemisphere(vec2 uv)
 {
-	float phi = uv.x * M_PI * 2.0;
-	vec2 scTheta = vec2(sqrt(uv.y), sqrt(1.0-uv.x));
-	vec2 scPhi = vec2(sin(phi), cos(phi));
-
-	return vec3(
-		scPhi.x * scTheta.x, 
-		scPhi.y * scTheta.x, 
-		scTheta.y);
+	float r = sqrt(uv.x);
+	float theta = 2.0 * M_PI * uv.y;
+	float x = r * cos(theta);
+	float y = r * sin(theta);
+	return vec3(x, y, sqrt(1.0 - uv.x));
 }
+vec3 sampleCosineHemisphere(inout uint seed) { return mapToCosineHemisphere(randomFloat2(seed)); };
 
+// Point on hemisphere surface around Z+
+vec3 mapToUniformHemisphere(vec2 uv)
+{
+	float r = sqrt(1.0 - uv.x * uv.x);
+	float phi = 2.0 * M_PI * uv.y;
+	return vec3(cos(phi) * r, sin(phi) * r, uv.x);
+}
+vec3 sampleUniformHemisphere(inout uint seed) { return mapToUniformHemisphere(randomFloat2(seed)); };
+
+// Point on sphere surface
 vec3 mapToUniformSphere(vec2 uv)
 {
-	float z = 1.0 - 2.0 * uv.x;
+	float phi = uv.x * M_PI * 2.0;
+	float z = 1.0 - 2.0 * uv.y;
 	float r = sqrt(1.0 - z*z);
-	float phi = 2.0f * M_PI * uv.y;
-	float x = cos(phi);
-	float y = sin(phi);
+	float x = r * cos(phi);
+	float y = r * sin(phi);
 	return vec3(x,y,z);
+}
+vec3 sampleUniformSphere(inout uint seed) { return mapToUniformSphere(randomFloat2(seed)); };
+
+vec3 sampleUniformSphereInterior(inout uint seed)
+{ 
+	for(;;)
+	{
+		vec3 v;
+		v.x = randomFloat(seed);
+		v.y = randomFloat(seed);
+		v.z = randomFloat(seed);
+		if (dot(v,v) <= 1.0)
+		{
+			return v;
+		}
+	}
 }
 
 mat3 makeOrthonormalBasis(vec3 n)

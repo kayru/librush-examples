@@ -45,6 +45,8 @@ private:
 		MovingAverage<double, 60> cpuTotal;
 	} m_stats;
 
+	double m_totalGpuRenderTime = 0;
+
 	Camera m_camera;
 	CameraManipulator* m_cameraMan;
 
@@ -151,4 +153,5 @@ private:
 	void createRayTracingScene(GfxContext* ctx);
 
 	void createGpuScene();
+	void resetCamera();
 };
