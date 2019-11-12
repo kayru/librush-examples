@@ -4,7 +4,8 @@
 #include "Common.glsl"
 #include "BRDF.glsl"
 
-#define USE_WHITE_FURNECE false
+#define DEBUG_FURNECE      false
+#define DEBUG_REFLECTIONS  false
 
 layout(location = 0) rayPayloadNV DefaultPayload payload;
 
@@ -73,7 +74,7 @@ vec3 getSunColor()
 
 vec3 getSkyColor(vec3 dir)
 {
-	if (USE_WHITE_FURNECE)
+	if (DEBUG_FURNECE)
 	{		
 		return vec3(1.0);
 	}
@@ -86,7 +87,6 @@ vec3 getSkyColor(vec3 dir)
 	}
 }
 
-
 void main()
 {
 	ivec2 pixelIndex = ivec2(gl_LaunchIDNV.xy);
@@ -95,14 +95,12 @@ void main()
 	uint pixelLinearIndex = pixelIndex.x + pixelIndex.y * outputSize.y;
 	uint randomSeed = hashFnv1(pixelLinearIndex + pixelLinearIndex * 1294974679 + frameIndex);
 
-	vec2 pixelJitter;
-	pixelJitter.x = (randomFloat(randomSeed) - 0.5) / outputSize.x;
-	pixelJitter.y = (randomFloat(randomSeed) - 0.5) / outputSize.y;
+	vec2 pixelJitter = (randomFloat2(randomSeed) - 0.5) / outputSize;
 
 	vec3 result = vec3(0);
 	vec3 weight = vec3(1);
 
-	const uint maxPathLength = USE_WHITE_FURNECE ? 2 : 5;
+	const uint maxPathLength = DEBUG_FURNECE ? 2 : 5;
 	for(uint i=0; i<maxPathLength; ++i)
 	{
 		RayDesc ray;
@@ -125,13 +123,13 @@ void main()
 
 		if (isHit)
 		{
-			if (USE_WHITE_FURNECE) payload.albedo = vec3(1.0);
+			if (DEBUG_FURNECE) payload.albedo = vec3(1.0);
 
 			weight *= payload.albedo;
 
 			vec3 L = getSunDirection();
 			float cosTheta = dot(payload.normal, L);
-			if (cosTheta > 0 && !USE_WHITE_FURNECE)
+			if (cosTheta > 0 && !DEBUG_FURNECE)
 			{
 				RayDesc shadowRay;
 				shadowRay.origin = ray.origin + ray.direction * payload.hitT;

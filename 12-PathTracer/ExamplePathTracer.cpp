@@ -55,7 +55,7 @@ struct TimingScope
 
 ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f), Vec3(0.0f))
 {
-	Gfx_SetPresentInterval(1);
+	Gfx_SetPresentInterval(0);
 
 	m_windowEvents.setOwner(m_window);
 

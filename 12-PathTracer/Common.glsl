@@ -2,6 +2,7 @@
 #define INCLUDED_COMMON_GLSL
 
 #define M_PI 3.14159265358979323846264338327950288
+#define saturate(x) clamp(x, 0.0, 1.0)
 
 // global resources
 
@@ -91,6 +92,12 @@ struct RayDesc
 float nudgeULP(float x, int delta)
 {
 	return uintBitsToFloat(floatBitsToUint(x) + delta);
+}
+
+float pow5(float x)
+{
+	float x2 = x * x;
+	return x2 * x2 * x;
 }
 
 float max3(vec3 v)
