@@ -132,7 +132,7 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 		m_statusString = "Usage: ExamplePathTracer <filename.obj>";
 	}
 
-	resetCamera();
+	loadCamera();
 
 	m_cameraMan = new CameraManipulator();
 }
@@ -165,6 +165,24 @@ void ExamplePathTracer::update()
 	{
 		switch (e.type)
 		{
+		case WindowEventType_KeyDown:
+			if (e.code == Key_F1)
+			{
+				m_showUI = !m_showUI;
+			}
+			else if (e.code == Key_F2)
+			{
+				saveCamera();
+			}
+			else if (e.code == Key_F3)
+			{
+				loadCamera();
+			}
+			else if (e.code == Key_F4)
+			{
+				resetCamera();
+			}
+			break;
 		case WindowEventType_Scroll:
 			if (e.scroll.y > 0)
 			{
@@ -187,8 +205,6 @@ void ExamplePathTracer::update()
 
 	m_cameraMan->update(&m_camera, dt, m_window->getKeyboardState(), m_window->getMouseState());
 
-	m_frameIndex++;
-
 	if (m_camera.getPosition() != oldCamera.getPosition()
 		|| m_camera.getForward() != oldCamera.getForward()
 		|| m_camera.getAspect() != oldCamera.getAspect()
@@ -201,6 +217,8 @@ void ExamplePathTracer::update()
 	m_windowEvents.clear();
 
 	render();
+
+	m_frameIndex++;
 }
 
 void ExamplePathTracer::createRayTracingScene(GfxContext* ctx)
@@ -300,6 +318,7 @@ void ExamplePathTracer::render()
 		Gfx_Draw(ctx, 0, 3);
 	}
 
+	if (m_showUI)
 	{
 		GfxMarkerScope markerFrame(ctx, "UI");
 
@@ -308,10 +327,8 @@ void ExamplePathTracer::render()
 
 		m_prim->begin2D(m_window->getSize());
 
-		m_font->setScale(2.0f);
 		m_font->draw(m_prim, Vec2(10.0f), m_statusString.c_str());
 
-		m_font->setScale(1.0f);
 		char            timingString[1024];
 		const GfxStats& stats = Gfx_Stats();
 		sprintf_s(timingString,
@@ -1022,6 +1039,32 @@ void ExamplePathTracer::resetCamera()
 	float fov = 1.0f;
 	m_camera = Camera(aspect, fov, 0.25f, 10000.0f);
 	m_camera.lookAt(Vec3(m_boundingBox.m_max) + Vec3(2.0f), m_boundingBox.center());
+	m_frameIndex = 0;
+}
+
+void ExamplePathTracer::saveCamera()
+{
+	FileOut f("camera.bin");
+	if (f.valid())
+	{
+		f.writeT(m_camera);
+		RUSH_LOG("Camera saved to file");
+	}
+}
+
+void ExamplePathTracer::loadCamera()
+{
+	FileIn f("camera.bin");
+	if (f.valid())
+	{
+		f.readT(m_camera);
+		m_frameIndex = 0;
+		RUSH_LOG("Camera loaded from file");
+	}
+	else
+	{
+		resetCamera();
+	}
 }
 
 bool ExamplePathTracer::loadModel(const char* filename)

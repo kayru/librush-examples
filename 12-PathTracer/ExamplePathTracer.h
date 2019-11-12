@@ -139,6 +139,7 @@ private:
 
 	bool m_loadingThreadShouldExit = false;
 	u32 m_frameIndex = 0;
+	bool m_showUI = true;
 
 	std::mutex m_loadingMutex;
 
@@ -153,5 +154,7 @@ private:
 	void createRayTracingScene(GfxContext* ctx);
 
 	void createGpuScene();
+	void saveCamera();
+	void loadCamera();
 	void resetCamera();
 };
