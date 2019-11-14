@@ -14,9 +14,9 @@ float D_GGX(float linearRoughness, float NoH, vec3 h)
 	return saturate(d);
 }
 
-vec3 importanceSamplingNdfDggx(vec2 uv, float roughness) {
+vec3 importanceSamplingNdfDggx(vec2 uv, float linearRoughness) {
 	// Importance sampling D_GGX
-	float a2 = roughness * roughness;
+	float a2 = linearRoughness * linearRoughness;
 	float phi = 2.0 * M_PI * uv.x;
 	float cosTheta2 = (1.0 - uv.y) / (1.0 + (a2 - 1.0) * uv.y);
 	float cosTheta = sqrt(cosTheta2);

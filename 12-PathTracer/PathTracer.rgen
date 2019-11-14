@@ -4,8 +4,9 @@
 #include "Common.glsl"
 #include "BRDF.glsl"
 
-#define DEBUG_FURNECE      false
-#define DEBUG_REFLECTIONS  false
+#define USE_DEBUG_FURNECE      false
+#define USE_DEBUG_REFLECTIONS  false
+#define USE_DIRECT_LIGHTING    true
 
 layout(location = 0) rayPayloadNV DefaultPayload payload;
 
@@ -74,7 +75,7 @@ vec3 getSunColor()
 
 vec3 getSkyColor(vec3 dir)
 {
-	if (DEBUG_FURNECE)
+	if (USE_DEBUG_FURNECE)
 	{		
 		return vec3(1.0);
 	}
@@ -100,56 +101,74 @@ void main()
 	vec3 result = vec3(0);
 	vec3 weight = vec3(1);
 
-	const uint maxPathLength = DEBUG_FURNECE ? 2 : 5;
+	RayDesc primaryRay;
+	primaryRay.minT = 0;
+	primaryRay.maxT = 1e9;
+	primaryRay.origin = cameraPosition.xyz;
+	primaryRay.direction = getCameraViewVector(pixelUV + pixelJitter);
+
+	const uint maxPathLength = USE_DEBUG_FURNECE ? 2 : 5;
 	for(uint i=0; i<maxPathLength; ++i)
 	{
-		RayDesc ray;
-		ray.minT = 0;
-		ray.maxT = 1e9;
+		bool isHit = traceRay(primaryRay);
 
-		if (i == 0)
+		if (!isHit)
 		{
-			ray.origin = cameraPosition.xyz;
-			ray.direction = getCameraViewVector(pixelUV + pixelJitter);
-		}
-		else
-		{
-			ray.origin = ray.origin + ray.direction * payload.hitT;
-			ray.origin += payload.geoNormal * max3(abs(ray.origin)) * 1e-4;
-			ray.direction = normalize(payload.normal + sampleUniformSphere(randomSeed));
+			// We hit the sky, so we're done
+			result += weight * getSkyColor(primaryRay.direction);
+			break;
 		}
 
-		bool isHit = traceRay(ray);
+		if (USE_DEBUG_FURNECE) payload.albedo = vec3(1.0);
 
-		if (isHit)
+		const vec3 L = getSunDirection();
+		const vec3 N = payload.normal;
+		const vec3 V = -primaryRay.direction;
+		const float NoL = dot(N, L);
+
+		if (NoL > 0 && USE_DIRECT_LIGHTING && !USE_DEBUG_FURNECE && (!USE_DEBUG_REFLECTIONS || i > 0))
 		{
-			if (DEBUG_FURNECE) payload.albedo = vec3(1.0);
+			RayDesc shadowRay;
+			shadowRay.origin = primaryRay.origin + primaryRay.direction * payload.hitT;
+			shadowRay.origin += payload.geoNormal * max3(abs(shadowRay.origin)) * 1e-4;
+			shadowRay.direction = L;
+			shadowRay.minT = 0.0;
+			shadowRay.maxT = 1e9;
 
-			weight *= payload.albedo;
-
-			vec3 L = getSunDirection();
-			float cosTheta = dot(payload.normal, L);
-			if (cosTheta > 0 && !DEBUG_FURNECE)
+			bool isLightOccluded = traceShadowRay(shadowRay);
+			if (!isLightOccluded)
 			{
-				RayDesc shadowRay;
-				shadowRay.origin = ray.origin + ray.direction * payload.hitT;
-				shadowRay.origin += payload.geoNormal * max3(abs(shadowRay.origin)) * 1e-4;
-				shadowRay.direction = L;
-				shadowRay.minT = 0.0;
-				shadowRay.maxT = 1e9;
+				result += weight * payload.albedo * getSunColor() * NoL;
+			}
+		}
 
-				bool isLightOccluded = traceShadowRay(shadowRay);
-				if (!isLightOccluded)
+		// Generate next ray
+
+		primaryRay.origin = primaryRay.origin + primaryRay.direction * payload.hitT;
+		primaryRay.origin += payload.geoNormal * max3(abs(primaryRay.origin)) * 1e-4;		
+		primaryRay.direction = normalize(N + sampleUniformSphere(randomSeed));
+
+		if (USE_DEBUG_REFLECTIONS && i==0)
+		{
+			payload.albedo = vec3(1);
+
+			float linearRoughness = max(0.0001, payload.roughness * payload.roughness);
+			mat3 basis = makeOrthonormalBasis(N);
+			for (int i=0; i<128; ++i) // Try to generate a valid ray
+			{
+				vec3 H = basis * importanceSamplingNdfDggx(randomFloat2(randomSeed), linearRoughness);
+				vec3 L = reflect(-V, H);
+				if (dot(L, payload.normal) > 0)
 				{
-					result += weight * getSunColor() * cosTheta;
+					primaryRay.direction = L;
+					break;
 				}
 			}
 		}
-		else
-		{
-			result += weight * getSkyColor(ray.direction);
-			break;
-		}
+
+		// Update weight for the next segment and continue tracing
+
+		weight *= payload.albedo;
 	}
 
 	if (frameIndex > 0)
