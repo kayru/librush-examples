@@ -94,7 +94,9 @@ void main()
 	vec2 pixelUV = vec2(pixelIndex)/vec2(outputSize);
 
 	uint pixelLinearIndex = pixelIndex.x + pixelIndex.y * outputSize.y;
-	uint randomSeed = hashFnv1(pixelLinearIndex + pixelLinearIndex * 1294974679 + frameIndex);
+
+	uint pixelRandomSeed = hashFnv1(pixelLinearIndex + pixelLinearIndex * 1294974679);
+	uint randomSeed = hashFnv1(pixelRandomSeed + frameIndex);
 
 	vec2 pixelJitter = (randomFloat2(randomSeed) - 0.5) / outputSize;
 
@@ -119,7 +121,7 @@ void main()
 			break;
 		}
 
-		if (USE_DEBUG_FURNECE) payload.albedo = vec3(1.0);
+		if (USE_DEBUG_FURNECE) payload.baseColor = vec3(1.0);
 
 		const vec3 L = getSunDirection();
 		const vec3 N = payload.normal;
@@ -138,25 +140,33 @@ void main()
 			bool isLightOccluded = traceShadowRay(shadowRay);
 			if (!isLightOccluded)
 			{
-				result += weight * payload.albedo * getSunColor() * NoL;
+				result += weight * payload.baseColor * getSunColor() * NoL;
 			}
 		}
 
 		// Generate next ray
 
 		primaryRay.origin = primaryRay.origin + primaryRay.direction * payload.hitT;
-		primaryRay.origin += payload.geoNormal * max3(abs(primaryRay.origin)) * 1e-4;		
-		primaryRay.direction = normalize(N + sampleUniformSphere(randomSeed));
+		primaryRay.origin += payload.geoNormal * max3(abs(primaryRay.origin)) * 1e-4;
+
+		vec2 reflectionSampleUV = randomFloat2(randomSeed);
+		if (i==0)
+		{
+			vec2 modResultInt;
+			reflectionSampleUV = modf(Halton23(int(frameIndex)) + randomFloat2(pixelRandomSeed), modResultInt);
+		}
+
+		primaryRay.direction = normalize(N + mapToUniformSphere(reflectionSampleUV));
 
 		if (USE_DEBUG_REFLECTIONS && i==0)
 		{
-			payload.albedo = vec3(1);
+			payload.baseColor = vec3(1);
 
 			float linearRoughness = max(0.0001, payload.roughness * payload.roughness);
 			mat3 basis = makeOrthonormalBasis(N);
 			for (int i=0; i<128; ++i) // Try to generate a valid ray
 			{
-				vec3 H = basis * importanceSamplingNdfDggx(randomFloat2(randomSeed), linearRoughness);
+				vec3 H = basis * importanceSamplingNdfDggx(reflectionSampleUV, linearRoughness);
 				vec3 L = reflect(-V, H);
 				if (dot(L, payload.normal) > 0)
 				{
@@ -168,7 +178,7 @@ void main()
 
 		// Update weight for the next segment and continue tracing
 
-		weight *= payload.albedo;
+		weight *= payload.baseColor;
 	}
 
 	if (frameIndex > 0)

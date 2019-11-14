@@ -66,16 +66,17 @@ struct MaterialConstants
 	uint alphaMode;
 	float metallicFactor;
 	float roughnessFactor;
+	float reflectance;
 };
 
 struct DefaultPayload
 {
 	float hitT;
 
-	vec3 albedo;
-	
+	vec3 baseColor;
 	float metalness;
 	float roughness;
+	float reflectance;
 
 	vec3 normal;
 	vec3 geoNormal;
@@ -184,6 +185,53 @@ mat3 makeOrthonormalBasis(vec3 n)
 	vec3 x = normalize(cross(u, z));
 	vec3 y = cross(z, x);
 	return mat3(x, y, z);
+}
+
+struct Surface
+{
+	vec3 normal;
+	vec3 diffuseColor;
+	vec3 specularColor;
+};
+
+float computeDielectricF0(float reflectance)
+{
+	return 0.08 * reflectance;
+}
+
+vec3 computeF0(float reflectance, vec3 baseColor, float metalness)
+{
+	return mix(vec3(computeDielectricF0(reflectance)), baseColor, metalness);
+}
+
+Surface unpack(DefaultPayload p)
+{
+	Surface result;
+	result.normal = p.normal;
+	result.diffuseColor = p.baseColor - p.baseColor * p.metalness;
+	result.specularColor = computeF0(p.reflectance, p.baseColor, p.metalness);
+	return result;	
+}
+
+// Halton sequence implementation by Ollj
+// https://www.shadertoy.com/view/tl2GDw
+
+float Halton(int b, int i)
+{
+	float r = 0.0;
+	float f = 1.0;
+	while (i > 0) 
+	{
+		f = f / float(b);
+		r = r + f * float(i % b);
+		i = int(floor(float(i) / float(b)));
+	}
+	return r;
+}
+
+vec2 Halton23(int i)
+{
+	return vec2(Halton(2, i), Halton(3, i));
 }
 
 
