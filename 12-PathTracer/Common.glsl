@@ -192,24 +192,16 @@ struct Surface
 	vec3 normal;
 	vec3 diffuseColor;
 	vec3 specularColor;
+	float linearRoughness;
 };
-
-float computeDielectricF0(float reflectance)
-{
-	return 0.08 * reflectance;
-}
-
-vec3 computeF0(float reflectance, vec3 baseColor, float metalness)
-{
-	return mix(vec3(computeDielectricF0(reflectance)), baseColor, metalness);
-}
 
 Surface unpack(DefaultPayload p)
 {
 	Surface result;
 	result.normal = p.normal;
 	result.diffuseColor = p.baseColor - p.baseColor * p.metalness;
-	result.specularColor = computeF0(p.reflectance, p.baseColor, p.metalness);
+	result.specularColor = p.baseColor * p.metalness + (p.reflectance * (1.0 - p.metalness));
+	result.linearRoughness = max(0.0001, p.roughness * p.roughness);
 	return result;	
 }
 

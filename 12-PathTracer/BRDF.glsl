@@ -32,13 +32,13 @@ float V_SmithGGXCorrelated(float linearRoughness, float NoV, float NoL)
 
 vec3 F_Schlick(vec3 f0, float f90, float VoH)
 {
-    float f = pow5(1.0 - VoH);
-    return f + f0 * (f90 - f);
+	float f = pow5(1.0 - VoH);
+	return f + f0 * (f90 - f);
 }
 
 float F_Schlick(float f0, float f90, float VoH)
 {
-    return f0 + (f90 - f0) * pow5(1.0 - VoH);
+	return f0 + (f90 - f0) * pow5(1.0 - VoH);
 }
 
 float BRDF_Distribution(float linearRoughness, float NoH, vec3 h)
@@ -70,9 +70,26 @@ vec3 evalSpecular(vec3 f0, float linearRoughness, float NoH, float NoV, float No
 	return (D * V) * F;
 }
 
-vec3 evalDiffuse(vec3 albedo)
+vec3 evalDiffuse(vec3 diffuseColor)
 {
-	return albedo * BRDF_Diffuse();
+	return diffuseColor * BRDF_Diffuse();
 }
+
+vec3 evalSurface(Surface s, vec3 V, vec3 L)
+{
+	vec3 H = normalize(V + L);
+	vec3 N = s.normal;
+
+	float NoV = saturate(dot(N, V));
+	float NoL = saturate(dot(N, L));
+	float NoH = saturate(dot(N, H));
+	float LoH = saturate(dot(L, H));
+
+	vec3 Fr = evalSpecular(s.specularColor, s.linearRoughness, NoH, NoV, NoL, LoH, H);
+	vec3 Fd = evalDiffuse(s.diffuseColor);
+
+	return (Fr + Fd) * NoL;
+}
+
 
 #endif // INCLUDED_BRDF_GLSL

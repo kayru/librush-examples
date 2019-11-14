@@ -4,9 +4,9 @@
 #include "Common.glsl"
 #include "BRDF.glsl"
 
-#define USE_DEBUG_FURNECE      false
-#define USE_DEBUG_REFLECTIONS  false
-#define USE_DIRECT_LIGHTING    true
+#define USE_DEBUG_FURNECE          false
+#define USE_DEBUG_REFLECTIONS      false
+#define USE_DIRECT_LIGHTING        true
 
 layout(location = 0) rayPayloadNV DefaultPayload payload;
 
@@ -70,7 +70,7 @@ vec3 getSunDirection()
 
 vec3 getSunColor()
 {
-	return vec3(0.95, 0.90, 0.8) * 2.5;
+	return vec3(0.95, 0.90, 0.8) * 2.5 * M_PI;
 }
 
 vec3 getSkyColor(vec3 dir)
@@ -109,7 +109,8 @@ void main()
 	primaryRay.origin = cameraPosition.xyz;
 	primaryRay.direction = getCameraViewVector(pixelUV + pixelJitter);
 
-	const uint maxPathLength = USE_DEBUG_FURNECE ? 2 : 5;
+	uint maxPathLength = USE_DEBUG_FURNECE ? 2 : 5;
+
 	for(uint i=0; i<maxPathLength; ++i)
 	{
 		bool isHit = traceRay(primaryRay);
@@ -140,7 +141,8 @@ void main()
 			bool isLightOccluded = traceShadowRay(shadowRay);
 			if (!isLightOccluded)
 			{
-				result += weight * payload.baseColor * getSunColor() * NoL;
+				Surface surface = unpack(payload);
+				result += weight * evalSurface(surface, V, L) * getSunColor();
 			}
 		}
 
