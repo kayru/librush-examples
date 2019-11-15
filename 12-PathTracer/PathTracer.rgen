@@ -6,7 +6,9 @@
 
 #define USE_DEBUG_FURNECE          false
 #define USE_DEBUG_REFLECTIONS      false
+#define USE_DEBUG_SKY              false
 #define USE_DIRECT_LIGHTING        true
+#define USE_INDIRECT_SPECULAR      true
 
 layout(location = 0) rayPayloadNV DefaultPayload payload;
 
@@ -79,6 +81,11 @@ vec3 getSkyColor(vec3 dir)
 	{		
 		return vec3(1.0);
 	}
+	else if(USE_DEBUG_SKY)
+	{
+		vec3 dummy;
+		return modf((dir*0.5+0.5) * 10, dummy);
+	}
 	else
 	{
 		vec3 colorT = vec3(0.5, 0.66, 0.9) * 2.0;
@@ -122,7 +129,9 @@ void main()
 			break;
 		}
 
-		if (USE_DEBUG_FURNECE) payload.baseColor = vec3(1.0);
+		if (USE_DEBUG_FURNECE) payload.baseColor = vec3(1);
+		if (USE_DEBUG_REFLECTIONS && i==0) payload.baseColor = vec3(1);
+
 
 		const vec3 L = getSunDirection();
 		const vec3 N = payload.normal;
@@ -160,10 +169,10 @@ void main()
 
 		primaryRay.direction = normalize(N + mapToUniformSphere(reflectionSampleUV));
 
-		if (USE_DEBUG_REFLECTIONS && i==0)
-		{
-			payload.baseColor = vec3(1);
+		bool isSpecular = USE_INDIRECT_SPECULAR && randomFloat(randomSeed) < 0.5;
 
+		if (isSpecular)
+		{
 			float linearRoughness = max(0.0001, payload.roughness * payload.roughness);
 			mat3 basis = makeOrthonormalBasis(N);
 			for (int i=0; i<128; ++i) // Try to generate a valid ray
@@ -176,11 +185,13 @@ void main()
 					break;
 				}
 			}
+
+			weight *= unpack(payload).specularColor;
 		}
-
-		// Update weight for the next segment and continue tracing
-
-		weight *= payload.baseColor;
+		else
+		{
+			weight *= USE_INDIRECT_SPECULAR ? unpack(payload).diffuseColor : payload.baseColor;
+		}
 	}
 
 	if (frameIndex > 0)
