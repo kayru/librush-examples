@@ -16,16 +16,19 @@ uniform SceneConstants
 	vec4 cameraPosition;
 	ivec2 outputSize;
 	uint frameIndex;
-	uint padding;
+	uint enableEnvmap;
 };
 
 layout(set=0, binding=1)
 uniform sampler defaultSampler;
 
-layout(set=0, binding=2, rgba32f)
+layout(set=0, binding=2)
+uniform texture2D envmapTexture;
+
+layout(set=0, binding=3, rgba32f)
 uniform image2D outputImage;
 
-layout(set=0, binding=3, std430)
+layout(set=0, binding=4, std430)
 buffer IndexBuffer
 {
 	uint indexBuffer[];
@@ -38,7 +41,7 @@ struct Vertex
 	float texcoord[2];
 };
 
-layout(set=0, binding=4, std430)
+layout(set=0, binding=5, std430)
 buffer VertexBuffer
 {
 	Vertex vertexBuffer[];
@@ -48,7 +51,7 @@ vec3 getPosition(Vertex v) { return vec3(v.position[0], v.position[1], v.positio
 vec3 getNormal(Vertex v) { return vec3(v.normal[0], v.normal[1], v.normal[2]); }
 vec2 getTexcoord(Vertex v) { return vec2(v.texcoord[0], v.texcoord[1]); }
 
-layout(set=0, binding=5)
+layout(set=0, binding=6)
 uniform accelerationStructureNV TLAS;
 
 #define MaxTextures 1024
@@ -226,5 +229,14 @@ vec2 Halton23(int i)
 	return vec2(Halton(2, i), Halton(3, i));
 }
 
+vec2 cartesianToLatLongTexcoord(vec3 p)
+{
+	// http://gl.ict.usc.edu/Data/HighResProbes
+
+	float u = (1.0f + atan(p.x, -p.z) / M_PI);
+	float v = acos(p.y) / M_PI;
+
+	return vec2(u * 0.5f, v);
+}
 
 #endif // INCLUDED_COMMON_GLSL

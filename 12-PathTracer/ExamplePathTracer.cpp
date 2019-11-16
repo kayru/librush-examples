@@ -82,6 +82,7 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 
 		pipelineDesc.bindings.constantBuffers = 1; // scene constants
 		pipelineDesc.bindings.samplers = 1; // default sampler
+		pipelineDesc.bindings.textures = 1; // envmap
 		pipelineDesc.bindings.rwImages = 1; // output image
 		pipelineDesc.bindings.rwBuffers = 2; // IB + VB
 		pipelineDesc.bindings.descriptorSets[1] = materialDescriptorSetDesc;
@@ -114,6 +115,17 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 		{
 			RUSH_LOG("Could not load model from '%s'\n", modelFilename);
 		}
+
+		const char* envFilename = "envmap.hdr";
+		if (g_appCfg.argc >= 4)
+		{
+			if (!strcmp(g_appCfg.argv[2], "--env"))
+			{
+				envFilename = g_appCfg.argv[3];
+			}
+		}
+
+		loadEnvmap(envFilename);
 
 		Vec3  center       = m_boundingBox.center();
 		Vec3  dimensions   = m_boundingBox.dimensions();
@@ -256,6 +268,7 @@ void ExamplePathTracer::render()
 	constants.matViewProjInv = (matView * matProj).inverse().transposed();
 	constants.cameraPosition = Vec4(m_camera.getPosition());
 	constants.frameIndex = m_frameIndex;
+	constants.enableEnvmap = m_useEnvmap;
 
 	GfxContext* ctx = Platform_GetGfxContext();
 
@@ -286,6 +299,7 @@ void ExamplePathTracer::render()
 		GfxMarkerScope markerRT(ctx, "RT");
 		Gfx_SetConstantBuffer(ctx, 0, m_constantBuffer);
 		Gfx_SetSampler(ctx, 0, m_samplerStates.anisotropicWrap);
+		Gfx_SetTexture(ctx, 0, m_envmap);
 		Gfx_SetStorageImage(ctx, 0, m_outputImage);
 		Gfx_SetStorageBuffer(ctx, 0, m_indexBuffer);
 		Gfx_SetStorageBuffer(ctx, 1, m_vertexBuffer);
@@ -413,6 +427,8 @@ void ExamplePathTracer::loadingThreadFunction()
 				m_loadingMutex.lock();
 				m_loadedTextures.push_back(pendingLoad);
 				m_loadingMutex.unlock();
+
+				free(pixels);
 			}
 			else
 			{
@@ -1083,5 +1099,28 @@ bool ExamplePathTracer::loadModel(const char* filename)
 	{
 		RUSH_LOG_ERROR("Unsupported model file extension.");
 		return false;
+	}
+}
+
+void ExamplePathTracer::loadEnvmap(const char* filename)
+{
+	FileIn f(filename);
+	if (f.valid())
+	{
+		RUSH_LOG("Loading envmap '%s'", filename);
+
+		int w, h, comp;
+		float* img = stbi_loadf(filename, &w, &h, &comp, 4);
+		GfxTextureDesc desc = GfxTextureDesc::make2D(w, h, GfxFormat_RGBA32_Float);
+		m_envmap = Gfx_CreateTexture(desc, img);
+		free(img);
+
+		m_useEnvmap = true;
+	}
+	else
+	{
+		Vec4 img = Vec4(0, 0, 0, 1);
+		GfxTextureDesc desc = GfxTextureDesc::make2D(1, 1, GfxFormat_RGBA32_Float);
+		m_envmap = Gfx_CreateTexture(desc, &img);
 	}
 }

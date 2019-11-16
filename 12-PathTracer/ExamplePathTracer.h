@@ -77,7 +77,7 @@ private:
 		Vec4 cameraPosition = Vec4(0.0);
 		Tuple2i outputSize = {};
 		u32 frameIndex;
-		u32 padding;
+		u32 enableEnvmap;
 	};
 
 	Mat4 m_worldTransform = Mat4::identity();
@@ -150,6 +150,8 @@ private:
 	GfxOwn<GfxBuffer>                m_sbtBuffer;
 	GfxOwn<GfxTexture>               m_outputImage;
 	GfxOwn<GfxTechnique>             m_blitTonemap;
+	GfxOwn<GfxTexture>               m_envmap;
+	bool m_useEnvmap = false;
 
 	void loadingThreadFunction();
 	void createRayTracingScene(GfxContext* ctx);
@@ -158,4 +160,5 @@ private:
 	void saveCamera();
 	void loadCamera();
 	void resetCamera();
+	void loadEnvmap(const char* filename);
 };
