@@ -189,10 +189,12 @@ void main()
 		{
 			float linearRoughness = max(0.0001, payload.roughness * payload.roughness);
 			mat3 basis = makeOrthonormalBasis(N);
+			vec3 H = vec3(0,0,1);
+			vec3 L = vec3(0,0,1);
 			for (int i=0; i<128; ++i) // Try to generate a valid ray
 			{
-				vec3 H = basis * importanceSamplingNdfDggx(reflectionSampleUV, linearRoughness);
-				vec3 L = reflect(-V, H);
+				H = basis * importanceSamplingNdfDggx(reflectionSampleUV, linearRoughness);
+				L = reflect(-V, H);
 				if (dot(L, payload.normal) > 0)
 				{
 					primaryRay.direction = L;
@@ -200,7 +202,10 @@ void main()
 				}
 			}
 
-			weight *= unpack(payload).specularColor;
+			float LoH = max(0, dot(L, H));
+			vec3 fresnel = F_Schlick(unpack(payload).specularColor, 1.0, LoH);
+
+			weight *= fresnel;
 		}
 		else
 		{

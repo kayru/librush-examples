@@ -104,7 +104,7 @@ private:
 		AlphaMode alphaMode = AlphaMode::Opaque;
 		float metallicFactor = 0;
 		float roughnessFactor = 1;
-		float reflectance = 0.5f;
+		float reflectance = 0.08f;
 	};
 
 	std::vector<MaterialConstants> m_materials;
