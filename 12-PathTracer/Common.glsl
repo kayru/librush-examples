@@ -1,6 +1,11 @@
 #ifndef INCLUDED_COMMON_GLSL
 #define INCLUDED_COMMON_GLSL
 
+#define PT_FLAG_USE_ENVMAP              (1 << 0)
+#define PT_FLAG_USE_NEUTRAL_BACKGROUND  (1 << 1)
+
+#ifndef __cplusplus
+
 #define M_PI 3.14159265358979323846264338327950288
 #define saturate(x) clamp(x, 0.0, 1.0)
 
@@ -16,7 +21,7 @@ uniform SceneConstants
 	vec4 cameraPosition;
 	ivec2 outputSize;
 	uint frameIndex;
-	uint enableEnvmap;
+	uint flags;
 };
 
 layout(set=0, binding=1)
@@ -238,5 +243,7 @@ vec2 cartesianToLatLongTexcoord(vec3 p)
 
 	return vec2(u * 0.5f, v);
 }
+
+#endif // __cplusplus
 
 #endif // INCLUDED_COMMON_GLSL

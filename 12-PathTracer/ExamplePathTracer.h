@@ -18,6 +18,8 @@
 #include <thread>
 #include <unordered_map>
 
+#include "Common.glsl"
+
 class ExamplePathTracer : public ExampleApp
 {
 public:
@@ -77,7 +79,7 @@ private:
 		Vec4 cameraPosition = Vec4(0.0);
 		Tuple2i outputSize = {};
 		u32 frameIndex;
-		u32 enableEnvmap;
+		u32 flags;
 	};
 
 	Mat4 m_worldTransform = Mat4::identity();
@@ -151,7 +153,9 @@ private:
 	GfxOwn<GfxTexture>               m_outputImage;
 	GfxOwn<GfxTechnique>             m_blitTonemap;
 	GfxOwn<GfxTexture>               m_envmap;
+
 	bool m_useEnvmap = false;
+	bool m_useNeutralBackground = false;
 
 	void loadingThreadFunction();
 	void createRayTracingScene(GfxContext* ctx);

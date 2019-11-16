@@ -194,6 +194,16 @@ void ExamplePathTracer::update()
 			{
 				resetCamera();
 			}
+			else if (e.code == Key_1)
+			{
+				m_useEnvmap = !m_useEnvmap;
+				m_frameIndex = 0;
+			}
+			else if (e.code == Key_2)
+			{
+				m_useNeutralBackground = !m_useNeutralBackground;
+				m_frameIndex = 0;
+			}
 			break;
 		case WindowEventType_Scroll:
 			if (e.scroll.y > 0)
@@ -268,7 +278,9 @@ void ExamplePathTracer::render()
 	constants.matViewProjInv = (matView * matProj).inverse().transposed();
 	constants.cameraPosition = Vec4(m_camera.getPosition());
 	constants.frameIndex = m_frameIndex;
-	constants.enableEnvmap = m_useEnvmap;
+	constants.flags = 0;
+	constants.flags |= m_useEnvmap ? PT_FLAG_USE_ENVMAP: 0;
+	constants.flags |= m_useNeutralBackground ? PT_FLAG_USE_NEUTRAL_BACKGROUND : 0;
 
 	GfxContext* ctx = Platform_GetGfxContext();
 

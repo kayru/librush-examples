@@ -86,7 +86,7 @@ vec3 getSkyColor(vec3 dir)
 		vec3 dummy;
 		return modf((dir*0.5+0.5) * 10, dummy);
 	}
-	else if (enableEnvmap!=0)
+	else if ((flags&PT_FLAG_USE_ENVMAP)!=0)
 	{
 		vec2 uv = cartesianToLatLongTexcoord(dir);
 		vec3 s = texture(sampler2D(envmapTexture, defaultSampler), uv).rgb * 5.0;
@@ -130,8 +130,16 @@ void main()
 
 		if (!isHit)
 		{
+			if (i==0 && (flags&PT_FLAG_USE_NEUTRAL_BACKGROUND)!=0)
+			{
+				result = vec3(0.25);
+			}
+			else
+			{
+				result += weight * getSkyColor(primaryRay.direction);
+			}
+
 			// We hit the sky, so we're done
-			result += weight * getSkyColor(primaryRay.direction);
 			break;
 		}
 
@@ -144,7 +152,7 @@ void main()
 		const vec3 V = -primaryRay.direction;
 		const float NoL = dot(N, L);
 
-		if (NoL > 0 && USE_DIRECT_LIGHTING && !USE_DEBUG_FURNECE && (!USE_DEBUG_REFLECTIONS || i > 0) && enableEnvmap==0)
+		if (NoL > 0 && USE_DIRECT_LIGHTING && !USE_DEBUG_FURNECE && (!USE_DEBUG_REFLECTIONS || i > 0) && (flags&PT_FLAG_USE_ENVMAP)==0)
 		{
 			RayDesc shadowRay;
 			shadowRay.origin = primaryRay.origin + primaryRay.direction * payload.hitT;
