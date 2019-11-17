@@ -37,8 +37,6 @@ void main()
 	vec4 albedoSample   = texture(sampler2D(textureDescriptors[materialConstants.albedoTextureId],   defaultSampler), uv);
 	vec4 specularSample = texture(sampler2D(textureDescriptors[materialConstants.specularTextureId], defaultSampler), uv);
 
-	payload.baseColor *= materialConstants.baseColor.rgb;
-
 	if (materialConstants.materialMode == PT_MATERIAL_MODE_PBR_METALLIC_ROUGHNESS)
 	{
 		payload.baseColor.rgb = albedoSample .rgb;
@@ -52,6 +50,7 @@ void main()
 		payload.baseColor.rgb = albedoSample.rgb * (1.0 - payload.metalness);
 	}
 
+	payload.baseColor *= materialConstants.baseColor.rgb;
 	payload.reflectance = materialConstants.reflectance;
 
 	payload.normal = normalize(INTERPOLATE(triVertices, getNormal, barycentrics));
