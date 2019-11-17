@@ -95,6 +95,12 @@ private:
 		Blend
 	};
 
+	enum class MaterialMode : u32
+	{
+		MetallicRoughness  = PT_MATERIAL_MODE_PBR_METALLIC_ROUGHNESS,
+		SpecularGlossiness = PT_MATERIAL_MODE_PBR_SPECULAR_GLOSSINESS
+	};
+
 	struct MaterialConstants
 	{
 		Vec4 baseColor = Vec4(1.0f);
@@ -105,6 +111,7 @@ private:
 		float metallicFactor = 0;
 		float roughnessFactor = 1;
 		float reflectance = 0.08f;
+		MaterialMode materialMode = MaterialMode::MetallicRoughness;
 	};
 
 	std::vector<MaterialConstants> m_materials;

@@ -5,6 +5,7 @@
 #include <Rush/Platform.h>
 #include <Rush/UtilLog.h>
 #include <Rush/UtilTimer.h>
+#include <Rush/UtilRandom.h>
 #include <Rush/Window.h>
 
 #include <Rush/MathTypes.h>
@@ -594,6 +595,8 @@ bool ExamplePathTracer::loadModelGLTF(const char* filename)
 
 		if (inMaterial.has_pbr_metallic_roughness)
 		{
+			constants.materialMode = MaterialMode::MetallicRoughness;
+
 			constants.baseColor[0] = inMaterial.pbr_metallic_roughness.base_color_factor[0];
 			constants.baseColor[1] = inMaterial.pbr_metallic_roughness.base_color_factor[1];
 			constants.baseColor[2] = inMaterial.pbr_metallic_roughness.base_color_factor[2];
@@ -623,9 +626,31 @@ bool ExamplePathTracer::loadModelGLTF(const char* filename)
 		}
 		else if (inMaterial.has_pbr_specular_glossiness)
 		{
+			constants.materialMode = MaterialMode::SpecularGlossiness;
+
 			constants.baseColor[0] = inMaterial.pbr_specular_glossiness.diffuse_factor[0];
 			constants.baseColor[1] = inMaterial.pbr_specular_glossiness.diffuse_factor[1];
 			constants.baseColor[2] = inMaterial.pbr_specular_glossiness.diffuse_factor[2];
+
+			if (auto texture = inMaterial.pbr_specular_glossiness.diffuse_texture.texture)
+			{
+				if (texture->image && texture->image->uri)
+				{
+					std::string filename = directory + std::string(texture->image->uri);
+					fixDirectorySeparatorsInplace(filename);
+					constants.albedoTextureId = enqueueLoadTexture(filename);
+				}
+			}
+
+			if (auto texture = inMaterial.pbr_specular_glossiness.specular_glossiness_texture.texture)
+			{
+				if (texture->image && texture->image->uri)
+				{
+					std::string filename = directory + std::string(texture->image->uri);
+					fixDirectorySeparatorsInplace(filename);
+					constants.specularTextureId = enqueueLoadTexture(filename);
+				}
+			}
 		}
 
 		constants.baseColor[0] = convertDiffuseColor(constants.baseColor[0]);

@@ -34,12 +34,24 @@ void main()
 
 	vec2 uv = INTERPOLATE(triVertices, getTexcoord, barycentrics);
 
-	payload.baseColor.rgb = texture(sampler2D(textureDescriptors[materialConstants.albedoTextureId], defaultSampler), uv).rgb;
+	vec4 albedoSample   = texture(sampler2D(textureDescriptors[materialConstants.albedoTextureId],   defaultSampler), uv);
+	vec4 specularSample = texture(sampler2D(textureDescriptors[materialConstants.specularTextureId], defaultSampler), uv);
+
 	payload.baseColor *= materialConstants.baseColor.rgb;
 
-	vec4 specularSample = texture(sampler2D(textureDescriptors[materialConstants.specularTextureId], defaultSampler), uv);
-	payload.metalness = materialConstants.metallicFactor * specularSample.b;
-	payload.roughness = materialConstants.roughnessFactor * specularSample.g;
+	if (materialConstants.materialMode == PT_MATERIAL_MODE_PBR_METALLIC_ROUGHNESS)
+	{
+		payload.baseColor.rgb = albedoSample .rgb;
+		payload.metalness = materialConstants.metallicFactor * specularSample.b;
+		payload.roughness = materialConstants.roughnessFactor * specularSample.g;
+	}
+	else
+	{
+		payload.metalness = max3(specularSample.rgb);
+		payload.roughness = 1.0 - specularSample.a;
+		payload.baseColor.rgb = albedoSample.rgb * (1.0 - payload.metalness);
+	}
+
 	payload.reflectance = materialConstants.reflectance;
 
 	payload.normal = normalize(INTERPOLATE(triVertices, getNormal, barycentrics));

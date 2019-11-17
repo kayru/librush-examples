@@ -4,6 +4,9 @@
 #define PT_FLAG_USE_ENVMAP              (1 << 0)
 #define PT_FLAG_USE_NEUTRAL_BACKGROUND  (1 << 1)
 
+#define PT_MATERIAL_MODE_PBR_METALLIC_ROUGHNESS   0
+#define PT_MATERIAL_MODE_PBR_SPECULAR_GLOSSINESS  1
+
 #ifndef __cplusplus
 
 #define M_PI 3.14159265358979323846264338327950288
@@ -75,6 +78,7 @@ struct MaterialConstants
 	float metallicFactor;
 	float roughnessFactor;
 	float reflectance;
+	uint materialMode;
 };
 
 struct DefaultPayload
