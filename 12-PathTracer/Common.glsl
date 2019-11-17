@@ -70,7 +70,8 @@ uniform texture2D textureDescriptors[MaxTextures];
 
 struct MaterialConstants
 {
-	vec4 baseColor;
+	vec4 albedoFactor;
+	vec4 specularFactor;
 	uint albedoTextureId;
 	uint specularTextureId;
 	uint firstIndex;

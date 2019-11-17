@@ -434,7 +434,7 @@ void ExamplePathTracer::loadingThreadFunction()
 					mipHeight = nextMipHeight;
 				}
 
-				pendingLoad->desc      = GfxTextureDesc::make2D(w, h);
+				pendingLoad->desc      = GfxTextureDesc::make2D(w, h, pendingLoad->desc.format);
 				pendingLoad->desc.mips = mipIndex;
 
 				m_loadingMutex.lock();
@@ -457,7 +457,7 @@ void ExamplePathTracer::loadingThreadFunction()
 	}
 }
 
-u32 ExamplePathTracer::enqueueLoadTexture(const std::string& filename)
+u32 ExamplePathTracer::enqueueLoadTexture(const std::string& filename, GfxFormat format)
 {
 	auto it = m_textures.find(filename);
 
@@ -465,6 +465,7 @@ u32 ExamplePathTracer::enqueueLoadTexture(const std::string& filename)
 	{
 		TextureData* textureData = new TextureData;
 
+		textureData->desc.format = format;
 		textureData->filename    = filename;
 		textureData->descriptorIndex = u32(m_textureDescriptors.size());
 		m_textureDescriptors.push_back(InvalidResourceHandle());
@@ -562,7 +563,8 @@ bool ExamplePathTracer::loadModelGLTF(const char* filename)
 	{
 		MaterialConstants constants;
 		constants.albedoTextureId = m_defaultWhiteTextureId;
-		constants.baseColor = Vec4(1.0f);
+		constants.albedoFactor = Vec4(1.0f);
+		constants.specularFactor = Vec4(1.0f);
 		m_materials.push_back(constants);
 	}
 
@@ -597,9 +599,9 @@ bool ExamplePathTracer::loadModelGLTF(const char* filename)
 		{
 			constants.materialMode = MaterialMode::MetallicRoughness;
 
-			constants.baseColor[0] = inMaterial.pbr_metallic_roughness.base_color_factor[0];
-			constants.baseColor[1] = inMaterial.pbr_metallic_roughness.base_color_factor[1];
-			constants.baseColor[2] = inMaterial.pbr_metallic_roughness.base_color_factor[2];
+			constants.albedoFactor[0] = inMaterial.pbr_metallic_roughness.base_color_factor[0];
+			constants.albedoFactor[1] = inMaterial.pbr_metallic_roughness.base_color_factor[1];
+			constants.albedoFactor[2] = inMaterial.pbr_metallic_roughness.base_color_factor[2];
 
 			constants.metallicFactor = inMaterial.pbr_metallic_roughness.metallic_factor;
 			constants.roughnessFactor = inMaterial.pbr_metallic_roughness.roughness_factor;
@@ -610,7 +612,7 @@ bool ExamplePathTracer::loadModelGLTF(const char* filename)
 				{
 					std::string filename = directory + std::string(texture->image->uri);
 					fixDirectorySeparatorsInplace(filename);
-					constants.albedoTextureId = enqueueLoadTexture(filename);
+					constants.albedoTextureId = enqueueLoadTexture(filename, GfxFormat::GfxFormat_RGBA8_sRGB);
 				}
 			}
 
@@ -620,7 +622,7 @@ bool ExamplePathTracer::loadModelGLTF(const char* filename)
 				{
 					std::string filename = directory + std::string(texture->image->uri);
 					fixDirectorySeparatorsInplace(filename);
-					constants.specularTextureId = enqueueLoadTexture(filename);
+					constants.specularTextureId = enqueueLoadTexture(filename, GfxFormat::GfxFormat_RGBA8_Unorm);
 				}
 			}
 		}
@@ -628,9 +630,15 @@ bool ExamplePathTracer::loadModelGLTF(const char* filename)
 		{
 			constants.materialMode = MaterialMode::SpecularGlossiness;
 
-			constants.baseColor[0] = inMaterial.pbr_specular_glossiness.diffuse_factor[0];
-			constants.baseColor[1] = inMaterial.pbr_specular_glossiness.diffuse_factor[1];
-			constants.baseColor[2] = inMaterial.pbr_specular_glossiness.diffuse_factor[2];
+			constants.albedoFactor[0] = inMaterial.pbr_specular_glossiness.diffuse_factor[0];
+			constants.albedoFactor[1] = inMaterial.pbr_specular_glossiness.diffuse_factor[1];
+			constants.albedoFactor[2] = inMaterial.pbr_specular_glossiness.diffuse_factor[2];
+
+			constants.specularFactor[0] = inMaterial.pbr_specular_glossiness.specular_factor[0];
+			constants.specularFactor[1] = inMaterial.pbr_specular_glossiness.specular_factor[1];
+			constants.specularFactor[2] = inMaterial.pbr_specular_glossiness.specular_factor[2];
+
+			constants.roughnessFactor = inMaterial.pbr_specular_glossiness.glossiness_factor;
 
 			if (auto texture = inMaterial.pbr_specular_glossiness.diffuse_texture.texture)
 			{
@@ -638,7 +646,7 @@ bool ExamplePathTracer::loadModelGLTF(const char* filename)
 				{
 					std::string filename = directory + std::string(texture->image->uri);
 					fixDirectorySeparatorsInplace(filename);
-					constants.albedoTextureId = enqueueLoadTexture(filename);
+					constants.albedoTextureId = enqueueLoadTexture(filename, GfxFormat::GfxFormat_RGBA8_sRGB);
 				}
 			}
 
@@ -648,14 +656,14 @@ bool ExamplePathTracer::loadModelGLTF(const char* filename)
 				{
 					std::string filename = directory + std::string(texture->image->uri);
 					fixDirectorySeparatorsInplace(filename);
-					constants.specularTextureId = enqueueLoadTexture(filename);
+					constants.specularTextureId = enqueueLoadTexture(filename, GfxFormat::GfxFormat_RGBA8_sRGB);
 				}
 			}
 		}
 
-		constants.baseColor[0] = convertDiffuseColor(constants.baseColor[0]);
-		constants.baseColor[1] = convertDiffuseColor(constants.baseColor[1]);
-		constants.baseColor[2] = convertDiffuseColor(constants.baseColor[2]);
+		constants.albedoFactor[0] = convertDiffuseColor(constants.albedoFactor[0]);
+		constants.albedoFactor[1] = convertDiffuseColor(constants.albedoFactor[1]);
+		constants.albedoFactor[2] = convertDiffuseColor(constants.albedoFactor[2]);
 
 		materialMap[&inMaterial] = u32(m_materials.size());
 
@@ -828,10 +836,10 @@ bool ExamplePathTracer::loadModelObj(const char* filename)
 	for (auto& objMaterial : materials)
 	{
 		MaterialConstants constants;
-		constants.baseColor.x = convertDiffuseColor(objMaterial.diffuse[0]);
-		constants.baseColor.y = convertDiffuseColor(objMaterial.diffuse[1]);
-		constants.baseColor.z = convertDiffuseColor(objMaterial.diffuse[2]);
-		constants.baseColor.w = 1.0f;
+		constants.albedoFactor.x = convertDiffuseColor(objMaterial.diffuse[0]);
+		constants.albedoFactor.y = convertDiffuseColor(objMaterial.diffuse[1]);
+		constants.albedoFactor.z = convertDiffuseColor(objMaterial.diffuse[2]);
+		constants.albedoFactor.w = 1.0f;
 		constants.albedoTextureId = m_defaultWhiteTextureId;
 
 		u32 materialId = u32(m_materials.size());
@@ -839,7 +847,7 @@ bool ExamplePathTracer::loadModelObj(const char* filename)
 		{
 			std::string filename = directory + objMaterial.diffuse_texname;
 			fixDirectorySeparatorsInplace(filename);
-			constants.albedoTextureId = enqueueLoadTexture(filename);
+			constants.albedoTextureId = enqueueLoadTexture(filename, GfxFormat::GfxFormat_RGBA8_sRGB);
 		}
 
 		m_materials.push_back(constants);

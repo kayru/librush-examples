@@ -39,18 +39,17 @@ void main()
 
 	if (materialConstants.materialMode == PT_MATERIAL_MODE_PBR_METALLIC_ROUGHNESS)
 	{
-		payload.baseColor.rgb = albedoSample .rgb;
+		payload.baseColor.rgb = albedoSample.rgb * materialConstants.albedoFactor.rgb;
 		payload.metalness = materialConstants.metallicFactor * specularSample.b;
 		payload.roughness = materialConstants.roughnessFactor * specularSample.g;
 	}
 	else
 	{
-		payload.metalness = max3(specularSample.rgb);
-		payload.roughness = 1.0 - specularSample.a;
-		payload.baseColor.rgb = albedoSample.rgb * (1.0 - payload.metalness);
+		payload.metalness = max3(specularSample.rgb * materialConstants.specularFactor.rgb);
+		payload.roughness = 1.0 - specularSample.a * materialConstants.roughnessFactor;
+		payload.baseColor.rgb = mix(albedoSample.rgb * materialConstants.albedoFactor.rgb, specularSample.rgb * materialConstants.specularFactor.rgb, payload.metalness);
 	}
 
-	payload.baseColor *= materialConstants.baseColor.rgb;
 	payload.reflectance = materialConstants.reflectance;
 
 	payload.normal = normalize(INTERPOLATE(triVertices, getNormal, barycentrics));

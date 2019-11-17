@@ -37,7 +37,7 @@ private:
 	bool loadModelObj(const char* filename);
 	bool loadModelGLTF(const char* filename);
 
-	u32 enqueueLoadTexture(const std::string& filename);
+	u32 enqueueLoadTexture(const std::string& filename, GfxFormat format);
 
 	Timer m_timer;
 
@@ -103,7 +103,8 @@ private:
 
 	struct MaterialConstants
 	{
-		Vec4 baseColor = Vec4(1.0f);
+		Vec4 albedoFactor = Vec4(1.0f);
+		Vec4 specularFactor = Vec4(1.0f);
 		u32 albedoTextureId = 0;
 		u32 specularTextureId = 0;
 		u32 firstIndex = 0;
