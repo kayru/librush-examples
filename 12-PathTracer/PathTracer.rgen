@@ -191,7 +191,7 @@ void main()
 			mat3 basis = makeOrthonormalBasis(N);
 			vec3 H = vec3(0,0,1);
 			vec3 L = vec3(0,0,1);
-			for (int i=0; i<128; ++i) // Try to generate a valid ray
+			for (int i=0; i<16; ++i) // Try to generate a valid ray
 			{
 				H = basis * importanceSamplingNdfDggx(reflectionSampleUV, linearRoughness);
 				L = reflect(-V, H);
@@ -200,6 +200,7 @@ void main()
 					primaryRay.direction = L;
 					break;
 				}
+				reflectionSampleUV = randomFloat2(randomSeed);
 			}
 
 			float LoH = max(0, dot(L, H));
