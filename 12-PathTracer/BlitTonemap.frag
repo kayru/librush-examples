@@ -54,7 +54,13 @@ void main()
 {
 	vec3 color = texture(sampler2D(inputTexture, linearClampSampler), texcoord).rgb;
 
-	color = neutral_tonemap(color);
+	float exposure = 1;
+	float gamma = 1;
+
+	color = neutral_tonemap(color * exposure);
+	color.x = pow(color.x, 1.0 / gamma);
+	color.y = pow(color.y, 1.0 / gamma);
+	color.z = pow(color.z, 1.0 / gamma);
 
 	fragColor = vec4(color, 1);
 }
