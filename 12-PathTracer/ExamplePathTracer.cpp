@@ -17,8 +17,7 @@
 #include <stb_image_resize.h>
 #include <tiny_obj_loader.h>
 #include <cgltf.h>
-
-#include <chrono>
+#include <algorithm>
 
 #ifdef __GNUC__
 #define sprintf_s sprintf // TODO: make a common cross-compiler/platform equivalent
@@ -1154,10 +1153,60 @@ void ExamplePathTracer::loadEnvmap(const char* filename)
 	{
 		RUSH_LOG("Loading envmap '%s'", filename);
 
-		int w, h, comp;
-		float* img = stbi_loadf(filename, &w, &h, &comp, 4);
-		GfxTextureDesc desc = GfxTextureDesc::make2D(w, h, GfxFormat_RGBA32_Float);
+		int width, height, comp;
+		Vec4* img = (Vec4*)stbi_loadf(filename, &width, &height, &comp, 4);
+
+		std::vector<float> weights;
+		const u64 pixelCount = u64(width) * height;
+		weights.reserve(pixelCount);
+		float imgMin = FLT_MAX;
+		float imgMax = 0;
+		double imgAvg = 0;
+		for (u64 i = 0; i < pixelCount; ++i)
+		{
+			float w = img[i].xyz().reduceMax();
+			imgMin = min(imgMin, w);
+			imgMax = max(imgMax, w);
+			imgAvg += w;
+			weights.push_back(w);
+		}
+
+		imgAvg /= pixelCount;
+
+		std::sort(weights.begin(), weights.end());
+		const double thresholdPercentile = 99.5f;
+		const u64 thresholdIndex = u64(floor((thresholdPercentile/100.0) * weights.size()));
+		const float thresholdWeight = weights[thresholdIndex];
+
+		std::vector<Vec4> imgHigh;
+		imgHigh.resize(pixelCount);
+
+		if (thresholdWeight * 100.0f < imgMax)
+		{
+			RUSH_LOG("High frequency IBL detected. Clamping brightest %d%% pixels.", 100.0f - thresholdPercentile);
+
+			for (u64 i = 0; i < pixelCount; ++i)
+			{
+				Vec4 color = img[i];
+				float w = color.xyz().reduceMax();
+
+				if (w > thresholdWeight)
+				{
+					Vec4 colorClamped = (img[i] / w) * thresholdWeight;
+					img[i] = colorClamped;
+					imgHigh[i] = max(color - colorClamped, Vec4(0.0));
+				}
+				else
+				{
+					imgHigh[i] = Vec4(0.0);
+				}
+			}
+		}
+
+		GfxTextureDesc desc = GfxTextureDesc::make2D(width, height, GfxFormat_RGBA32_Float);
 		m_envmap = Gfx_CreateTexture(desc, img);
+		m_envmapHigh = Gfx_CreateTexture(desc, imgHigh.data());
+
 		free(img);
 
 		m_useEnvmap = true;

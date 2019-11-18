@@ -161,6 +161,7 @@ private:
 	GfxOwn<GfxTexture>               m_outputImage;
 	GfxOwn<GfxTechnique>             m_blitTonemap;
 	GfxOwn<GfxTexture>               m_envmap;
+	GfxOwn<GfxTexture>               m_envmapHigh;
 
 	bool m_useEnvmap = false;
 	bool m_useNeutralBackground = false;
