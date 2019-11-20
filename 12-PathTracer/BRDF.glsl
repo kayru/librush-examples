@@ -53,7 +53,8 @@ float BRDF_Visibility(float linearRoughness, float NoV, float NoL, float LoH)
 
 vec3 BRDF_Fresnel(vec3 f0, float LoH)
 {
-	float f90 = saturate(dot(f0, vec3(50.0 * 0.33)));
+	//float f90 = saturate(dot(f0, vec3(50.0 * 0.33)));
+	float f90 = 1.0;
 	return F_Schlick(f0, f90, LoH);
 }
 

@@ -204,9 +204,10 @@ void main()
 			}
 
 			float LoH = max(0, dot(L, H));
-			vec3 fresnel = F_Schlick(unpack(payload).specularColor, 1.0, LoH);
+			vec3 F = BRDF_Fresnel(unpack(payload).specularColor, LoH);
 
-			weight *= fresnel;
+			// distribution and visibility are importance sampled, so only fresnel is needed here
+			weight *= F;
 		}
 		else
 		{
