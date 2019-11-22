@@ -5,7 +5,7 @@
 
 // Adapted from Filament: https://github.com/google/filament
 
-float D_GGX(float linearRoughness, float NoH, vec3 h)
+float D_GGX(float linearRoughness, float NoH)
 {
 	float oneMinusNoHSquared = 1.0 - NoH * NoH;
 	float a = NoH * linearRoughness;
@@ -41,39 +41,17 @@ float F_Schlick(float f0, float f90, float VoH)
 	return f0 + (f90 - f0) * pow5(1.0 - VoH);
 }
 
-float BRDF_Distribution(float linearRoughness, float NoH, vec3 h)
-{
-	return D_GGX(linearRoughness, NoH, h);
-}
-
-float BRDF_Visibility(float linearRoughness, float NoV, float NoL, float LoH)
-{
-	return V_SmithGGXCorrelated(linearRoughness, NoV, NoL);
-}
-
-vec3 BRDF_Fresnel(vec3 f0, float LoH)
-{
-	//float f90 = saturate(dot(f0, vec3(50.0 * 0.33)));
-	float f90 = 1.0;
-	return F_Schlick(f0, f90, LoH);
-}
-
-float BRDF_Diffuse()
-{
-	return 1.0 / M_PI;
-}
-
 vec3 evalSpecular(vec3 f0, float linearRoughness, float NoH, float NoV, float NoL, float LoH, vec3 H)
 {
-	float D = BRDF_Distribution(linearRoughness, NoH, H);
-	float V = BRDF_Visibility(linearRoughness, NoV, NoL, LoH);
-	vec3  F = BRDF_Fresnel(f0, LoH);
+	float D = D_GGX(linearRoughness, NoH);
+	float V = V_SmithGGXCorrelated(linearRoughness, NoV, NoL);
+	vec3  F = F_Schlick(f0, 1.0, LoH);
 	return (D * V) * F;
 }
 
 vec3 evalDiffuse(vec3 diffuseColor)
 {
-	return diffuseColor * BRDF_Diffuse();
+	return diffuseColor / M_PI;
 }
 
 vec3 evalSurface(Surface s, vec3 V, vec3 L)

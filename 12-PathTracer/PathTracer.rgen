@@ -114,7 +114,7 @@ void main()
 	vec2 pixelJitter = (randomFloat2(randomSeed) - 0.5) / outputSize;
 
 	vec3 result = vec3(0);
-	vec3 weight = vec3(1);
+	vec3 throughput = vec3(1);
 
 	RayDesc primaryRay;
 	primaryRay.minT = 0;
@@ -128,6 +128,8 @@ void main()
 	{
 		bool isHit = traceRay(primaryRay);
 
+		if (USE_DEBUG_FURNECE && i > 0) isHit = false;
+
 		if (!isHit)
 		{
 			if (i==0 && (flags&PT_FLAG_USE_NEUTRAL_BACKGROUND)!=0)
@@ -136,7 +138,7 @@ void main()
 			}
 			else
 			{
-				result += weight * getSkyColor(primaryRay.direction);
+				result += throughput * getSkyColor(primaryRay.direction);
 			}
 
 			// We hit the sky, so we're done
@@ -165,7 +167,7 @@ void main()
 			if (!isLightOccluded)
 			{
 				Surface surface = unpack(payload);
-				result += weight * evalSurface(surface, V, L) * getSunColor();
+				result += throughput * evalSurface(surface, V, L) * getSunColor();
 			}
 		}
 
@@ -183,7 +185,8 @@ void main()
 
 		primaryRay.direction = normalize(N + mapToUniformSphere(reflectionSampleUV));
 
-		bool isSpecular = USE_INDIRECT_SPECULAR && randomFloat(randomSeed) < 0.5;
+		float specularProbability = USE_INDIRECT_SPECULAR ? 0.5 : 0.0;
+		bool isSpecular = randomFloat(randomSeed) < specularProbability;
 
 		if (isSpecular)
 		{
@@ -204,14 +207,15 @@ void main()
 			}
 
 			float LoH = max(0, dot(L, H));
-			vec3 F = BRDF_Fresnel(unpack(payload).specularColor, LoH);
+			vec3 F = F_Schlick(unpack(payload).specularColor, 1.0, LoH);
 
-			// distribution and visibility are importance sampled, so only fresnel is needed here
-			weight *= F;
+			throughput *= F;
+			throughput /= specularProbability;
 		}
 		else
 		{
-			weight *= USE_INDIRECT_SPECULAR ? unpack(payload).diffuseColor : payload.baseColor;
+			throughput *= USE_INDIRECT_SPECULAR ? unpack(payload).diffuseColor : payload.baseColor;
+			throughput /= (1.0-specularProbability);
 		}
 	}
 
