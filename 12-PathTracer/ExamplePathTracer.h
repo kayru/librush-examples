@@ -66,9 +66,16 @@ private:
 
 	GfxOwn<GfxBuffer> m_indexBuffer;
 	GfxOwn<GfxBuffer> m_vertexBuffer;
-	GfxOwn<GfxBuffer> m_constantBuffer;
+	GfxOwn<GfxBuffer> m_sceneConstantBuffer;
+	GfxOwn<GfxBuffer> m_tonemapConstantBuffer;
 	u32 m_indexCount = 0;
 	u32 m_vertexCount = 0;
+
+	struct TonemapConstants
+	{
+		float exposure = 1;
+		float gamma = 1;
+	};
 
 	struct SceneConstants
 	{
@@ -163,8 +170,16 @@ private:
 	GfxOwn<GfxTexture>               m_envmap;
 	GfxOwn<GfxTexture>               m_envmapHigh;
 
-	bool m_useEnvmap = false;
-	bool m_useNeutralBackground = false;
+	struct Settings
+	{
+		bool m_useEnvmap = false;
+		bool m_useNeutralBackground = false;
+		float m_gamma = 1.0f;
+		float m_exposureEV100 = 0.0f;
+		float m_fov = 1.0f;
+	};
+
+	Settings m_settings;
 
 	void loadingThreadFunction();
 	void createRayTracingScene(GfxContext* ctx);

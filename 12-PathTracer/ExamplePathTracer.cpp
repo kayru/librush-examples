@@ -19,6 +19,9 @@
 #include <cgltf.h>
 #include <algorithm>
 
+#include <Common/ImGuiImpl.h>
+#include <imgui.h>
+
 #ifdef __GNUC__
 #define sprintf_s sprintf // TODO: make a common cross-compiler/platform equivalent
 #endif
@@ -57,6 +60,8 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 {
 	Gfx_SetPresentInterval(0);
 
+	ImGuiImpl_Startup(m_window);
+
 	m_windowEvents.setOwner(m_window);
 
 	const u32      whiteTexturePixels[4] = {0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF};
@@ -71,8 +76,16 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 	materialDescriptorSetDesc.textures = MaxTextures;
 	m_materialDescriptorSet = Gfx_CreateDescriptorSet(materialDescriptorSetDesc);
 
-	GfxBufferDesc cbDesc(GfxBufferFlags::TransientConstant, GfxFormat_Unknown, 1, sizeof(SceneConstants));
-	m_constantBuffer = Gfx_CreateBuffer(cbDesc);
+	{
+		GfxBufferDesc cbDesc(GfxBufferFlags::TransientConstant, GfxFormat_Unknown, 1, sizeof(SceneConstants));
+		m_sceneConstantBuffer = Gfx_CreateBuffer(cbDesc);
+	}
+
+	{
+		GfxBufferDesc cbDesc(GfxBufferFlags::TransientConstant, GfxFormat_Unknown, 1, sizeof(TonemapConstants));
+		m_tonemapConstantBuffer = Gfx_CreateBuffer(cbDesc);
+	}
+	
 
 	{
 		GfxRayTracingPipelineDesc pipelineDesc;
@@ -100,6 +113,7 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 		desc.vs = vs.get();
 		desc.ps = ps.get();
 		desc.vf = vf.get();
+		desc.bindings.constantBuffers = 1;
 		desc.bindings.samplers = 1; // linear sampler
 		desc.bindings.textures = 1; // input texture
 		m_blitTonemap = Gfx_CreateTechnique(desc);
@@ -151,6 +165,8 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 
 ExamplePathTracer::~ExamplePathTracer()
 {
+	ImGuiImpl_Shutdown();
+
 	for (const auto& it : m_textures)
 	{
 		delete it.second;
@@ -172,6 +188,28 @@ void ExamplePathTracer::update()
 
 	const float dt = (float)m_timer.time();
 	m_timer.reset();
+
+	ImGuiImpl_Update(dt);
+
+	ImGui::Begin("Menu");
+	bool renderSettingsChanged = false;
+	renderSettingsChanged |= ImGui::Checkbox("Use envmap",              &m_settings.m_useEnvmap);
+	renderSettingsChanged |= ImGui::Checkbox("Neutral background",      &m_settings.m_useNeutralBackground);
+	renderSettingsChanged |= ImGui::SliderFloat("FOV",                  &m_settings.m_fov,      0.1f, 2.0f);
+	ImGui::SliderFloat("Exposure EV100",   &m_settings.m_exposureEV100, -20.0f, 20.0f);
+	ImGui::SliderFloat("Gamma",            &m_settings.m_gamma,         0.5f, 4.0f);
+	ImGui::End();
+
+	if (renderSettingsChanged)
+	{
+		m_frameIndex = 0;
+	}
+
+	Camera oldCamera = m_camera;
+
+	m_camera.setFov(m_settings.m_fov);
+	m_camera.setAspect(m_window->getAspect());
+	m_cameraMan->setMoveSpeed(20.0f * m_cameraScale);
 
 	for (const WindowEvent& e : m_windowEvents)
 	{
@@ -196,12 +234,12 @@ void ExamplePathTracer::update()
 			}
 			else if (e.code == Key_1)
 			{
-				m_useEnvmap = !m_useEnvmap;
+				m_settings.m_useEnvmap = !m_settings.m_useEnvmap;
 				m_frameIndex = 0;
 			}
 			else if (e.code == Key_2)
 			{
-				m_useNeutralBackground = !m_useNeutralBackground;
+				m_settings.m_useNeutralBackground = !m_settings.m_useNeutralBackground;
 				m_frameIndex = 0;
 			}
 			break;
@@ -220,12 +258,11 @@ void ExamplePathTracer::update()
 		}
 	}
 
-	Camera oldCamera = m_camera;
+	if (!ImGui::GetIO().WantCaptureKeyboard && !ImGui::GetIO().WantCaptureMouse)
+	{
+		m_cameraMan->update(&m_camera, dt, m_window->getKeyboardState(), m_window->getMouseState());
+	}
 
-	m_camera.setAspect(m_window->getAspect());
-	m_cameraMan->setMoveSpeed(20.0f * m_cameraScale);
-
-	m_cameraMan->update(&m_camera, dt, m_window->getKeyboardState(), m_window->getMouseState());
 
 	if (m_camera.getPosition() != oldCamera.getPosition()
 		|| m_camera.getForward() != oldCamera.getForward()
@@ -279,8 +316,8 @@ void ExamplePathTracer::render()
 	constants.cameraPosition = Vec4(m_camera.getPosition());
 	constants.frameIndex = m_frameIndex;
 	constants.flags = 0;
-	constants.flags |= m_useEnvmap ? PT_FLAG_USE_ENVMAP: 0;
-	constants.flags |= m_useNeutralBackground ? PT_FLAG_USE_NEUTRAL_BACKGROUND : 0;
+	constants.flags |= m_settings.m_useEnvmap ? PT_FLAG_USE_ENVMAP: 0;
+	constants.flags |= m_settings.m_useNeutralBackground ? PT_FLAG_USE_NEUTRAL_BACKGROUND : 0;
 
 	GfxContext* ctx = Platform_GetGfxContext();
 
@@ -297,7 +334,7 @@ void ExamplePathTracer::render()
 
 	GfxMarkerScope markerFrame(ctx, "Frame");
 
-	Gfx_UpdateBuffer(ctx, m_constantBuffer, &constants, sizeof(constants));
+	Gfx_UpdateBuffer(ctx, m_sceneConstantBuffer, &constants, sizeof(constants));
 
 	if (m_valid)
 	{
@@ -309,7 +346,7 @@ void ExamplePathTracer::render()
 		}
 
 		GfxMarkerScope markerRT(ctx, "RT");
-		Gfx_SetConstantBuffer(ctx, 0, m_constantBuffer);
+		Gfx_SetConstantBuffer(ctx, 0, m_sceneConstantBuffer);
 		Gfx_SetSampler(ctx, 0, m_samplerStates.anisotropicWrap);
 		Gfx_SetTexture(ctx, 0, m_envmap);
 		Gfx_SetStorageImage(ctx, 0, m_outputImage);
@@ -335,10 +372,16 @@ void ExamplePathTracer::render()
 	{
 		GfxMarkerScope markerFrame(ctx, "Tonemap");
 
+		TonemapConstants constants = {};
+		constants.exposure = 1.0f / (1.2f * powf(2.0f, m_settings.m_exposureEV100));
+		constants.gamma = m_settings.m_gamma;
+		Gfx_UpdateBuffer(ctx, m_tonemapConstantBuffer, &constants, sizeof(constants));
+
 		Gfx_SetDepthStencilState(ctx, m_depthStencilStates.disable);
 		Gfx_SetRasterizerState(ctx, m_rasterizerStates.solidNoCull);
 		Gfx_SetBlendState(ctx, m_blendStates.opaque);
 		Gfx_SetTechnique(ctx, m_blitTonemap);
+		Gfx_SetConstantBuffer(ctx, 0, m_tonemapConstantBuffer);
 		Gfx_SetSampler(ctx, 0, m_samplerStates.linearClamp);
 		Gfx_SetTexture(ctx, 0, m_outputImage);
 		Gfx_Draw(ctx, 0, 3);
@@ -367,6 +410,8 @@ void ExamplePathTracer::render()
 		    m_totalGpuRenderTime,
 		    m_frameIndex);
 		m_font->draw(m_prim, Vec2(10.0f, 30.0f), timingString);
+
+		ImGuiImpl_Render(ctx, m_prim);
 
 		m_prim->end2D();
 	}
@@ -1209,7 +1254,7 @@ void ExamplePathTracer::loadEnvmap(const char* filename)
 
 		free(img);
 
-		m_useEnvmap = true;
+		m_settings.m_useEnvmap = true;
 	}
 	else
 	{

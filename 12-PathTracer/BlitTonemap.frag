@@ -3,8 +3,15 @@
 layout (location = 0) in vec2 texcoord;
 layout (location = 0) out vec4 fragColor;
 
-layout (binding = 0) uniform sampler linearClampSampler;
-layout (binding = 1) uniform texture2D inputTexture;
+layout(set = 0, binding = 0)
+uniform TonemapConstants
+{
+	float exposure;
+	float gamma;
+};
+
+layout (binding = 1) uniform sampler linearClampSampler;
+layout (binding = 2) uniform texture2D inputTexture;
 
 // Tonemapping implementation by Tomasz Stachowiak (MIT license)
 // https://github.com/h3r2tic/rtoy-samples/blob/4c76e7efadb47eae5a290e11447815300dbe4131/assets/shaders/tonemap_sharpen.glsl
@@ -53,9 +60,6 @@ vec3 neutral_tonemap(vec3 col)
 void main()
 {
 	vec3 color = texture(sampler2D(inputTexture, linearClampSampler), texcoord).rgb;
-
-	float exposure = 1;
-	float gamma = 1;
 
 	color = neutral_tonemap(color * exposure);
 	color.x = pow(color.x, 1.0 / gamma);

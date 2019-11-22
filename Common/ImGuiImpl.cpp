@@ -165,9 +165,9 @@ void ImGuiImpl_Startup(Window* window)
 	rasterDescr.cullMode = GfxCullMode::None;
 	s_rasterState = Gfx_CreateRasterizerState(rasterDescr);
 
-	GfxDepthStencilDesc depth_descr;
-	depth_descr.enable = false;
-	s_depthState = Gfx_CreateDepthStencilState(depth_descr);
+	GfxDepthStencilDesc depthDescr;
+	depthDescr.enable = false;
+	s_depthState = Gfx_CreateDepthStencilState(depthDescr);
 
 	io.KeyMap[ImGuiKey_Tab] = Key_Tab;
 	io.KeyMap[ImGuiKey_LeftArrow] = Key_Left;
