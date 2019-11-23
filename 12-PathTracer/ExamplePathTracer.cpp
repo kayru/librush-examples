@@ -189,20 +189,23 @@ void ExamplePathTracer::update()
 	const float dt = (float)m_timer.time();
 	m_timer.reset();
 
-	ImGuiImpl_Update(dt);
-
-	ImGui::Begin("Menu");
-	bool renderSettingsChanged = false;
-	renderSettingsChanged |= ImGui::Checkbox("Use envmap",              &m_settings.m_useEnvmap);
-	renderSettingsChanged |= ImGui::Checkbox("Neutral background",      &m_settings.m_useNeutralBackground);
-	renderSettingsChanged |= ImGui::SliderFloat("FOV",                  &m_settings.m_fov,      0.1f, 2.0f);
-	ImGui::SliderFloat("Exposure EV100",   &m_settings.m_exposureEV100, -20.0f, 20.0f);
-	ImGui::SliderFloat("Gamma",            &m_settings.m_gamma,         0.5f, 4.0f);
-	ImGui::End();
-
-	if (renderSettingsChanged)
+	if (m_showUI)
 	{
-		m_frameIndex = 0;
+		ImGuiImpl_Update(dt);
+
+		ImGui::Begin("Menu");
+		bool renderSettingsChanged = false;
+		renderSettingsChanged |= ImGui::Checkbox("Use envmap", &m_settings.m_useEnvmap);
+		renderSettingsChanged |= ImGui::Checkbox("Neutral background", &m_settings.m_useNeutralBackground);
+		renderSettingsChanged |= ImGui::SliderFloat("FOV", &m_settings.m_fov, 0.1f, 2.0f);
+		ImGui::SliderFloat("Exposure EV100", &m_settings.m_exposureEV100, -10.0f, 10.0f);
+		ImGui::SliderFloat("Gamma", &m_settings.m_gamma, 0.25f, 3.0f);
+		ImGui::End();
+
+		if (renderSettingsChanged)
+		{
+			m_frameIndex = 0;
+		}
 	}
 
 	Camera oldCamera = m_camera;
@@ -258,11 +261,10 @@ void ExamplePathTracer::update()
 		}
 	}
 
-	if (!ImGui::GetIO().WantCaptureKeyboard && !ImGui::GetIO().WantCaptureMouse)
+	if (!m_showUI ||(!ImGui::GetIO().WantCaptureKeyboard && !ImGui::GetIO().WantCaptureMouse))
 	{
 		m_cameraMan->update(&m_camera, dt, m_window->getKeyboardState(), m_window->getMouseState());
 	}
-
 
 	if (m_camera.getPosition() != oldCamera.getPosition()
 		|| m_camera.getForward() != oldCamera.getForward()
@@ -373,7 +375,7 @@ void ExamplePathTracer::render()
 		GfxMarkerScope markerFrame(ctx, "Tonemap");
 
 		TonemapConstants constants = {};
-		constants.exposure = 1.0f / (1.2f * powf(2.0f, m_settings.m_exposureEV100));
+		constants.exposure = 1.0f / (1.2f * powf(2.0f, -m_settings.m_exposureEV100));
 		constants.gamma = m_settings.m_gamma;
 		Gfx_UpdateBuffer(ctx, m_tonemapConstantBuffer, &constants, sizeof(constants));
 
@@ -411,9 +413,9 @@ void ExamplePathTracer::render()
 		    m_frameIndex);
 		m_font->draw(m_prim, Vec2(10.0f, 30.0f), timingString);
 
-		ImGuiImpl_Render(ctx, m_prim);
-
 		m_prim->end2D();
+
+		ImGuiImpl_Render(ctx, m_prim);
 	}
 
 	Gfx_EndPass(ctx);
@@ -1228,7 +1230,7 @@ void ExamplePathTracer::loadEnvmap(const char* filename)
 
 		if (thresholdWeight * 100.0f < imgMax)
 		{
-			RUSH_LOG("High frequency IBL detected. Clamping brightest %d%% pixels.", 100.0f - thresholdPercentile);
+			RUSH_LOG("High frequency IBL detected. Clamping brightest %.1f%% pixels.", 100.0f - thresholdPercentile);
 
 			for (u64 i = 0; i < pixelCount; ++i)
 			{

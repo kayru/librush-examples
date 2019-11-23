@@ -174,8 +174,8 @@ private:
 	{
 		bool m_useEnvmap = false;
 		bool m_useNeutralBackground = false;
-		float m_gamma = 1.0f;
-		float m_exposureEV100 = 0.0f;
+		float m_gamma = 1.2f;
+		float m_exposureEV100 = 0.5f;
 		float m_fov = 1.0f;
 	};
 

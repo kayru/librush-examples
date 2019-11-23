@@ -243,7 +243,7 @@ vec2 cartesianToLatLongTexcoord(vec3 p)
 {
 	// http://gl.ict.usc.edu/Data/HighResProbes
 
-	float u = (1.0f + atan(p.x, -p.z) / M_PI);
+	float u = (1.0f + atan(p.z, -p.x) / M_PI);
 	float v = acos(p.y) / M_PI;
 
 	return vec2(u * 0.5f, v);
