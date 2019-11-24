@@ -14,14 +14,30 @@ float D_GGX(float linearRoughness, float NoH)
 	return saturate(d);
 }
 
-vec3 importanceSamplingNdfDggx(vec2 uv, float linearRoughness) {
-	// Importance sampling D_GGX
-	float a2 = linearRoughness * linearRoughness;
-	float phi = 2.0 * M_PI * uv.x;
-	float cosTheta2 = (1.0 - uv.y) / (1.0 + (a2 - 1.0) * uv.y);
-	float cosTheta = sqrt(cosTheta2);
-	float sinTheta = sqrt(1.0 - cosTheta2);
-	return vec3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
+// http://jcgt.org/published/0007/04/01/paper.pdf
+vec3 importanceSampleDGGXVNDF(vec2 uv, float linearRoughness, vec3 V)
+{
+	// Section 3.2: transforming the view direction to the hemisphere configuration
+	vec3 Vh = normalize(vec3(linearRoughness * V.x, linearRoughness * V.y, V.z));
+
+	// Section 4.1: orthonormal basis (with special case if cross product is zero)
+	float lensq = pow2(Vh.x) + pow2(Vh.y);
+	vec3 T1 = lensq > 0.0 ? vec3(-Vh.y, Vh.x, 0.0) * inversesqrt(lensq) : vec3(1.0, 0.0, 0.0);
+	vec3 T2 = cross(Vh, T1);
+
+	// Section 4.2: parameterization of the projected area
+	float r = sqrt(uv.x);
+	float phi = 2.0 * M_PI * uv.y;
+	float t1 = r * cos(phi);
+	float t2 = r * sin(phi);
+	float s = 0.5 * (1.0 + Vh.z);
+	t2 = (1.0 - s) * sqrt(1.0 - pow2(t1)) + s * t2;
+
+	// Section 4.3: reprojection onto hemisphere
+	vec3 Nh = t1 * T1 + t2 * T2 + sqrt(max(0.0, 1.0 - pow2(t1) - pow2(t2))) * Vh;
+
+	// Section 3.4: transforming the normal back to the ellipsoid configuration
+	return vec3(linearRoughness * Nh.x, linearRoughness * Nh.y, max(0.0, Nh.z));
 }
 
 float V_SmithGGXCorrelated(float linearRoughness, float NoV, float NoL)
