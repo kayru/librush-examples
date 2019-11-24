@@ -22,9 +22,12 @@ uniform SceneConstants
 	mat4 matViewProj;
 	mat4 matViewProjInv;
 	vec4 cameraPosition;
+
 	ivec2 outputSize;
 	uint frameIndex;
 	uint flags;
+
+	ivec2 envmapSize;
 };
 
 layout(set=0, binding=1)
@@ -55,11 +58,23 @@ buffer VertexBuffer
 	Vertex vertexBuffer[];
 };
 
+struct EnvmapCell
+{
+	float p;
+	uint i;
+};
+
+layout(set = 0, binding = 6, std430)
+buffer EnvmapDistributionBuffer
+{
+	EnvmapCell envmapDistributionBuffer[];
+};
+
 vec3 getPosition(Vertex v) { return vec3(v.position[0], v.position[1], v.position[2]); }
 vec3 getNormal(Vertex v) { return vec3(v.normal[0], v.normal[1], v.normal[2]); }
 vec2 getTexcoord(Vertex v) { return vec2(v.texcoord[0], v.texcoord[1]); }
 
-layout(set=0, binding=6)
+layout(set=0, binding=7)
 uniform accelerationStructureNV TLAS;
 
 #define MaxTextures 1024
@@ -122,6 +137,19 @@ float pow5(float x)
 float max3(vec3 v)
 {
 	return max(max(v.x, v.y), v.z);
+}
+
+uint randomUint16(inout uint seed)
+{
+	seed = 214013 * seed + 2531011;
+	return (seed ^ seed >> 16);
+}
+
+uint randomUint32(inout uint seed)
+{
+	uint a = randomUint16(seed) << 16;
+	uint b = randomUint16(seed) & 0xFFFF;
+	return a | b;
 }
 
 float randomFloat(inout uint seed)
@@ -252,6 +280,53 @@ vec2 cartesianToLatLongTexcoord(vec3 p)
 	float v = acos(p.y) / M_PI;
 
 	return vec2(u * 0.5f, v);
+}
+
+vec3 latLongTexcoordToCartesian(vec2 uv)
+{
+	// http://gl.ict.usc.edu/Data/HighResProbes
+
+	float theta = M_PI*(uv.x*2.0 - 1.0);
+	float phi = M_PI*uv.y;
+
+	float x = sin(phi)*sin(theta);
+	float y = cos(phi);
+	float z = -sin(phi)*cos(theta);
+
+	return vec3(z, y, x);
+}
+
+vec3 envMapPixelIndexToDirection(uint i, vec2 pixelJitter)
+{
+	uint x = i % envmapSize.x;
+	uint y = i / envmapSize.x;
+
+	vec2 pixelPos = vec2(x, y);
+	vec2 uv = (pixelPos + pixelJitter) / vec2(envmapSize);
+
+	return latLongTexcoordToCartesian(uv);
+}
+
+vec3 importanceSampleSkyLightDir(inout uint randomSeed)
+{
+	uint i = randomUint32(randomSeed) % (envmapSize.x * envmapSize.y);
+	EnvmapCell entry = envmapDistributionBuffer[i];
+	vec2 jitter = randomFloat2(randomSeed); // jitter within a texel
+
+	if (randomFloat(randomSeed) <= entry.p)
+	{
+		return envMapPixelIndexToDirection(i, jitter);
+	}
+	else
+	{
+		return envMapPixelIndexToDirection(entry.i, jitter);
+	}
+}
+
+float powerHeuristic(float f, float g)
+{
+	float denom = pow2(f) + pow2(g);
+	return denom > 0 ? pow2(f) / denom : 0;
 }
 
 #endif // __cplusplus

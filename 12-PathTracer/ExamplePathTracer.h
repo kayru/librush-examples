@@ -84,9 +84,12 @@ private:
 		Mat4 matViewProj = Mat4::identity();
 		Mat4 matViewProjInv = Mat4::identity();
 		Vec4 cameraPosition = Vec4(0.0);
+
 		Tuple2i outputSize = {};
-		u32 frameIndex;
-		u32 flags;
+		u32 frameIndex = 0;
+		u32 flags = 0;
+
+		Tuple2i envmapSize = {};
 	};
 
 	Mat4 m_worldTransform = Mat4::identity();
@@ -168,7 +171,8 @@ private:
 	GfxOwn<GfxTexture>               m_outputImage;
 	GfxOwn<GfxTechnique>             m_blitTonemap;
 	GfxOwn<GfxTexture>               m_envmap;
-	GfxOwn<GfxTexture>               m_envmapHigh;
+	GfxOwn<GfxBuffer>                m_envmapDistribution;
+
 
 	struct Settings
 	{

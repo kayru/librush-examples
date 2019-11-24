@@ -97,7 +97,7 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 		pipelineDesc.bindings.samplers = 1; // default sampler
 		pipelineDesc.bindings.textures = 1; // envmap
 		pipelineDesc.bindings.rwImages = 1; // output image
-		pipelineDesc.bindings.rwBuffers = 2; // IB + VB
+		pipelineDesc.bindings.rwBuffers = 3; // IB + VB + envmap distribution
 		pipelineDesc.bindings.descriptorSets[1] = materialDescriptorSetDesc;
 		pipelineDesc.bindings.accelerationStructures = 1; // TLAS
 
@@ -333,6 +333,7 @@ void ExamplePathTracer::render()
 	}
 
 	constants.outputSize = outputImageDesc.getSize2D();
+	constants.envmapSize = Gfx_GetTextureDesc(m_envmap).getSize2D();
 
 	GfxMarkerScope markerFrame(ctx, "Frame");
 
@@ -354,6 +355,7 @@ void ExamplePathTracer::render()
 		Gfx_SetStorageImage(ctx, 0, m_outputImage);
 		Gfx_SetStorageBuffer(ctx, 0, m_indexBuffer);
 		Gfx_SetStorageBuffer(ctx, 1, m_vertexBuffer);
+		Gfx_SetStorageBuffer(ctx, 2, m_envmapDistribution);
 		Gfx_SetDescriptors(ctx, 1, m_materialDescriptorSet);
 		Gfx_TraceRays(ctx, m_rtPipeline, m_tlas, m_sbtBuffer, outputImageDesc.width, outputImageDesc.height);
 	}
@@ -1193,6 +1195,73 @@ bool ExamplePathTracer::loadModel(const char* filename)
 	}
 }
 
+// Discrete probability distribution sampling based on alias method
+// http://www.keithschwarz.com/darts-dice-coins
+template <typename T>
+struct DiscreteDistribution
+{
+	typedef std::pair<T, size_t> Cell;
+
+	DiscreteDistribution(const T* weights, size_t count, T weightSum)
+	{
+		std::vector<Cell> large;
+		std::vector<Cell> small;
+		for (size_t i = 0; i < count; ++i)
+		{
+			T p = weights[i] * count / weightSum;
+			if (p < T(1)) small.push_back({ p, i });
+			else large.push_back({ p, i });
+		}
+
+		m_cells.resize(count, { T(0), 0 });
+
+		while (large.size() && small.size())
+		{
+			auto l = small.back(); small.pop_back();
+			auto g = large.back(); large.pop_back();
+			m_cells[l.second].first = l.first;
+			m_cells[l.second].second = g.second;
+			g.first = (l.first + g.first) - T(1);
+			if (g.first < T(1))
+			{
+				small.push_back(g);
+			}
+			else
+			{
+				large.push_back(g);
+			}
+		}
+
+		while (large.size())
+		{
+			auto g = large.back(); large.pop_back();
+			m_cells[g.second].first = T(1);
+		}
+
+		while (small.size())
+		{
+			auto l = small.back(); small.pop_back();
+			m_cells[l.second].first = T(1);
+		}
+	}
+
+	std::vector<Cell> m_cells;
+};
+
+inline double latLongTexelArea(Vec2 pos, Vec2 imageSize)
+{
+	Vec2 uv0 = pos / imageSize;
+	Vec2 uv1 = (pos + Vec2(1.0f)) / imageSize;
+
+	double theta0 = Pi * (uv0.x * 2.0 - 1.0);
+	double theta1 = Pi * (uv1.x * 2.0 - 1.0);
+
+	double phi0 = Pi * (uv0.y - 0.5);
+	double phi1 = Pi * (uv1.y - 0.5);
+
+	return abs(theta1 - theta0) * abs(sin(phi1) - sin(phi0));
+}
+
 void ExamplePathTracer::loadEnvmap(const char* filename)
 {
 	FileIn f(filename);
@@ -1203,56 +1272,57 @@ void ExamplePathTracer::loadEnvmap(const char* filename)
 		int width, height, comp;
 		Vec4* img = (Vec4*)stbi_loadf(filename, &width, &height, &comp, 4);
 
-		std::vector<float> weights;
+		const Vec2 imageSize = Vec2(float(width), float(height));
+
+		std::vector<double> weights;
+		std::vector<double> areas;
+
 		const u64 pixelCount = u64(width) * height;
 		weights.reserve(pixelCount);
-		float imgMin = FLT_MAX;
-		float imgMax = 0;
-		double imgAvg = 0;
+		areas.reserve(pixelCount);
+
+		double weightSum = 0;
 		for (u64 i = 0; i < pixelCount; ++i)
 		{
-			float w = img[i].xyz().reduceMax();
-			imgMin = min(imgMin, w);
-			imgMax = max(imgMax, w);
-			imgAvg += w;
+			//img[i] = Vec4(1.0);
+
+			u32 x = u32(i % width);
+			u32 y = u32(i / width);
+			Vec2 pixelPos = Vec2(float(x), float(y));
+			double a = latLongTexelArea(pixelPos, imageSize);
+			double w = a * double(img[i].xyz().reduceMax());
 			weights.push_back(w);
+			areas.push_back(a);
+			weightSum += w;
 		}
 
-		imgAvg /= pixelCount;
-
-		std::sort(weights.begin(), weights.end());
-		const double thresholdPercentile = 99.5f;
-		const u64 thresholdIndex = u64(floor((thresholdPercentile/100.0) * weights.size()));
-		const float thresholdWeight = weights[thresholdIndex];
-
-		std::vector<Vec4> imgHigh;
-		imgHigh.resize(pixelCount);
-
-		if (thresholdWeight * 100.0f < imgMax)
+		for (u64 i = 0; i < pixelCount; ++i)
 		{
-			RUSH_LOG("High frequency IBL detected. Clamping brightest %.1f%% pixels.", 100.0f - thresholdPercentile);
+			double pdf = (weights[i] / weightSum) / areas[i];
+			img[i].w = float(pdf);
+		}
 
-			for (u64 i = 0; i < pixelCount; ++i)
-			{
-				Vec4 color = img[i];
-				float w = color.xyz().reduceMax();
+		DiscreteDistribution<double> distribution(weights.data(), weights.size(), weightSum);
 
-				if (w > thresholdWeight)
-				{
-					Vec4 colorClamped = (img[i] / w) * thresholdWeight;
-					img[i] = colorClamped;
-					imgHigh[i] = max(color - colorClamped, Vec4(0.0));
-				}
-				else
-				{
-					imgHigh[i] = Vec4(0.0);
-				}
-			}
+		struct EnvmapCell
+		{
+			float p;
+			u32 i;
+		};
+
+		std::vector<EnvmapCell> envmapDistributionBuffer;
+		envmapDistributionBuffer.reserve(pixelCount);
+		for (u64 i = 0; i < pixelCount; ++i)
+		{
+			EnvmapCell cell;
+			cell.p = float(distribution.m_cells[i].first);
+			cell.i = u32(distribution.m_cells[i].second);
+			envmapDistributionBuffer.push_back(cell);
 		}
 
 		GfxTextureDesc desc = GfxTextureDesc::make2D(width, height, GfxFormat_RGBA32_Float);
 		m_envmap = Gfx_CreateTexture(desc, img);
-		m_envmapHigh = Gfx_CreateTexture(desc, imgHigh.data());
+		m_envmapDistribution = Gfx_CreateBuffer(GfxBufferFlags::Storage, u32(pixelCount), sizeof(EnvmapCell), envmapDistributionBuffer.data());
 
 		free(img);
 

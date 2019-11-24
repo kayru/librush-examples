@@ -101,6 +101,23 @@ vec3 getSkyColor(vec3 dir)
 	}
 }
 
+struct LightSample
+{
+	vec3 w;
+	vec3 value;
+	float pdfW;
+};
+
+LightSample importanceSampleEnvmap(inout uint randomSeed)
+{
+	LightSample result;
+	result.w = importanceSampleSkyLightDir(randomSeed);
+	vec4 envmapSample = texture(sampler2D(envmapTexture, defaultSampler), cartesianToLatLongTexcoord(result.w));
+	result.value= envmapSample.rgb;
+	result.pdfW = envmapSample.a;
+	return result;
+}
+
 void main()
 {
 	ivec2 pixelIndex = ivec2(gl_LaunchIDNV.xy);
@@ -124,6 +141,12 @@ void main()
 
 	uint maxPathLength = USE_DEBUG_FURNECE ? 2 : 5;
 
+	vec3 scatterValue = vec3(0.0);
+	float scatterPdfW = 0;
+
+	vec3 lightValue = vec3(0.0);
+	float lightPdfW = 0;
+
 	for(uint i=0; i<maxPathLength; ++i)
 	{
 		bool isHit = traceRay(primaryRay);
@@ -136,38 +159,61 @@ void main()
 			{
 				result = vec3(0.25);
 			}
+			if (i == 0)
+			{
+				result = getSkyColor(primaryRay.direction);
+			}
 			else
 			{
-				result += throughput * getSkyColor(primaryRay.direction);
+				// TODO
 			}
 
 			// We hit the sky, so we're done
 			break;
 		}
 
+		if (i > 0)
+		{
+
+		}
+
 		if (USE_DEBUG_FURNECE) payload.baseColor = vec3(1);
 		if (USE_DEBUG_REFLECTIONS && i==0) payload.baseColor = vec3(1);
 
-
-		const vec3 L = getSunDirection();
 		const vec3 N = payload.normal;
 		const vec3 V = -primaryRay.direction;
-		const float NoL = dot(N, L);
 
-		if (NoL > 0 && USE_DIRECT_LIGHTING && !USE_DEBUG_FURNECE && (!USE_DEBUG_REFLECTIONS || i > 0) && (flags&PT_FLAG_USE_ENVMAP)==0)
+		if (USE_DIRECT_LIGHTING && !USE_DEBUG_FURNECE && (!USE_DEBUG_REFLECTIONS || i > 0))
 		{
+			vec3 L = vec3(0, 0, 1);
+			if (bool(flags&PT_FLAG_USE_ENVMAP))
+			{
+				LightSample ls = importanceSampleEnvmap(randomSeed);
+				L = ls.w;
+				lightValue = ls.value;
+				lightPdfW = ls.pdfW;
+			}
+			else
+			{
+				L = getSunDirection();
+				lightValue = getSunColor();
+				lightPdfW = 1;
+			}
+
 			RayDesc shadowRay;
+
 			shadowRay.origin = primaryRay.origin + primaryRay.direction * payload.hitT;
 			shadowRay.origin += payload.geoNormal * max3(abs(shadowRay.origin)) * 1e-4;
 			shadowRay.direction = L;
 			shadowRay.minT = 0.0;
 			shadowRay.maxT = 1e9;
 
-			bool isLightOccluded = traceShadowRay(shadowRay);
-			if (!isLightOccluded)
+			float NoL = dot(N, L);
+
+			if (NoL>0 && !traceShadowRay(shadowRay))
 			{
 				Surface surface = unpack(payload);
-				result += throughput * evalSurface(surface, V, L) * getSunColor();
+				result += throughput * evalSurface(surface, V, L) * lightValue / lightPdfW;
 			}
 		}
 
@@ -183,8 +229,6 @@ void main()
 			reflectionSampleUV = modf(Halton23(int(frameIndex)) + randomFloat2(pixelRandomSeed), modResultInt);
 		}
 
-		primaryRay.direction = normalize(N + mapToUniformSphere(reflectionSampleUV));
-
 		float specularProbability = USE_INDIRECT_SPECULAR ? 0.5 : 0.0;
 		bool isSpecular = randomFloat(randomSeed) < specularProbability;
 
@@ -194,18 +238,26 @@ void main()
 			vec3 H = normalize(basis * importanceSampleDGGXVNDF(reflectionSampleUV, unpack(payload).linearRoughness, V * basis));
 			vec3 L = reflect(-V, H);
 
-			primaryRay.direction = L;
-
+			float NoH = max(0, dot(N, H));
 			float LoH = max(0, dot(L, H));
+			float VoH = max(0, dot(V, H));
+
+			float D = D_GGX(unpack(payload).linearRoughness, NoH);
 			vec3 F = F_Schlick(unpack(payload).specularColor, 1.0, LoH);
 
 			throughput *= F;
 			throughput /= specularProbability;
+
+			primaryRay.direction = L;
+			scatterPdfW = D * NoH / (4 * VoH);
 		}
 		else
 		{
 			throughput *= USE_INDIRECT_SPECULAR ? unpack(payload).diffuseColor : payload.baseColor;
 			throughput /= (1.0-specularProbability);
+
+			primaryRay.direction = normalize(N + mapToUniformSphere(reflectionSampleUV));
+			scatterPdfW = 1.0 / M_PI;
 		}
 	}
 
