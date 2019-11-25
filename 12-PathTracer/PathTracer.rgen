@@ -108,14 +108,19 @@ struct LightSample
 	float pdfW;
 };
 
-LightSample importanceSampleEnvmap(inout uint randomSeed)
+LightSample sampleEnvmap(vec3 dir)
 {
 	LightSample result;
-	result.w = importanceSampleSkyLightDir(randomSeed);
-	vec4 envmapSample = texture(sampler2D(envmapTexture, defaultSampler), cartesianToLatLongTexcoord(result.w));
-	result.value= envmapSample.rgb;
+	vec4 envmapSample = texture(sampler2D(envmapTexture, defaultSampler), cartesianToLatLongTexcoord(dir));
+	result.w = dir;
+	result.value = envmapSample.rgb;
 	result.pdfW = envmapSample.a;
 	return result;
+}
+
+LightSample importanceSampleEnvmap(inout uint randomSeed)
+{
+	return sampleEnvmap(importanceSampleSkyLightDir(randomSeed));
 }
 
 void main()
@@ -141,13 +146,9 @@ void main()
 
 	uint maxPathLength = USE_DEBUG_FURNECE ? 2 : 5;
 
-	vec3 scatterValue = vec3(0.0);
-	float scatterPdfW = 0;
+	float scatterPdfW = 1e9;
 
-	vec3 lightValue = vec3(0.0);
-	float lightPdfW = 0;
-
-	for(uint i=0; i<maxPathLength; ++i)
+	for(uint i=0; i<=maxPathLength; ++i)
 	{
 		bool isHit = traceRay(primaryRay);
 
@@ -159,45 +160,45 @@ void main()
 			{
 				result = vec3(0.25);
 			}
-			if (i == 0)
-			{
-				result = getSkyColor(primaryRay.direction);
-			}
 			else
 			{
-				// TODO
+				LightSample ls = sampleEnvmap(primaryRay.direction);
+				result += throughput * ls.value * powerHeuristic(scatterPdfW, ls.pdfW);
 			}
 
 			// We hit the sky, so we're done
 			break;
 		}
 
-		if (i > 0)
-		{
-
-		}
-
 		if (USE_DEBUG_FURNECE) payload.baseColor = vec3(1);
 		if (USE_DEBUG_REFLECTIONS && i==0) payload.baseColor = vec3(1);
 
-		const vec3 N = payload.normal;
+		const vec3 N = normalize(payload.normal);
 		const vec3 V = -primaryRay.direction;
+
+		const float specularProbability = USE_INDIRECT_SPECULAR ? 0.5 : 0.0;
+		bool isSpecular = randomFloat(randomSeed) <= specularProbability;
+
+		if (i == maxPathLength) break;
 
 		if (USE_DIRECT_LIGHTING && !USE_DEBUG_FURNECE && (!USE_DEBUG_REFLECTIONS || i > 0))
 		{
 			vec3 L = vec3(0, 0, 1);
+			vec3 lightColor = vec3(0.0);
+			float lightPdfW = 0.0;
+
 			if (bool(flags&PT_FLAG_USE_ENVMAP))
 			{
 				LightSample ls = importanceSampleEnvmap(randomSeed);
 				L = ls.w;
-				lightValue = ls.value;
+				lightColor = ls.value / ls.pdfW;
 				lightPdfW = ls.pdfW;
 			}
 			else
 			{
 				L = getSunDirection();
-				lightValue = getSunColor();
-				lightPdfW = 1;
+				lightColor = getSunColor();
+				lightPdfW = 1e9;
 			}
 
 			RayDesc shadowRay;
@@ -210,10 +211,33 @@ void main()
 
 			float NoL = dot(N, L);
 
-			if (NoL>0 && !traceShadowRay(shadowRay))
+			if (NoL > 0 && !traceShadowRay(shadowRay))
 			{
-				Surface surface = unpack(payload);
-				result += throughput * evalSurface(surface, V, L) * lightValue / lightPdfW;
+				vec3 brdf = vec3(1.0);
+				float brdfPdfW = 1.0;
+
+				if (isSpecular)
+				{
+					vec3 H = normalize(V + L);
+
+					float NoH = max(0, dot(N, H));
+					float LoH = max(0, dot(L, H));
+					float VoH = max(0, dot(V, H));
+
+					float sD = D_GGX(unpack(payload).linearRoughness, NoH);
+					float sG = G1_Smith(unpack(payload).linearRoughness, NoL);
+					vec3  sF = F_Schlick(unpack(payload).specularColor, 1.0, LoH);
+
+					brdfPdfW = sD * NoH / (4.0 * VoH);
+					brdf = sD * sG * sF;
+				}
+				else
+				{
+					brdfPdfW = 1.0 / M_PI;
+					brdf = unpack(payload).diffuseColor * NoL;
+				}
+
+				result += throughput * lightColor * brdf * powerHeuristic(lightPdfW, brdfPdfW);
 			}
 		}
 
@@ -229,27 +253,26 @@ void main()
 			reflectionSampleUV = modf(Halton23(int(frameIndex)) + randomFloat2(pixelRandomSeed), modResultInt);
 		}
 
-		float specularProbability = USE_INDIRECT_SPECULAR ? 0.5 : 0.0;
-		bool isSpecular = randomFloat(randomSeed) < specularProbability;
-
 		if (isSpecular)
 		{
 			mat3 basis = makeOrthonormalBasis(N);
 			vec3 H = normalize(basis * importanceSampleDGGXVNDF(reflectionSampleUV, unpack(payload).linearRoughness, V * basis));
 			vec3 L = reflect(-V, H);
 
+			float NoL = max(0, dot(N, L));
 			float NoH = max(0, dot(N, H));
 			float LoH = max(0, dot(L, H));
 			float VoH = max(0, dot(V, H));
 
-			float D = D_GGX(unpack(payload).linearRoughness, NoH);
-			vec3 F = F_Schlick(unpack(payload).specularColor, 1.0, LoH);
+			float sD = D_GGX(unpack(payload).linearRoughness, NoH);
+			float sG = G1_Smith(unpack(payload).linearRoughness, NoL);
+			vec3  sF = F_Schlick(unpack(payload).specularColor, 1.0, LoH);
 
-			throughput *= F;
+			throughput *= sF * sG;
 			throughput /= specularProbability;
 
 			primaryRay.direction = L;
-			scatterPdfW = D * NoH / (4 * VoH);
+			scatterPdfW = sD * NoH / (4.0 * VoH);
 		}
 		else
 		{

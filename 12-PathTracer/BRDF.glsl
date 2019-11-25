@@ -11,7 +11,13 @@ float D_GGX(float linearRoughness, float NoH)
 	float a = NoH * linearRoughness;
 	float k = linearRoughness / (oneMinusNoHSquared + a * a);
 	float d = k * k * (1.0 / M_PI);
-	return saturate(d);
+	return max(0, d);
+}
+
+float G1_Smith(float linearRoughness, float NoL)
+{
+	float a2 = linearRoughness*linearRoughness;
+	return 2.0 * NoL / (NoL + sqrt(a2 + (1.0 - a2) * pow2(NoL)));
 }
 
 // http://jcgt.org/published/0007/04/01/paper.pdf

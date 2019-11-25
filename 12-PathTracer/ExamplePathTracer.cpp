@@ -1289,11 +1289,14 @@ void ExamplePathTracer::loadEnvmap(const char* filename)
 			u32 x = u32(i % width);
 			u32 y = u32(i / width);
 			Vec2 pixelPos = Vec2(float(x), float(y));
-			double a = latLongTexelArea(pixelPos, imageSize);
-			double w = a * double(img[i].xyz().reduceMax());
-			weights.push_back(w);
-			areas.push_back(a);
-			weightSum += w;
+
+			double pixelIntensity = double(img[i].xyz().reduceMax());
+			double pixelArea = latLongTexelArea(pixelPos, imageSize);
+			double weight = pixelArea * pixelIntensity;
+
+			weights.push_back(weight);
+			areas.push_back(pixelArea);
+			weightSum += weight;
 		}
 
 		for (u64 i = 0; i < pixelCount; ++i)
