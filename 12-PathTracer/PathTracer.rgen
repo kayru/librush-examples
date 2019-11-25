@@ -9,6 +9,7 @@
 #define USE_DEBUG_SKY              false
 #define USE_DIRECT_LIGHTING        true
 #define USE_INDIRECT_SPECULAR      true
+#define USE_ROUGHNESS_BIAS         true
 
 layout(location = 0) rayPayloadNV DefaultPayload payload;
 
@@ -147,12 +148,20 @@ void main()
 	uint maxPathLength = USE_DEBUG_FURNECE ? 2 : 5;
 
 	float scatterPdfW = 1e9;
+	float roughnessBias = 0;
 
 	for(uint i=0; i<=maxPathLength; ++i)
 	{
 		bool isHit = traceRay(primaryRay);
 
 		if (USE_DEBUG_FURNECE && i > 0) isHit = false;
+
+		if (USE_ROUGHNESS_BIAS)
+		{
+			float oldRoughness = payload.roughness;
+			payload.roughness = min(1.0, payload.roughness + roughnessBias);
+			roughnessBias += oldRoughness * 0.5f;
+		}
 
 		if (!isHit)
 		{
