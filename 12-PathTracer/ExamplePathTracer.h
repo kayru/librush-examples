@@ -49,6 +49,8 @@ private:
 
 	double m_totalGpuRenderTime = 0;
 
+
+	Vec2 m_cameraSensorSizeMM = Vec2(36.0f, 24.0f); // 35mm film
 	Camera m_camera;
 	CameraManipulator* m_cameraMan;
 
@@ -180,7 +182,7 @@ private:
 		bool m_useNeutralBackground = false;
 		float m_gamma = 1.2f;
 		float m_exposureEV100 = 0.5f;
-		float m_fov = 1.0f;
+		float m_focalLengthMM = 50.0;
 	};
 
 	Settings m_settings;

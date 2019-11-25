@@ -177,6 +177,11 @@ ExamplePathTracer::~ExamplePathTracer()
 	delete m_cameraMan;
 }
 
+inline float focalLengthToFov(float focalLength, float sensorSize)
+{
+	return 2.0f * atanf((sensorSize / 2.0f) / focalLength);
+}
+
 void ExamplePathTracer::update()
 {
 	TimingScope timingScope(m_stats.cpuTotal);
@@ -197,7 +202,7 @@ void ExamplePathTracer::update()
 		bool renderSettingsChanged = false;
 		renderSettingsChanged |= ImGui::Checkbox("Use envmap", &m_settings.m_useEnvmap);
 		renderSettingsChanged |= ImGui::Checkbox("Neutral background", &m_settings.m_useNeutralBackground);
-		renderSettingsChanged |= ImGui::SliderFloat("FOV", &m_settings.m_fov, 0.1f, 2.0f);
+		renderSettingsChanged |= ImGui::SliderFloat("Focal length (mm)", &m_settings.m_focalLengthMM, 1.0f, 250.0f);
 		ImGui::SliderFloat("Exposure EV100", &m_settings.m_exposureEV100, -10.0f, 10.0f);
 		ImGui::SliderFloat("Gamma", &m_settings.m_gamma, 0.25f, 3.0f);
 		ImGui::End();
@@ -210,7 +215,7 @@ void ExamplePathTracer::update()
 
 	Camera oldCamera = m_camera;
 
-	m_camera.setFov(m_settings.m_fov);
+	m_camera.setFov(focalLengthToFov(m_settings.m_focalLengthMM, m_cameraSensorSizeMM.x));
 	m_camera.setAspect(m_window->getAspect());
 	m_cameraMan->setMoveSpeed(20.0f * m_cameraScale);
 
