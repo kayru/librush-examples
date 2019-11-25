@@ -160,7 +160,7 @@ void main()
 		{
 			float oldRoughness = payload.roughness;
 			payload.roughness = min(1.0, payload.roughness + roughnessBias);
-			roughnessBias += oldRoughness * 0.5f;
+			roughnessBias += oldRoughness * 0.75f;
 		}
 
 		if (!isHit)
@@ -200,7 +200,7 @@ void main()
 			{
 				LightSample ls = importanceSampleEnvmap(randomSeed);
 				L = ls.w;
-				lightColor = ls.value / ls.pdfW;
+				lightColor = ls.value;
 				lightPdfW = ls.pdfW;
 			}
 			else
@@ -220,7 +220,7 @@ void main()
 
 			float NoL = dot(N, L);
 
-			if (NoL > 0 && !traceShadowRay(shadowRay))
+			if (NoL > 0 && lightPdfW > 0 && !traceShadowRay(shadowRay))
 			{
 				vec3 brdf = vec3(1.0);
 				float brdfPdfW = 1.0;
@@ -246,7 +246,7 @@ void main()
 					brdf = unpack(payload).diffuseColor * NoL;
 				}
 
-				result += throughput * lightColor * brdf * powerHeuristic(lightPdfW, brdfPdfW);
+				result += throughput * lightColor * brdf * powerHeuristic(lightPdfW, brdfPdfW) / lightPdfW;
 			}
 		}
 
