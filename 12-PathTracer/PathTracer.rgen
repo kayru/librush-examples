@@ -158,9 +158,16 @@ void main()
 
 		if (USE_ROUGHNESS_BIAS)
 		{
+			#if 0
 			float oldRoughness = payload.roughness;
 			payload.roughness = min(1.0, payload.roughness + roughnessBias);
 			roughnessBias += oldRoughness * 0.75f;
+			#else
+			// Path roughnening as per https://www.arnoldrenderer.com/research/physically_based_shader_design_in_arnold.pdf
+			// "Avoiding Caustic Paths", fig. 14
+			payload.roughness = max(payload.roughness, roughnessBias);
+			roughnessBias = payload.roughness;
+			#endif
 		}
 
 		if (!isHit)
