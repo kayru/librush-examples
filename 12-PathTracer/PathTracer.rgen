@@ -76,7 +76,7 @@ vec3 getSunColor()
 	return vec3(0.95, 0.90, 0.8) * 2.5 * M_PI;
 }
 
-vec3 getSkyColor(vec3 dir)
+vec3 getSimpleSkyColor(vec3 dir)
 {
 	if (USE_DEBUG_FURNECE)
 	{		
@@ -86,12 +86,6 @@ vec3 getSkyColor(vec3 dir)
 	{
 		vec3 dummy;
 		return modf((dir*0.5+0.5) * 10, dummy);
-	}
-	else if ((flags&PT_FLAG_USE_ENVMAP)!=0)
-	{
-		vec2 uv = cartesianToLatLongTexcoord(dir);
-		vec3 s = texture(sampler2D(envmapTexture, defaultSampler), uv).rgb;
-		return s;
 	}
 	else
 	{
@@ -150,6 +144,8 @@ void main()
 	float scatterPdfW = 1e9;
 	float roughnessBias = 0;
 
+	const bool useEnvmap = bool(flags & PT_FLAG_USE_ENVMAP);
+
 	for(uint i=0; i<=maxPathLength; ++i)
 	{
 		bool isHit = traceRay(primaryRay);
@@ -176,10 +172,15 @@ void main()
 			{
 				result = vec3(0.25);
 			}
-			else
+			else if (useEnvmap)
 			{
 				LightSample ls = sampleEnvmap(primaryRay.direction);
-				result += throughput * ls.value * powerHeuristic(scatterPdfW, ls.pdfW);
+				float misWeight = powerHeuristic(scatterPdfW, ls.pdfW);
+				result += throughput * ls.value * misWeight;
+			}
+			else
+			{
+				result += throughput * getSimpleSkyColor(primaryRay.direction);
 			}
 
 			// We hit the sky, so we're done
@@ -203,7 +204,7 @@ void main()
 			vec3 lightColor = vec3(0.0);
 			float lightPdfW = 0.0;
 
-			if (bool(flags&PT_FLAG_USE_ENVMAP))
+			if (useEnvmap)
 			{
 				LightSample ls = importanceSampleEnvmap(randomSeed);
 				L = ls.w;
@@ -214,7 +215,7 @@ void main()
 			{
 				L = getSunDirection();
 				lightColor = getSunColor();
-				lightPdfW = 1e9;
+				lightPdfW = 1;
 			}
 
 			RayDesc shadowRay;
@@ -253,7 +254,8 @@ void main()
 					brdf = unpack(payload).diffuseColor * NoL;
 				}
 
-				result += throughput * lightColor * brdf * powerHeuristic(lightPdfW, brdfPdfW) / lightPdfW;
+				float misWeight = useEnvmap ? powerHeuristic(lightPdfW, brdfPdfW) : 1.0;
+				result += throughput * lightColor * brdf * misWeight / lightPdfW;
 			}
 		}
 

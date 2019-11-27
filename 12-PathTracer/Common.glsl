@@ -21,6 +21,7 @@ uniform SceneConstants
 	mat4 matProj;
 	mat4 matViewProj;
 	mat4 matViewProjInv;
+	mat4 matEnvmapTransform;
 	vec4 cameraPosition;
 
 	ivec2 outputSize;

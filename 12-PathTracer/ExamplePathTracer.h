@@ -85,6 +85,7 @@ private:
 		Mat4 matProj = Mat4::identity();
 		Mat4 matViewProj = Mat4::identity();
 		Mat4 matViewProjInv = Mat4::identity();
+		Mat4 matEnvmapTransform = Mat4::identity();
 		Vec4 cameraPosition = Vec4(0.0);
 
 		Tuple2i outputSize = {};
@@ -183,6 +184,7 @@ private:
 		float m_gamma = 1.2f;
 		float m_exposureEV100 = 0.5f;
 		float m_focalLengthMM = 50.0;
+		float m_envmapRotationDegrees = 0.0;
 	};
 
 	Settings m_settings;

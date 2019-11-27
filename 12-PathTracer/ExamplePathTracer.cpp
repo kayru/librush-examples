@@ -203,6 +203,7 @@ void ExamplePathTracer::update()
 		renderSettingsChanged |= ImGui::Checkbox("Use envmap", &m_settings.m_useEnvmap);
 		renderSettingsChanged |= ImGui::Checkbox("Neutral background", &m_settings.m_useNeutralBackground);
 		renderSettingsChanged |= ImGui::SliderFloat("Focal length (mm)", &m_settings.m_focalLengthMM, 1.0f, 250.0f);
+		renderSettingsChanged |= ImGui::SliderFloat("Envmap rotation (deg)", &m_settings.m_envmapRotationDegrees, 0.0f, 360.0f);
 		ImGui::SliderFloat("Exposure EV100", &m_settings.m_exposureEV100, -10.0f, 10.0f);
 		ImGui::SliderFloat("Gamma", &m_settings.m_gamma, 0.25f, 3.0f);
 		ImGui::End();
@@ -320,6 +321,7 @@ void ExamplePathTracer::render()
 	constants.matProj = matProj.transposed();
 	constants.matViewProj = (matView * matProj).transposed();
 	constants.matViewProjInv = (matView * matProj).inverse().transposed();
+	//constants.matEnvmapTransform = Mat4::rotationY(toRadians(m_settings.m_envmapRotationDegrees)).transposed();
 	constants.cameraPosition = Vec4(m_camera.getPosition());
 	constants.frameIndex = m_frameIndex;
 	constants.flags = 0;
@@ -1269,6 +1271,12 @@ inline double latLongTexelArea(Vec2 pos, Vec2 imageSize)
 
 void ExamplePathTracer::loadEnvmap(const char* filename)
 {
+	struct EnvmapCell
+	{
+		float p;
+		u32 i;
+	};
+
 	FileIn f(filename);
 	if (f.valid())
 	{
@@ -1312,12 +1320,6 @@ void ExamplePathTracer::loadEnvmap(const char* filename)
 
 		DiscreteDistribution<double> distribution(weights.data(), weights.size(), weightSum);
 
-		struct EnvmapCell
-		{
-			float p;
-			u32 i;
-		};
-
 		std::vector<EnvmapCell> envmapDistributionBuffer;
 		envmapDistributionBuffer.reserve(pixelCount);
 		for (u64 i = 0; i < pixelCount; ++i)
@@ -1341,5 +1343,8 @@ void ExamplePathTracer::loadEnvmap(const char* filename)
 		Vec4 img = Vec4(0, 0, 0, 1);
 		GfxTextureDesc desc = GfxTextureDesc::make2D(1, 1, GfxFormat_RGBA32_Float);
 		m_envmap = Gfx_CreateTexture(desc, &img);
+
+		EnvmapCell envmapCell = {};
+		m_envmapDistribution = Gfx_CreateBuffer(GfxBufferFlags::Storage, 1, sizeof(EnvmapCell), &envmapCell);
 	}
 }
