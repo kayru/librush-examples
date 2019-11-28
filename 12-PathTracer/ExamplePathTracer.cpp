@@ -130,7 +130,8 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 			RUSH_LOG("Could not load model from '%s'\n", modelFilename);
 		}
 
-		const char* envFilename = "envmap.hdr";
+
+		std::string envFilename = std::string(Platform_GetExecutableDirectory()) + "/envmap.hdr";
 		if (g_appCfg.argc >= 4)
 		{
 			if (!strcmp(g_appCfg.argv[2], "--env"))
@@ -139,7 +140,7 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 			}
 		}
 
-		loadEnvmap(envFilename);
+		loadEnvmap(envFilename.c_str());
 
 		Vec3  center       = m_boundingBox.center();
 		Vec3  dimensions   = m_boundingBox.dimensions();
@@ -321,7 +322,7 @@ void ExamplePathTracer::render()
 	constants.matProj = matProj.transposed();
 	constants.matViewProj = (matView * matProj).transposed();
 	constants.matViewProjInv = (matView * matProj).inverse().transposed();
-	//constants.matEnvmapTransform = Mat4::rotationY(toRadians(m_settings.m_envmapRotationDegrees)).transposed();
+	constants.matEnvmapTransform = Mat4::rotationY(toRadians(m_settings.m_envmapRotationDegrees)).transposed();
 	constants.cameraPosition = Vec4(m_camera.getPosition());
 	constants.frameIndex = m_frameIndex;
 	constants.flags = 0;

@@ -107,7 +107,7 @@ LightSample sampleEnvmap(vec3 dir)
 {
 	LightSample result;
 	vec4 envmapSample = texture(sampler2D(envmapTexture, defaultSampler), cartesianToLatLongTexcoord(dir));
-	result.w = dir;
+	result.w = dir * mat3(matEnvmapTransform);
 	result.value = envmapSample.rgb;
 	result.pdfW = envmapSample.a;
 	return result;
@@ -174,7 +174,7 @@ void main()
 			}
 			else if (useEnvmap)
 			{
-				LightSample ls = sampleEnvmap(primaryRay.direction);
+				LightSample ls = sampleEnvmap(mat3(matEnvmapTransform) * primaryRay.direction);
 				float misWeight = powerHeuristic(scatterPdfW, ls.pdfW);
 				result += throughput * ls.value * misWeight;
 			}
