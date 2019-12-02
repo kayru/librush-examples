@@ -253,7 +253,8 @@ void main()
 					float sG = G1_Smith(unpack(payload).linearRoughness, NoL);
 					vec3  sF = F_Schlick(unpack(payload).specularColor, 1.0, LoH);
 
-					brdfPdfW = sD * NoH / (4.0 * VoH);
+					float denom = (4.0 * VoH);
+					brdfPdfW = denom > 0 ? sD * NoH / denom : 0;
 					brdf = sD * sG * sF;
 				}
 				else
@@ -298,7 +299,8 @@ void main()
 			throughput /= specularProbability;
 
 			primaryRay.direction = L;
-			scatterPdfW = sD * NoH / (4.0 * VoH);
+			float denom = (4.0 * VoH);
+			scatterPdfW = denom > 0 ? sD * NoH / denom : 0;
 		}
 		else
 		{
