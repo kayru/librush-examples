@@ -139,6 +139,14 @@ void main()
 	primaryRay.origin = cameraPosition.xyz;
 	primaryRay.direction = getCameraViewVector(pixelUV + pixelJitter);
 
+	if (bool(flags & PT_FLAG_USE_DEPTH_OF_FIELD))
+	{
+		vec3 focusPoint = primaryRay.origin + primaryRay.direction * (focusDistance / dot(matView[2].xyz, primaryRay.direction));
+		vec2 apertureSample = sampleUniformDisk(randomSeed) * 0.5;
+		primaryRay.origin += (matView[0].xyz * apertureSample.x + matView[1].xyz * apertureSample.y) * apertureSize;
+		primaryRay.direction = normalize(focusPoint - primaryRay.origin);
+	}
+
 	uint maxPathLength = USE_DEBUG_FURNECE ? 2 : 5;
 
 	float scatterPdfW = 1e9;

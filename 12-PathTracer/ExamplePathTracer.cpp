@@ -145,11 +145,6 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 		Vec3  center       = m_boundingBox.center();
 		Vec3  dimensions   = m_boundingBox.dimensions();
 		float longest_side = dimensions.reduceMax();
-		if (longest_side != 0)
-		{
-			float scale      = 100.0f / longest_side;
-			m_worldTransform = Mat4::scaleTranslate(scale, -center * scale);
-		}
 
 		m_boundingBox.m_min = m_worldTransform * m_boundingBox.m_min;
 		m_boundingBox.m_max = m_worldTransform * m_boundingBox.m_max;
@@ -199,14 +194,24 @@ void ExamplePathTracer::update()
 	{
 		ImGuiImpl_Update(dt);
 
+
 		ImGui::Begin("Menu");
 		bool renderSettingsChanged = false;
 		renderSettingsChanged |= ImGui::Checkbox("Use envmap", &m_settings.m_useEnvmap);
 		renderSettingsChanged |= ImGui::Checkbox("Neutral background", &m_settings.m_useNeutralBackground);
+		renderSettingsChanged |= ImGui::Checkbox("Depth of Field", &m_settings.m_useDepthOfField);
 		renderSettingsChanged |= ImGui::SliderFloat("Focal length (mm)", &m_settings.m_focalLengthMM, 1.0f, 250.0f);
+		renderSettingsChanged |= ImGui::SliderFloat("Aperture size (mm)", &m_settings.m_apertureSizeMM, 0.0f, 100000.0, "%.3f", 3.0f);
+		renderSettingsChanged |= ImGui::SliderFloat("Focus distance", &m_settings.m_focusDistance, 0.0f, 1000.0, "%.3f", 3.0f);
 		renderSettingsChanged |= ImGui::SliderFloat("Envmap rotation (deg)", &m_settings.m_envmapRotationDegrees, 0.0f, 360.0f);
 		ImGui::SliderFloat("Exposure EV100", &m_settings.m_exposureEV100, -10.0f, 10.0f);
 		ImGui::SliderFloat("Gamma", &m_settings.m_gamma, 0.25f, 3.0f);
+		Vec3 camPos = m_camera.getPosition();
+		if (ImGui::DragFloat3("Camera position", &camPos.x, m_cameraScale))
+		{
+			m_camera.lookAt(camPos, camPos + m_camera.getForward());
+			renderSettingsChanged = true;
+		}
 		ImGui::End();
 
 		if (renderSettingsChanged)
@@ -217,7 +222,7 @@ void ExamplePathTracer::update()
 
 	Camera oldCamera = m_camera;
 
-	m_camera.setFov(focalLengthToFov(m_settings.m_focalLengthMM, m_cameraSensorSizeMM.x));
+	m_camera.setFov(focalLengthToFov(m_settings.m_focalLengthMM, m_settings.m_cameraSensorSizeMM.x));
 	m_camera.setAspect(m_window->getAspect());
 	m_cameraMan->setMoveSpeed(20.0f * m_cameraScale);
 
@@ -328,6 +333,7 @@ void ExamplePathTracer::render()
 	constants.flags = 0;
 	constants.flags |= m_settings.m_useEnvmap ? PT_FLAG_USE_ENVMAP: 0;
 	constants.flags |= m_settings.m_useNeutralBackground ? PT_FLAG_USE_NEUTRAL_BACKGROUND : 0;
+	constants.flags |= m_settings.m_useDepthOfField ? PT_FLAG_USE_DEPTH_OF_FIELD : 0;
 
 	GfxContext* ctx = Platform_GetGfxContext();
 
@@ -342,6 +348,10 @@ void ExamplePathTracer::render()
 
 	constants.outputSize = outputImageDesc.getSize2D();
 	constants.envmapSize = Gfx_GetTextureDesc(m_envmap).getSize2D();
+	constants.cameraSensorSize = m_settings.m_cameraSensorSizeMM / 1000.0f;
+	constants.focalLength = m_settings.m_focalLengthMM / 1000.0f;
+	constants.focusDistance = m_settings.m_focusDistance;
+	constants.apertureSize = m_settings.m_apertureSizeMM / 1000.0f;
 
 	GfxMarkerScope markerFrame(ctx, "Frame");
 
@@ -543,11 +553,6 @@ u32 ExamplePathTracer::enqueueLoadTexture(const std::string& filename, GfxFormat
 
 }
 
-inline float convertDiffuseColor(float v)
-{
-	return v == 0.0f ? 0.5f : v;
-}
-
 template <typename T>
 const T* getDataPtr(const cgltf_accessor* attr)
 {
@@ -658,6 +663,7 @@ bool ExamplePathTracer::loadModelGLTF(const char* filename)
 			constants.albedoFactor[0] = inMaterial.pbr_metallic_roughness.base_color_factor[0];
 			constants.albedoFactor[1] = inMaterial.pbr_metallic_roughness.base_color_factor[1];
 			constants.albedoFactor[2] = inMaterial.pbr_metallic_roughness.base_color_factor[2];
+			constants.albedoFactor[3] = 1.0;
 
 			constants.metallicFactor = inMaterial.pbr_metallic_roughness.metallic_factor;
 			constants.roughnessFactor = inMaterial.pbr_metallic_roughness.roughness_factor;
@@ -716,10 +722,6 @@ bool ExamplePathTracer::loadModelGLTF(const char* filename)
 				}
 			}
 		}
-
-		constants.albedoFactor[0] = convertDiffuseColor(constants.albedoFactor[0]);
-		constants.albedoFactor[1] = convertDiffuseColor(constants.albedoFactor[1]);
-		constants.albedoFactor[2] = convertDiffuseColor(constants.albedoFactor[2]);
 
 		materialMap[&inMaterial] = u32(m_materials.size());
 
@@ -892,9 +894,9 @@ bool ExamplePathTracer::loadModelObj(const char* filename)
 	for (auto& objMaterial : materials)
 	{
 		MaterialConstants constants;
-		constants.albedoFactor.x = convertDiffuseColor(objMaterial.diffuse[0]);
-		constants.albedoFactor.y = convertDiffuseColor(objMaterial.diffuse[1]);
-		constants.albedoFactor.z = convertDiffuseColor(objMaterial.diffuse[2]);
+		constants.albedoFactor.x = objMaterial.diffuse[0];
+		constants.albedoFactor.y = objMaterial.diffuse[1];
+		constants.albedoFactor.z = objMaterial.diffuse[2];
 		constants.albedoFactor.w = 1.0f;
 		constants.albedoTextureId = m_defaultWhiteTextureId;
 

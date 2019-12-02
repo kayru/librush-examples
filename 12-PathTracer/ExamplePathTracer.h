@@ -49,8 +49,6 @@ private:
 
 	double m_totalGpuRenderTime = 0;
 
-
-	Vec2 m_cameraSensorSizeMM = Vec2(36.0f, 24.0f); // 35mm film
 	Camera m_camera;
 	CameraManipulator* m_cameraMan;
 
@@ -93,6 +91,11 @@ private:
 		u32 flags = 0;
 
 		Tuple2i envmapSize = {};
+		Vec2 cameraSensorSize;
+
+		float focalLength;
+		float focusDistance;
+		float apertureSize;
 	};
 
 	Mat4 m_worldTransform = Mat4::identity();
@@ -176,14 +179,17 @@ private:
 	GfxOwn<GfxTexture>               m_envmap;
 	GfxOwn<GfxBuffer>                m_envmapDistribution;
 
-
 	struct Settings
 	{
 		bool m_useEnvmap = false;
 		bool m_useNeutralBackground = false;
+		bool m_useDepthOfField = false;
 		float m_gamma = 1.8f;
 		float m_exposureEV100 = 2.0f;
+		Vec2 m_cameraSensorSizeMM = Vec2(36.0f, 24.0f); // 35mm film
 		float m_focalLengthMM = 50.0;
+		float m_apertureSizeMM = 0.0;
+		float m_focusDistance = 1.0;
 		float m_envmapRotationDegrees = 0.0;
 	};
 

@@ -3,6 +3,7 @@
 
 #define PT_FLAG_USE_ENVMAP              (1 << 0)
 #define PT_FLAG_USE_NEUTRAL_BACKGROUND  (1 << 1)
+#define PT_FLAG_USE_DEPTH_OF_FIELD      (1 << 2)
 
 #define PT_MATERIAL_MODE_PBR_METALLIC_ROUGHNESS   0
 #define PT_MATERIAL_MODE_PBR_SPECULAR_GLOSSINESS  1
@@ -29,6 +30,11 @@ uniform SceneConstants
 	uint flags;
 
 	ivec2 envmapSize;
+	vec2 cameraSensorSize;
+
+	float focalLength;
+	float focusDistance;
+	float apertureSize;
 };
 
 layout(set=0, binding=1)
@@ -210,15 +216,14 @@ vec3 mapToUniformSphere(vec2 uv)
 }
 vec3 sampleUniformSphere(inout uint seed) { return mapToUniformSphere(randomFloat2(seed)); };
 
-vec3 sampleUniformSphereInterior(inout uint seed)
-{ 
-	for(;;)
+vec2 sampleUniformDisk(inout uint seed)
+{
+	for (;;)
 	{
-		vec3 v;
-		v.x = randomFloat(seed);
-		v.y = randomFloat(seed);
-		v.z = randomFloat(seed);
-		if (dot(v,v) <= 1.0)
+		vec2 v;
+		v.x = randomFloat(seed) * 2.0 - 1.0;
+		v.y = randomFloat(seed) * 2.0 - 1.0;
+		if (dot(v, v) <= 1.0)
 		{
 			return v;
 		}
