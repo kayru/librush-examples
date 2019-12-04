@@ -201,9 +201,6 @@ void main()
 		const vec3 N = normalize(payload.normal);
 		const vec3 V = -primaryRay.direction;
 
-		const float specularProbability = USE_INDIRECT_SPECULAR ? 0.5 : 0.0;
-		bool isSpecular = randomFloat(randomSeed) <= specularProbability;
-
 		if (i == maxPathLength) break;
 
 		if (USE_DIRECT_LIGHTING && !USE_DEBUG_FURNECE && (!USE_DEBUG_REFLECTIONS || i > 0))
@@ -278,6 +275,15 @@ void main()
 			vec2 modResultInt;
 			reflectionSampleUV = modf(Halton23(int(frameIndex)) + randomFloat2(pixelRandomSeed), modResultInt);
 		}
+
+		float specularProbability = USE_INDIRECT_SPECULAR ? 0.5 : 0.0;
+
+		if (pixelUV.x < 0.5)
+		{
+			specularProbability = clamp(payload.metalness, 0.1, 0.9);
+		}
+
+		bool isSpecular = randomFloat(randomSeed) <= specularProbability;
 
 		if (isSpecular)
 		{
