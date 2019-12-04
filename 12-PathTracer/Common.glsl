@@ -329,10 +329,14 @@ vec3 importanceSampleSkyLightDir(inout uint randomSeed)
 	}
 }
 
+float balanceHeuristic(float f, float g)
+{
+	return f / (f+g);
+}
+
 float powerHeuristic(float f, float g)
 {
-	float denom = pow2(f) + pow2(g);
-	return denom > 0 ? pow2(f) / denom : 0;
+	return pow2(f) / (pow2(f) + pow2(g));
 }
 
 #endif // __cplusplus

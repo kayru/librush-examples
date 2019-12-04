@@ -238,10 +238,6 @@ void main()
 
 			if (NoL > 0 && lightPdfW > 0 && !traceShadowRay(shadowRay))
 			{
-				vec3 brdf = vec3(1.0);
-				float brdfPdfW = 1.0;
-
-				if (isSpecular)
 				{
 					vec3 H = normalize(V + L);
 
@@ -254,17 +250,20 @@ void main()
 					vec3  sF = F_Schlick(unpack(payload).specularColor, 1.0, LoH);
 
 					float denom = (4.0 * VoH);
-					brdfPdfW = denom > 0 ? sD * NoH / denom : 0;
-					brdf = sD * sG * sF;
-				}
-				else
-				{
-					brdfPdfW = 1.0 / M_PI;
-					brdf = unpack(payload).diffuseColor * NoL;
+					float brdfPdfW = denom > 0 ? sD * NoH / denom : 0;
+					vec3 brdf = sD * sG * sF;
+
+					float misWeight = useEnvmap ? powerHeuristic(lightPdfW, brdfPdfW) : 1.0;
+					result += throughput * lightColor * brdf * misWeight / (lightPdfW * 2);
 				}
 
-				float misWeight = useEnvmap ? powerHeuristic(lightPdfW, brdfPdfW) : 1.0;
-				result += throughput * lightColor * brdf * misWeight / lightPdfW;
+				{
+					float brdfPdfW = 1.0 / M_PI;
+					vec3 brdf = unpack(payload).diffuseColor * NoL;
+
+					float misWeight = useEnvmap ? powerHeuristic(lightPdfW, brdfPdfW) : 1.0;
+					result += throughput * lightColor * brdf * misWeight / (lightPdfW * 2);
+				}
 			}
 		}
 
