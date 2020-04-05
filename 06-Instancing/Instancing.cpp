@@ -401,13 +401,14 @@ public:
 		}
 		buildTime += m_timer.time();
 
-		u32 trianglesPerDraw = m_meshIndexCount / 3;
-		u32 trianglesPerFrame = trianglesPerDraw * m_instanceCount;
+		u64 trianglesPerDraw = m_meshIndexCount / 3;
+		u64 trianglesPerFrame = trianglesPerDraw * m_instanceCount;
 		if (m_limitTriangleCount && trianglesPerFrame > m_maxTrianglesPerFrame)
 		{
-			trianglesPerDraw = max<u32>(1, m_maxTrianglesPerFrame / m_instanceCount);
+			trianglesPerDraw = max<u64>(1, m_maxTrianglesPerFrame / m_instanceCount);
 		}
-		u32 indicesPerDraw = trianglesPerDraw * 3;
+		RUSH_ASSERT(trianglesPerDraw*3 <= ~0u);
+		const u32 indicesPerDraw = u32(trianglesPerDraw * 3);
 
 		if (m_method == Method::ConstantBufferOffset)
 		{
@@ -624,15 +625,19 @@ public:
 
 		m_prim->begin2D(m_window->getSize());
 		char statusString[1024];
-		HumanFriendlyValue triangleCount = getHumanFriendlyValueShort(indicesPerDraw * m_instanceCount / 3);
+		HumanFriendlyValue triangleCountHR = getHumanFriendlyValueShort(double(indicesPerDraw) * m_instanceCount / 3);
+		HumanFriendlyValue trianglesPerDrawHR = getHumanFriendlyValueShort(double(indicesPerDraw) / 3);
 		snprintf(statusString, 1024, 
 			"Method    : %s\n"
 			"Meshes    : %d\n"
 			"Triangles : %.2f%s\n"
+			"Tris/draw : %.2f%s\n"
 			"CPU build : %.2f ms\n"
 			"CPU draw  : %.2f ms\n"
 			"GPU draw  : %.2f", toString(m_method),
-			m_instanceCount, triangleCount.value, triangleCount.unit,
+			m_instanceCount, 
+			triangleCountHR.value, triangleCountHR.unit,
+			trianglesPerDrawHR.value, trianglesPerDrawHR.unit,
 			m_cpuBuildTime.get() * 1000.0f,
 			m_cpuDrawTime.get() * 1000.0f, m_gpuDrawTime.get() * 1000.0f);
 
@@ -768,7 +773,7 @@ private:
 
 	Method m_method = Method::Instancing;
 	bool m_limitTriangleCount = true;
-	const u32 m_maxTrianglesPerFrame = 100'000'000;
+	const u64 m_maxTrianglesPerFrame = 200'000'000;
 
 	u32 m_meshVertexCount = 0;
 	u32 m_meshIndexCount  = 0;
