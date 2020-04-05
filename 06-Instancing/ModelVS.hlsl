@@ -5,7 +5,7 @@ cbuffer SceneConstants : register(b0)
 
 cbuffer InstanceConstants : register(b1)
 {
-	float4x4 g_matWorld;
+	row_major float4x4 g_matWorld;
 };
 
 void main(

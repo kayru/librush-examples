@@ -26,6 +26,11 @@ class InstancingApp : public ExampleApp
 		ColorRGBA8 color;
 	};
 
+	struct InstanceConstants
+	{
+		Mat4 world;
+	};
+
 public:
 	InstancingApp() : ExampleApp()
 	{
@@ -322,11 +327,29 @@ public:
 			meshIndices);
 	}
 
+	void buildInstanceConstants(InstanceConstants& instanceConstants, u32 instanceIndex) const
+	{
+		u32 x = instanceIndex % m_rowCount;
+		u32 y = instanceIndex / m_rowCount;
+
+		float px = m_scale + ((float)x / m_colCount) * 2.0f - 1.0f;
+		float py = m_scale + ((float)y / m_rowCount) * 2.0f - 1.0f;
+		float pz = 0.0f;
+		float s = m_scale * 0.5f;
+
+		const Mat4& matRot = m_matrixPalette[instanceIndex % MatrixPaletteSize];
+
+		instanceConstants.world.rows[0] = matRot.rows[0];
+		instanceConstants.world.rows[1] = matRot.rows[1];
+		instanceConstants.world.rows[2] = matRot.rows[2];
+		instanceConstants.world.rows[3] = Vec4(px, -py, pz, 1.0f);
+	};
+
 	void update() override
 	{
 		auto ctx = Platform_GetGfxContext();
 
-		m_gpuTime.add(Gfx_Stats().lastFrameGpuTime);
+		m_gpuDrawTime.add(Gfx_Stats().lastFrameGpuTime);
 		Gfx_ResetStats();
 
 		const GfxCapability& caps    = Gfx_GetCapability();
@@ -349,40 +372,34 @@ public:
 		Gfx_SetVertexStream(ctx, 0, m_vertexBuffer);
 		Gfx_SetConstantBuffer(ctx, 0, m_globalConstantBuffer);
 
-		u32   rowCount = u32(ceilf(sqrtf((float)m_instanceCount)));
-		u32   colCount = divUp(m_instanceCount, rowCount);
-		float scaleX   = 1.0f / rowCount;
-		float scaleY   = 1.0f / colCount;
-		float scale    = min(scaleX, scaleY);
-
-		auto buildInstanceConstants = [&](InstanceConstants& instanceConstants, u32 instanceIndex) {
-			u32 x = instanceIndex % rowCount;
-			u32 y = instanceIndex / rowCount;
-
-			float px = scale + ((float)x / colCount) * 2.0f - 1.0f;
-			float py = scale + ((float)y / rowCount) * 2.0f - 1.0f;
-			float pz = 0.0f;
-			float s  = scale * 0.5f;
-
-			Mat4& matWorld   = instanceConstants.world;
-			matWorld.rows[0] = Vec4(s, 0.0f, 0.0f, 0.0f);
-			matWorld.rows[1] = Vec4(0.0f, s, 0.0f, 0.0f);
-			matWorld.rows[2] = Vec4(0.0f, 0.0f, s, 0.0f);
-			matWorld.rows[3] = Vec4(px, -py, pz, 1.0f);
-
-#if 1
-			Mat4 matWorldRot = Mat4::rotationX((float)instanceIndex + 1.0f + (float)m_timer.time() * 1.1f) *
-			                   Mat4::rotationY((float)instanceIndex + 2.0f + (float)m_timer.time() * 1.2f) *
-			                   Mat4::rotationZ((float)instanceIndex + 3.0f + (float)m_timer.time() * 1.3f);
-			instanceConstants.world = matWorldRot * matWorld;
-#else
-			instanceConstants.world = matWorld;
-#endif
-
-			instanceConstants.world.transpose();
-		};
-
 		double drawTime = 0.0;
+		double buildTime = 0.0;
+
+		buildTime -= m_timer.time();
+		{
+			const float time = float(m_timer.time());
+			m_rowCount = u32(ceilf(sqrtf((float)m_instanceCount)));
+			m_colCount = divUp(m_instanceCount, m_rowCount);
+			float scaleX = 1.0f / m_rowCount;
+			float scaleY = 1.0f / m_colCount;
+			m_scale = min(scaleX, scaleY);
+
+			m_matrixPalette.clear();
+			m_matrixPalette.reserve(MatrixPaletteSize);
+			for (int i = 0; i < MatrixPaletteSize; ++i)
+			{
+				Mat4 mat = Mat4::rotationX((float)i + 0.0f + time * 1.1f) *
+					Mat4::rotationY((float)i + 1.0f + time * 1.2f) *
+					Mat4::rotationZ((float)i + 2.0f + time * 1.3f);
+
+				mat.rows[0] *= m_scale * 0.5f;
+				mat.rows[1] *= m_scale * 0.5f;
+				mat.rows[2] *= m_scale * 0.5f;
+
+				m_matrixPalette.push(mat);
+			}
+		}
+		buildTime += m_timer.time();
 
 		u32 trianglesPerDraw = m_meshIndexCount / 3;
 		u32 trianglesPerFrame = trianglesPerDraw * m_instanceCount;
@@ -396,10 +413,12 @@ public:
 		{
 			Gfx_SetTechnique(ctx, m_technique);
 
+			buildTime -= m_timer.time();
 			for (u32 i = 0; i < (u32)m_instanceCount; ++i)
 			{
 				buildInstanceConstants(m_paddedInstanceConstants[i], i);
 			}
+			buildTime += m_timer.time();
 
 			drawTime -= m_timer.time();
 
@@ -421,7 +440,10 @@ public:
 			for (u32 i = 0; i < (u32)m_instanceCount; ++i)
 			{
 				InstanceConstants constants;
+
+				buildTime -= m_timer.time();
 				buildInstanceConstants(constants, i);
+				buildTime += m_timer.time();
 
 				drawTime -= m_timer.time();
 
@@ -439,7 +461,9 @@ public:
 			for (u32 i = 0; i < (u32)m_instanceCount; ++i)
 			{
 				InstanceConstants constants;
+				buildTime -= m_timer.time();
 				buildInstanceConstants(constants, i);
+				buildTime += m_timer.time();
 
 				drawTime -= m_timer.time();
 
@@ -462,10 +486,12 @@ public:
 				const u32 batchEnd   = min<u32>(batchBegin + batchSize, m_instanceCount);
 				const u32 batchSize  = batchEnd - batchBegin;
 
+				buildTime -= m_timer.time();
 				for (u32 i = 0; i < batchSize; ++i)
 				{
 					buildInstanceConstants(m_instanceConstants[i], batchBegin + i);
 				}
+				buildTime += m_timer.time();
 
 				drawTime -= m_timer.time();
 
@@ -494,10 +520,12 @@ public:
 				const u32 batchEnd   = min<u32>(batchBegin + batchSize, m_instanceCount);
 				const u32 batchSize  = batchEnd - batchBegin;
 
+				buildTime -= m_timer.time();
 				for (u32 i = 0; i < batchSize; ++i)
 				{
 					buildInstanceConstants(m_instanceConstants[i], batchBegin + i);
 				}
+				buildTime += m_timer.time();
 
 				drawTime -= m_timer.time();
 
@@ -523,10 +551,12 @@ public:
 				const u32 batchEnd   = min<u32>(batchBegin + batchSize, m_instanceCount);
 				const u32 batchSize  = batchEnd - batchBegin;
 
+				buildTime -= m_timer.time();
 				for (u32 i = 0; i < batchSize; ++i)
 				{
 					buildInstanceConstants(m_instanceConstants[i], batchBegin + i);
 				}
+				buildTime += m_timer.time();
 
 				drawTime -= m_timer.time();
 
@@ -556,10 +586,12 @@ public:
 				const u32 batchEnd   = min<u32>(batchBegin + batchSize, m_instanceCount);
 				const u32 batchSize  = batchEnd - batchBegin;
 
+				buildTime -= m_timer.time();
 				for (u32 i = 0; i < batchSize; ++i)
 				{
 					buildInstanceConstants(m_instanceConstants[i], batchBegin + i);
 				}
+				buildTime += m_timer.time();
 
 				drawTime -= m_timer.time();
 
@@ -587,24 +619,30 @@ public:
 			}
 		}
 
-		m_cpuTime.add(drawTime);
+		m_cpuBuildTime.add(buildTime);
+		m_cpuDrawTime.add(drawTime);
 
 		m_prim->begin2D(m_window->getSize());
 		char statusString[1024];
 		HumanFriendlyValue triangleCount = getHumanFriendlyValueShort(indicesPerDraw * m_instanceCount / 3);
 		snprintf(statusString, 1024, 
-			"Method: %s\n"
-			"Meshes: %d\n"
-			"Triangles: %.2f%s\n"
-			"CPU: %.2f ms\n"
-			"GPU: %.2f", toString(m_method),
+			"Method    : %s\n"
+			"Meshes    : %d\n"
+			"Triangles : %.2f%s\n"
+			"CPU build : %.2f ms\n"
+			"CPU draw  : %.2f ms\n"
+			"GPU draw  : %.2f", toString(m_method),
 			m_instanceCount, triangleCount.value, triangleCount.unit,
-			m_cpuTime.get() * 1000.0f, m_gpuTime.get() * 1000.0f);
+			m_cpuBuildTime.get() * 1000.0f,
+			m_cpuDrawTime.get() * 1000.0f, m_gpuDrawTime.get() * 1000.0f);
 
 		m_font->draw(m_prim, Vec2(10.0f), statusString);
 		m_prim->end2D();
 
 		Gfx_EndPass(ctx);
+
+		u32 oldInstanceCount = m_instanceCount;
+		Method oldMethod = m_method;
 
 		if (m_window->getKeyboardState().isKeyDown(Key_Up))
 		{
@@ -655,6 +693,15 @@ public:
 		}
 
 		m_instanceCount = min<int>(max(m_instanceCount, 1), MaxInstanceCount);
+
+		if (m_instanceCount != oldInstanceCount || m_method != oldMethod)
+		{
+			m_gpuDrawTime.reset();
+			m_cpuDrawTime.reset();
+			m_cpuBuildTime.reset();
+		}
+
+		m_frameCount++;
 	}
 
 private:
@@ -663,11 +710,6 @@ private:
 	struct GlobalConstants
 	{
 		Mat4 viewProj;
-	};
-
-	struct InstanceConstants
-	{
-		Mat4 world;
 	};
 
 	// Instance constants padded to 256 bytes
@@ -740,8 +782,18 @@ private:
 
 	Timer m_timer;
 
-	MovingAverage<double, 60> m_gpuTime;
-	MovingAverage<double, 60> m_cpuTime;
+	MovingAverage<double, 60> m_gpuDrawTime;
+	MovingAverage<double, 60> m_cpuDrawTime;
+	MovingAverage<double, 60> m_cpuBuildTime;
+
+	u32 m_frameCount = 0;
+
+	u32 m_rowCount = 1;
+	u32 m_colCount = 1;
+	float m_scale = 1.0f;
+
+	static constexpr u32 MatrixPaletteSize = 1024;
+	DynamicArray<Mat4> m_matrixPalette;
 };
 
 int main(int argc, char** argv)

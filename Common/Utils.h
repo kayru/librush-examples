@@ -26,6 +26,7 @@ template <typename T, size_t SIZE> struct MovingAverage
 	{
 		idx = 0;
 		sum = 0;
+		size = 0;
 		for (size_t i = 0; i < SIZE; ++i)
 		{
 			buf[i] = 0;
@@ -38,11 +39,16 @@ template <typename T, size_t SIZE> struct MovingAverage
 		sum -= buf[idx];
 		buf[idx] = v;
 		idx      = (idx + 1) % SIZE;
+		if (size < SIZE)
+		{
+			size++;
+		}
 	}
 
-	inline T get() const { return sum / SIZE; }
+	inline T get() const { return sum / max(size_t(1), size); }
 
 	size_t idx;
+	size_t size;
 	T      sum;
 	T      buf[SIZE];
 };

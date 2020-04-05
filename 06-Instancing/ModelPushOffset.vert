@@ -11,7 +11,7 @@ layout (binding = 0) uniform Global
 layout(constant_id = 0) const int maxBatchCount = 1;
 layout(binding = 1) uniform Instance
 {
-	mat4 g_matWorld[maxBatchCount];
+	layout(row_major) mat4 g_matWorld[maxBatchCount];
 };
 
 layout(push_constant) uniform PushConstants

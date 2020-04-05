@@ -10,7 +10,7 @@ layout (binding = 0) uniform Global
 
 layout(push_constant) uniform Instance
 {
-	mat4 g_matWorld;
+	layout(row_major) mat4 g_matWorld;
 } instanceConstants;
 
 layout (location = 0) in vec3 a_pos0;
