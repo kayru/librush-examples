@@ -627,7 +627,7 @@ public:
 		char statusString[1024];
 		HumanFriendlyValue triangleCountHR = getHumanFriendlyValueShort(double(indicesPerDraw) * m_instanceCount / 3);
 		HumanFriendlyValue trianglesPerDrawHR = getHumanFriendlyValueShort(double(indicesPerDraw) / 3);
-		snprintf(statusString, 1024, 
+		snprintf(statusString, 1024,
 			"Method    : %s\n"
 			"Meshes    : %d\n"
 			"Triangles : %.2f%s\n"
@@ -642,6 +642,19 @@ public:
 			m_cpuDrawTime.get() * 1000.0f, m_gpuDrawTime.get() * 1000.0f);
 
 		m_font->draw(m_prim, Vec2(10.0f), statusString);
+
+		snprintf(statusString, 1024, 
+			"Key bindings\n"
+			"  1..7:        Change draw method\n"
+			"  Up/Down:     Increase/decrease number of draws by 1/frame\n"
+			"  Left/Right:  Increase/decrease number of draws by 50/frame\n"
+			"  PageUp/Down: Increase/decrease number of draws by 1000/frame\n"
+			"  Home/End:    Maximum/minimum number of draws\n"
+		);
+
+		Vec2 stringSize = m_font->measure(statusString);
+		m_font->draw(m_prim, Vec2(10.0f, m_window->getSizeFloat().y - stringSize.y), statusString);
+
 		m_prim->end2D();
 
 		Gfx_EndPass(ctx);
