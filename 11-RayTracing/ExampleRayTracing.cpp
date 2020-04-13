@@ -42,7 +42,7 @@ ExampleRayTracing::ExampleRayTracing() : ExampleApp()
 
 	m_constantBuffer = Gfx_CreateBuffer(GfxBufferFlags::TransientConstant);
 
-	if (Gfx_GetCapability().rayTracingNV)
+	if (Gfx_GetCapability().rayTracing)
 	{
 		GfxRayTracingPipelineDesc pipelineDesc;
 		pipelineDesc.rayGen     = loadShaderFromFile(RUSH_SHADER_NAME("Primary.rgen"));
@@ -96,7 +96,7 @@ void ExampleRayTracing::update()
 
 	GfxMarkerScope markerFrame(ctx, "Frame");
 
-	if (Gfx_GetCapability().rayTracingNV)
+	if (Gfx_GetCapability().rayTracing)
 	{
 		if (!m_tlas.valid())
 		{
@@ -125,7 +125,7 @@ void ExampleRayTracing::update()
 
 		m_prim->begin2D(m_window->getSize());
 
-		if (Gfx_GetCapability().rayTracingNV)
+		if (Gfx_GetCapability().rayTracing)
 		{
 			m_prim->setTexture(m_outputImage);
 			Box2 rect(Vec2(0.0f), m_window->getSizeFloat());
