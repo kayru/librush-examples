@@ -133,9 +133,11 @@ void ExampleRayTracing::update()
 		}
 		else
 		{
-			Vec2 pos = Vec2(10, 10);
 			m_font->setScale(4.0f);
-			pos = m_font->draw(m_prim, pos, "Ray tracing is not supported.\n", ColorRGBA8::Red());
+			const char* msg     = "Ray tracing is not supported.";
+			Vec2        msgSize = m_font->measure(msg);
+			Vec2        pos     = (m_window->getSizeFloat() - msgSize) / 2.0f;
+			m_font->draw(m_prim, pos, msg, ColorRGBA8::Red());
 		}
 
 		m_prim->end2D();

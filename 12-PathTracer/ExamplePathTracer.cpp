@@ -86,7 +86,7 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 		m_tonemapConstantBuffer = Gfx_CreateBuffer(cbDesc);
 	}
 	
-
+	if (Gfx_GetCapability().rayTracing)
 	{
 		GfxRayTracingPipelineDesc pipelineDesc;
 		pipelineDesc.rayGen = loadShaderFromFile(RUSH_SHADER_NAME("PathTracer.rgen"));
@@ -357,11 +357,11 @@ void ExamplePathTracer::render()
 
 	Gfx_UpdateBuffer(ctx, m_sceneConstantBuffer, &constants, sizeof(constants));
 
-	if (m_valid)
+	if (m_valid && Gfx_GetCapability().rayTracing)
 	{
 		GfxMarkerScope markerFrame(ctx, "Model");
 
-		if (!m_tlas.valid())
+		if (!m_tlas.valid() && Gfx_GetCapability().rayTracing)
 		{
 			createRayTracingScene(ctx);
 		}
@@ -418,6 +418,7 @@ void ExamplePathTracer::render()
 
 		m_prim->begin2D(m_window->getSize());
 
+		m_font->setScale(1.0f);
 		m_font->draw(m_prim, Vec2(10.0f), m_statusString.c_str());
 
 		char            timingString[1024];
@@ -431,7 +432,17 @@ void ExamplePathTracer::render()
 		    m_stats.cpuTotal.get() * 1000.0f,
 		    m_totalGpuRenderTime,
 		    m_frameIndex);
+
 		m_font->draw(m_prim, Vec2(10.0f, 30.0f), timingString);
+
+		if (!Gfx_GetCapability().rayTracing)
+		{
+			m_font->setScale(4.0f);
+			const char* msg = "Ray tracing is not supported.";
+			Vec2 msgSize = m_font->measure(msg);
+			Vec2 pos = (m_window->getSizeFloat() - msgSize) / 2.0f;
+			m_font->draw(m_prim, pos, msg, ColorRGBA8::Red());
+		}
 
 		m_prim->end2D();
 
@@ -1103,53 +1114,56 @@ void ExamplePathTracer::createGpuScene()
 		nullptr  // storage buffers
 	);
 
-
-	RUSH_LOG("Creating ray tracing data");
-
-	DynamicArray<GfxRayTracingGeometryDesc> geometries;
-	geometries.reserve(m_segments.size());
-
-	const GfxCapability& caps = Gfx_GetCapability();
-	const u32 shaderHandleSize = caps.rtShaderHandleSize;
-	const u32 sbtRecordSize = alignCeiling(u32(shaderHandleSize + sizeof(MaterialConstants)), shaderHandleSize);
-
-	DynamicArray<u8> sbtData;
-	sbtData.resize(m_segments.size() * sbtRecordSize);
-
-	const u8* hitGroupHandle = Gfx_GetRayTracingShaderHandle(m_rtPipeline, GfxRayTracingShaderType::HitGroup, 0);
-
-	for (size_t i = 0; i < m_segments.size(); ++i)
+	if (Gfx_GetCapability().rayTracing)
 	{
-		const auto& segment = m_segments[i];
+		RUSH_LOG("Creating ray tracing data");
 
-		GfxRayTracingGeometryDesc geometryDesc;
-		geometryDesc.indexBuffer = m_indexBuffer.get();
-		geometryDesc.indexFormat = ibDesc.format;
-		geometryDesc.indexCount = segment.indexCount;
-		geometryDesc.indexBufferOffset = segment.indexOffset * ibStride;
-		geometryDesc.vertexBuffer = m_vertexBuffer.get();
-		geometryDesc.vertexFormat = GfxFormat::GfxFormat_RGB32_Float;
-		geometryDesc.vertexStride = sizeof(Vertex);
-		geometryDesc.vertexCount = m_vertexCount;
-		geometries.push_back(geometryDesc);
+		DynamicArray<GfxRayTracingGeometryDesc> geometries;
+		geometries.reserve(m_segments.size());
 
-		u8* sbtRecord = &sbtData[i * sbtRecordSize];
-		u8* sbtRecordConstants = sbtRecord + shaderHandleSize;
+		const GfxCapability& caps             = Gfx_GetCapability();
+		const u32            shaderHandleSize = caps.rtShaderHandleSize;
+		const u32 sbtRecordSize = alignCeiling(u32(shaderHandleSize + sizeof(MaterialConstants)), shaderHandleSize);
 
-		MaterialConstants materialConstants = m_materials[segment.material];
-		materialConstants.firstIndex = segment.indexOffset;
+		DynamicArray<u8> sbtData;
+		sbtData.resize(m_segments.size() * sbtRecordSize);
 
-		memcpy(sbtRecord, hitGroupHandle, sizeof(shaderHandleSize));
-		memcpy(sbtRecordConstants, &materialConstants, sizeof(materialConstants));
+		const u8* hitGroupHandle = Gfx_GetRayTracingShaderHandle(m_rtPipeline, GfxRayTracingShaderType::HitGroup, 0);
+
+		for (size_t i = 0; i < m_segments.size(); ++i)
+		{
+			const auto& segment = m_segments[i];
+
+			GfxRayTracingGeometryDesc geometryDesc;
+			geometryDesc.indexBuffer       = m_indexBuffer.get();
+			geometryDesc.indexFormat       = ibDesc.format;
+			geometryDesc.indexCount        = segment.indexCount;
+			geometryDesc.indexBufferOffset = segment.indexOffset * ibStride;
+			geometryDesc.vertexBuffer      = m_vertexBuffer.get();
+			geometryDesc.vertexFormat      = GfxFormat::GfxFormat_RGB32_Float;
+			geometryDesc.vertexStride      = sizeof(Vertex);
+			geometryDesc.vertexCount       = m_vertexCount;
+			geometries.push_back(geometryDesc);
+
+			u8* sbtRecord          = &sbtData[i * sbtRecordSize];
+			u8* sbtRecordConstants = sbtRecord + shaderHandleSize;
+
+			MaterialConstants materialConstants = m_materials[segment.material];
+			materialConstants.firstIndex        = segment.indexOffset;
+
+			memcpy(sbtRecord, hitGroupHandle, sizeof(shaderHandleSize));
+			memcpy(sbtRecordConstants, &materialConstants, sizeof(materialConstants));
+		}
+
+		m_sbtBuffer = Gfx_CreateBuffer(
+		    GfxBufferFlags::Storage, u32(sbtData.size() / sbtRecordSize), sbtRecordSize, sbtData.data());
+
+		GfxAccelerationStructureDesc blasDesc;
+		blasDesc.type         = GfxAccelerationStructureType::BottomLevel;
+		blasDesc.geometyCount = u32(geometries.size());
+		blasDesc.geometries   = geometries.data();
+		m_blas                = Gfx_CreateAccelerationStructure(blasDesc);
 	}
-
-	m_sbtBuffer = Gfx_CreateBuffer(GfxBufferFlags::Storage, u32(sbtData.size() / sbtRecordSize), sbtRecordSize, sbtData.data());
-
-	GfxAccelerationStructureDesc blasDesc;
-	blasDesc.type = GfxAccelerationStructureType::BottomLevel;
-	blasDesc.geometyCount = u32(geometries.size());
-	blasDesc.geometries = geometries.data();
-	m_blas = Gfx_CreateAccelerationStructure(blasDesc);
 }
 
 void ExamplePathTracer::resetCamera()
