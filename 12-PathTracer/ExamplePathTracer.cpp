@@ -312,7 +312,10 @@ void ExamplePathTracer::createRayTracingScene(GfxContext* ctx)
 	}
 
 	Gfx_BuildAccelerationStructure(ctx, m_blas);
+	Gfx_AddFullPipelineBarrier(ctx);
+
 	Gfx_BuildAccelerationStructure(ctx, m_tlas, instanceBuffer);
+	Gfx_AddFullPipelineBarrier(ctx);
 }
 
 void ExamplePathTracer::render()
