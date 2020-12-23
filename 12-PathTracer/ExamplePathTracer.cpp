@@ -320,10 +320,8 @@ void ExamplePathTracer::createRayTracingScene(GfxContext* ctx)
 
 void ExamplePathTracer::render()
 {
-	const GfxCapability& caps = Gfx_GetCapability();
-
 	Mat4 matView = m_camera.buildViewMatrix();
-	Mat4 matProj = m_camera.buildProjMatrix(caps.projectionFlags);
+	Mat4 matProj = m_camera.buildProjMatrix();
 
 	SceneConstants constants = {};
 	constants.matView = matView.transposed();

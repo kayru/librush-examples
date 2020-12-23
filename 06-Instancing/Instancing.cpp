@@ -354,7 +354,7 @@ public:
 
 		const GfxCapability& caps    = Gfx_GetCapability();
 		Mat4                 matView = Mat4::lookAt(Vec3(0.0f, 0.0f, -2.0f), Vec3(0.0f));
-		Mat4 matProj = Mat4::perspective(m_window->getAspect(), 1.0f, 0.1f, 100.0f, caps.projectionFlags);
+		Mat4 matProj = Mat4::perspective(m_window->getAspect(), 1.0f, 0.1f, 100.0f);
 
 		GlobalConstants globalConstants;
 		globalConstants.viewProj = (matView * matProj).transposed();

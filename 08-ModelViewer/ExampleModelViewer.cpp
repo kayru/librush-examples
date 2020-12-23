@@ -238,7 +238,7 @@ void ExampleModelViewer::render()
 	const GfxCapability& caps = Gfx_GetCapability();
 
 	Mat4 matView = m_interpolatedCamera.buildViewMatrix();
-	Mat4 matProj = m_interpolatedCamera.buildProjMatrix(caps.projectionFlags);
+	Mat4 matProj = m_interpolatedCamera.buildProjMatrix();
 
 	Constants constants;
 	constants.matViewProj = (matView * matProj).transposed();
