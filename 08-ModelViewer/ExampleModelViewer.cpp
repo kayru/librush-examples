@@ -81,8 +81,8 @@ ExampleModelViewer::ExampleModelViewer() : ExampleApp(), m_boundingBox(Vec3(0.0f
 	m_materialDescriptorSetDesc.stageFlags = GfxStageFlags::VertexPixel;
 
 	GfxShaderBindingDesc bindings;
-	bindings.constantBuffers = 1; // scene constants
-	bindings.samplers = 1; // linear sampler
+	bindings.descriptorSets[0].constantBuffers = 1; // scene constants
+	bindings.descriptorSets[0].samplers = 1; // linear sampler
 	bindings.descriptorSets[1] = m_materialDescriptorSetDesc;
 
 	m_technique = Gfx_CreateTechnique(GfxTechniqueDesc(m_ps, m_vs, m_vf, bindings));

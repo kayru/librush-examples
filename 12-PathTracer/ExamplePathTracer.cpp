@@ -93,13 +93,13 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 		pipelineDesc.miss = loadShaderFromFile(RUSH_SHADER_NAME("PathTracer.rmiss"));
 		pipelineDesc.closestHit = loadShaderFromFile(RUSH_SHADER_NAME("PathTracer.rchit"));
 
-		pipelineDesc.bindings.constantBuffers = 1; // scene constants
-		pipelineDesc.bindings.samplers = 1; // default sampler
-		pipelineDesc.bindings.textures = 1; // envmap
-		pipelineDesc.bindings.rwImages = 1; // output image
-		pipelineDesc.bindings.rwBuffers = 3; // IB + VB + envmap distribution
+		pipelineDesc.bindings.descriptorSets[0].constantBuffers = 1; // scene constants
+		pipelineDesc.bindings.descriptorSets[0].samplers = 1; // default sampler
+		pipelineDesc.bindings.descriptorSets[0].textures = 1; // envmap
+		pipelineDesc.bindings.descriptorSets[0].rwImages = 1; // output image
+		pipelineDesc.bindings.descriptorSets[0].rwBuffers = 3; // IB + VB + envmap distribution
+		pipelineDesc.bindings.descriptorSets[0].accelerationStructures = 1; // TLAS
 		pipelineDesc.bindings.descriptorSets[1] = materialDescriptorSetDesc;
-		pipelineDesc.bindings.accelerationStructures = 1; // TLAS
 
 		m_rtPipeline = Gfx_CreateRayTracingPipeline(pipelineDesc);
 	}
@@ -113,9 +113,9 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 		desc.vs = vs.get();
 		desc.ps = ps.get();
 		desc.vf = vf.get();
-		desc.bindings.constantBuffers = 1;
-		desc.bindings.samplers = 1; // linear sampler
-		desc.bindings.textures = 1; // input texture
+		desc.bindings.descriptorSets[0].constantBuffers = 1;
+		desc.bindings.descriptorSets[0].samplers = 1; // linear sampler
+		desc.bindings.descriptorSets[0].textures = 1; // input texture
 		m_blitTonemap = Gfx_CreateTechnique(desc);
 	}
 

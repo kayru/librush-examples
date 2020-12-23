@@ -23,7 +23,7 @@ public:
 		auto vf = Gfx_CreateVertexFormat(fmtDesc);
 
 		GfxShaderBindingDesc bindings;
-		bindings.constantBuffers = 1;
+		bindings.descriptorSets[0].constantBuffers = 1;
 		m_tech = Gfx_CreateTechnique(GfxTechniqueDesc(ps, vs, vf, bindings));
 
 		GfxBufferDesc cbDesc(GfxBufferFlags::TransientConstant, GfxFormat_Unknown, 1, sizeof(m_constants));

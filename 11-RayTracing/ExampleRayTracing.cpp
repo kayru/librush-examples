@@ -49,9 +49,9 @@ ExampleRayTracing::ExampleRayTracing() : ExampleApp()
 		pipelineDesc.miss       = loadShaderFromFile(RUSH_SHADER_NAME("Primary.rmiss"));
 		pipelineDesc.closestHit = loadShaderFromFile(RUSH_SHADER_NAME("Primary.rchit"));
 
-		pipelineDesc.bindings.constantBuffers        = 1;
-		pipelineDesc.bindings.rwImages               = 1;
-		pipelineDesc.bindings.accelerationStructures = 1;
+		pipelineDesc.bindings.descriptorSets[0].constantBuffers        = 1;
+		pipelineDesc.bindings.descriptorSets[0].rwImages               = 1;
+		pipelineDesc.bindings.descriptorSets[0].accelerationStructures = 1;
 
 		m_rtPipeline = Gfx_CreateRayTracingPipeline(pipelineDesc);
 

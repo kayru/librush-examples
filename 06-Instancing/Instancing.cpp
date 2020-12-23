@@ -73,7 +73,7 @@ public:
 
 			{
 				GfxShaderBindingDesc bindings;
-				bindings.constantBuffers = 2; // Global, Instance
+				bindings.descriptorSets[0].constantBuffers = 2; // Global, Instance
 				GfxTechniqueDesc techDesc(ps, vs, m_vertexFormat, bindings);
 				techDesc.specializationConstants     = specializationConstants;
 				techDesc.specializationConstantCount = RUSH_COUNTOF(specializationConstants);
@@ -86,9 +86,9 @@ public:
 			{
 				auto vsPush = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelPush.vert")));
 				GfxShaderBindingDesc bindings;
-				bindings.pushConstants          = u8(sizeof(Mat4));
+				bindings.pushConstantSize       = u8(sizeof(Mat4));
 				bindings.pushConstantStageFlags = GfxStageFlags::Vertex;
-				bindings.constantBuffers        = 1; // Global
+				bindings.descriptorSets[0].constantBuffers = 1; // Global
 				GfxTechniqueDesc techDesc(ps, vsPush, m_vertexFormat, bindings);
 				techDesc.specializationConstants     = specializationConstants;
 				techDesc.specializationConstantCount = RUSH_COUNTOF(specializationConstants);
@@ -101,9 +101,9 @@ public:
 			{
 				auto vsPushOffset = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelPushOffset.vert")));
 				GfxShaderBindingDesc bindings;
-				bindings.pushConstants          = u8(sizeof(u32));
+				bindings.pushConstantSize       = u8(sizeof(u32));
 				bindings.pushConstantStageFlags = GfxStageFlags::Vertex;
-				bindings.constantBuffers        = 2; // Global, Instance
+				bindings.descriptorSets[0].constantBuffers = 2; // Global, Instance
 				GfxTechniqueDesc techDesc(ps, vsPushOffset, m_vertexFormat, bindings);
 				techDesc.specializationConstants     = specializationConstants;
 				techDesc.specializationConstantCount = RUSH_COUNTOF(specializationConstants);
@@ -116,7 +116,7 @@ public:
 			{
 				auto vsInstanced = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelInstanced.vert")));
 				GfxShaderBindingDesc bindings;
-				bindings.constantBuffers = 2; // Global, Instance
+				bindings.descriptorSets[0].constantBuffers = 2; // Global, Instance
 				GfxTechniqueDesc techDesc(ps, vsInstanced, m_vertexFormat, bindings);
 				techDesc.specializationConstants     = specializationConstants;
 				techDesc.specializationConstantCount = RUSH_COUNTOF(specializationConstants);
@@ -129,7 +129,7 @@ public:
 			{
 				auto vsInstanceId = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelInstanced.vert")));
 				GfxShaderBindingDesc bindings;
-				bindings.constantBuffers = 2; // Global, Instance
+				bindings.descriptorSets[0].constantBuffers = 2; // Global, Instance
 				GfxTechniqueDesc techDesc(ps, vsInstanceId, m_vertexFormatInstanceId, bindings);
 				techDesc.specializationConstants     = specializationConstants;
 				techDesc.specializationConstantCount = RUSH_COUNTOF(specializationConstants);

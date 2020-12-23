@@ -23,8 +23,8 @@ public:
 		m_constantBuffer = Gfx_CreateBuffer(cbDesc);
 
 		GfxShaderBindingDesc bindings;
-		bindings.constantBuffers = 1;
-		bindings.rwImages        = 1;
+		bindings.descriptorSets[0].constantBuffers = 1;
+		bindings.descriptorSets[0].rwImages        = 1;
 
 		m_technique = Gfx_CreateTechnique(GfxTechniqueDesc(m_computeShader, bindings, {8,8,1}));
 
