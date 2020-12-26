@@ -36,6 +36,14 @@ ExampleApp::ExampleApp() : m_window(Platform_GetWindow())
 		m_depthStencilStates.writeLessEqual = Gfx_CreateDepthStencilState(desc);
 	}
 
+	{
+		GfxDepthStencilDesc desc;
+		desc.enable      = true;
+		desc.writeEnable = true;
+		desc.compareFunc = GfxCompareFunc::GreaterEqual;
+		m_depthStencilStates.writeGreaterEqual = Gfx_CreateDepthStencilState(desc);
+	}
+
 	// Rasterizer states
 
 	{

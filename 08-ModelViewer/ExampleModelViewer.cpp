@@ -121,7 +121,7 @@ ExampleModelViewer::ExampleModelViewer() : ExampleApp(), m_boundingBox(Vec3(0.0f
 	float aspect = m_window->getAspect();
 	float fov    = 1.0f;
 
-	m_camera = Camera(aspect, fov, 0.25f, 10000.0f);
+	m_camera = Camera(aspect, fov, 0.25f);
 	m_camera.lookAt(Vec3(m_boundingBox.m_max) + Vec3(2.0f), m_boundingBox.center());
 	m_interpolatedCamera = m_camera;
 
@@ -183,8 +183,7 @@ void ExampleModelViewer::update()
 	}
 
 	float clipNear = 0.25f * m_cameraScale;
-	float clipFar  = 10000.0f * m_cameraScale;
-	m_camera.setClip(clipNear, clipFar);
+	m_camera.setClip(clipNear, m_camera.getFarPlane());
 	m_camera.setAspect(m_window->getAspect());
 	m_cameraMan->setMoveSpeed(20.0f * m_cameraScale);
 
@@ -238,7 +237,7 @@ void ExampleModelViewer::render()
 	const GfxCapability& caps = Gfx_GetCapability();
 
 	Mat4 matView = m_interpolatedCamera.buildViewMatrix();
-	Mat4 matProj = m_interpolatedCamera.buildProjMatrix();
+	Mat4 matProj = m_interpolatedCamera.buildProjMatrix(m_reverseZ);
 
 	Constants constants;
 	constants.matViewProj = (matView * matProj).transposed();
@@ -256,12 +255,17 @@ void ExampleModelViewer::render()
 	GfxPassDesc passDesc;
 	passDesc.flags          = GfxPassFlags::ClearAll;
 	passDesc.clearColors[0] = ColorRGBA8(11, 22, 33);
+	passDesc.clearDepth = m_reverseZ ? 0.0f : 1.0f;
 	Gfx_BeginPass(ctx, passDesc);
 
 	Gfx_SetViewport(ctx, GfxViewport(m_window->getSize()));
 	Gfx_SetScissorRect(ctx, m_window->getSize());
 
-	Gfx_SetDepthStencilState(ctx, m_depthStencilStates.writeLessEqual);
+	Gfx_SetDepthStencilState(ctx,
+		m_reverseZ
+		? m_depthStencilStates.writeGreaterEqual 
+		: m_depthStencilStates.writeLessEqual);
+
 	Gfx_SetRasterizerState(ctx, m_rasterizerStates.solidCullCW);
 
 	if (m_valid)

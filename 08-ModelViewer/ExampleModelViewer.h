@@ -117,6 +117,7 @@ private:
 
 	WindowEventListener m_windowEvents;
 
+	const bool m_reverseZ = true;
 	float m_cameraScale = 1.0f;
 
 	struct TextureData

@@ -1171,7 +1171,7 @@ void ExamplePathTracer::resetCamera()
 {
 	float aspect = m_window->getAspect();
 	float fov = 1.0f;
-	m_camera = Camera(aspect, fov, 0.25f, 10000.0f);
+	m_camera = Camera(aspect, fov, 0.25f);
 	m_camera.lookAt(Vec3(m_boundingBox.m_max) + Vec3(2.0f), m_boundingBox.center());
 	m_frameIndex = 0;
 }

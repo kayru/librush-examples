@@ -20,6 +20,7 @@ protected:
 	struct DepthStencilStates
 	{
 		GfxOwn<GfxDepthStencilState> writeLessEqual;
+		GfxOwn<GfxDepthStencilState> writeGreaterEqual;
 		GfxOwn<GfxDepthStencilState> disable;
 	} m_depthStencilStates;
 
