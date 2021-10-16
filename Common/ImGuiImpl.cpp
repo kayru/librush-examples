@@ -150,6 +150,12 @@ void ImGuiImpl_Startup(Window* window)
 
 	ImGuiIO& io = ImGui::GetIO();
 
+	// Write config file next to the current binary instead of working directory
+	static char imguiConfigPath[1024];
+	const char* exeDir = Platform_GetExecutableDirectory();
+	snprintf(imguiConfigPath, sizeof(imguiConfigPath), "%s/imgui.ini", exeDir);
+	io.IniFilename = imguiConfigPath;
+
 	s_window = window;
 	s_window->setMessageInterceptor(&s_messageInterceptor);
 
