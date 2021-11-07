@@ -106,8 +106,9 @@ void ExampleRayTracing::update()
 		GfxMarkerScope markerRT(ctx, "RT");
 		Gfx_SetConstantBuffer(ctx, 0, m_constantBuffer);
 		Gfx_SetStorageImage(ctx, 0, m_outputImage);
+		Gfx_SetAccelerationStructure(ctx, 0, m_tlas);
 
-		Gfx_TraceRays(ctx, m_rtPipeline, m_tlas, m_sbtBuffer, outputImageDesc.width, outputImageDesc.height);
+		Gfx_TraceRays(ctx, m_rtPipeline, m_sbtBuffer, outputImageDesc.width, outputImageDesc.height);
 
 		Gfx_AddImageBarrier(ctx, m_outputImage, GfxResourceState_ShaderRead);
 	}

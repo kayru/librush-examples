@@ -376,7 +376,9 @@ void ExamplePathTracer::render()
 		Gfx_SetStorageBuffer(ctx, 1, m_vertexBuffer);
 		Gfx_SetStorageBuffer(ctx, 2, m_envmapDistribution);
 		Gfx_SetDescriptors(ctx, 1, m_materialDescriptorSet);
-		Gfx_TraceRays(ctx, m_rtPipeline, m_tlas, m_sbtBuffer, outputImageDesc.width, outputImageDesc.height);
+		Gfx_SetAccelerationStructure(ctx, 0, m_tlas);
+
+		Gfx_TraceRays(ctx, m_rtPipeline, m_sbtBuffer, outputImageDesc.width, outputImageDesc.height);
 	}
 
 	Gfx_AddImageBarrier(ctx, m_outputImage, GfxResourceState_ShaderRead);
