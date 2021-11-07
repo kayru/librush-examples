@@ -29,7 +29,7 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 		add_custom_command(
 			OUTPUT ${CMAKE_CFG_INTDIR}/${shaderName}.metal
 			COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CFG_INTDIR}
-			COMMAND ${GLSLC} -x hlsl -fentry-point=main -fshader-stage=${stage} -o ${CMAKE_CFG_INTDIR}/${shaderName}.bin ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
+			COMMAND ${GLSLC} -O -x hlsl -fentry-point=main -fshader-stage=${stage} -o ${CMAKE_CFG_INTDIR}/${shaderName}.bin ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
 			COMMAND ${spirv-cross} --msl --msl-version 200000 --msl-argument-buffers ${extra_args} ${CMAKE_CFG_INTDIR}/${shaderName}.bin > ${CMAKE_CFG_INTDIR}/${shaderName}.metal
 			MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
 		)
@@ -38,7 +38,7 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 		add_custom_command(
 			OUTPUT ${CMAKE_CFG_INTDIR}/${shaderName}.metal
 			COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CFG_INTDIR}
-			COMMAND ${GLSLC} -o ${CMAKE_CFG_INTDIR}/${shaderName}.bin ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
+			COMMAND ${GLSLC} -O -o ${CMAKE_CFG_INTDIR}/${shaderName}.bin ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
 			COMMAND ${spirv-cross} --msl --msl-version 200000 --msl-argument-buffers ${spirv-cross-args} ${CMAKE_CFG_INTDIR}/${shaderName}.bin > ${CMAKE_CFG_INTDIR}/${shaderName}.metal
 			MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
 		)
@@ -47,14 +47,14 @@ else()
 	function(hlsl_shader_compile_rule shaderName stage)
 		add_custom_command(
 			OUTPUT ${CMAKE_CFG_INTDIR}/${shaderName}.bin
-			COMMAND ${GLSLC} -x hlsl -fentry-point=main -fshader-stage=${stage} -o ${CMAKE_CFG_INTDIR}/${shaderName}.bin ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
+			COMMAND ${GLSLC} -O -x hlsl -fentry-point=main -fshader-stage=${stage} -o ${CMAKE_CFG_INTDIR}/${shaderName}.bin ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
 			MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
 		)
 	endfunction(hlsl_shader_compile_rule)
 	function(glsl_shader_compile_rule shaderName)
 		add_custom_command(
 			OUTPUT ${CMAKE_CFG_INTDIR}/${shaderName}.bin
-			COMMAND ${GLSLC} -o ${CMAKE_CFG_INTDIR}/${shaderName}.bin ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
+			COMMAND ${GLSLC} -O -o ${CMAKE_CFG_INTDIR}/${shaderName}.bin ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
 			MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
 		)
 	endfunction(glsl_shader_compile_rule)
