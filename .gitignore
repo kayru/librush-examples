@@ -35,8 +35,10 @@
 *.sublime-workspace
 .vscode
 .idea
+.vs
 
 # Local build files
 Build
 build
 cmake-build-*
+out
