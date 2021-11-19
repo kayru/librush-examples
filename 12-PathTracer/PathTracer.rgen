@@ -1,5 +1,5 @@
 #version 460
-#extension GL_NV_ray_tracing : enable
+#extension GL_EXT_ray_tracing : enable
 
 #include "Common.glsl"
 #include "BRDF.glsl"
@@ -11,7 +11,7 @@
 #define USE_INDIRECT_SPECULAR      true
 #define USE_ROUGHNESS_BIAS         true
 
-layout(location = 0) rayPayloadNV DefaultPayload payload;
+layout(location = 0) rayPayloadEXT DefaultPayload payload;
 
 vec3 getCameraViewVector(vec2 uv)
 {
@@ -23,10 +23,10 @@ vec3 getCameraViewVector(vec2 uv)
 
 bool traceRay(RayDesc ray)
 {
-	uint rayFlags = gl_RayFlagsOpaqueNV;
+	uint rayFlags = gl_RayFlagsOpaqueEXT;
 
 	payload.hitT = 0;
-	traceNV(TLAS,
+	traceRayEXT(TLAS,
 		rayFlags,		// uint rayFlags
 		~0u, 			// uint cullMask
 		0u,	 			// uint sbtRecordOffset
@@ -44,11 +44,11 @@ bool traceRay(RayDesc ray)
 
 bool traceShadowRay(RayDesc ray)
 {
-	uint rayFlags = gl_RayFlagsOpaqueNV | gl_RayFlagsTerminateOnFirstHitNV | gl_RayFlagsSkipClosestHitShaderNV;
+	uint rayFlags = gl_RayFlagsOpaqueEXT | gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsSkipClosestHitShaderEXT;
 
 	float oldHitT = payload.hitT;
 	payload.hitT = 0;
-	traceNV(TLAS,
+	traceRayEXT(TLAS,
 		rayFlags,		// uint rayFlags
 		~0u, 			// uint cullMask
 		0u,	 			// uint sbtRecordOffset
@@ -120,7 +120,7 @@ LightSample importanceSampleEnvmap(inout uint randomSeed)
 
 void main()
 {
-	ivec2 pixelIndex = ivec2(gl_LaunchIDNV.xy);
+	ivec2 pixelIndex = ivec2(gl_LaunchIDEXT.xy);
 	vec2 pixelUV = vec2(pixelIndex)/vec2(outputSize);
 
 	uint pixelLinearIndex = pixelIndex.x + pixelIndex.y * outputSize.y;

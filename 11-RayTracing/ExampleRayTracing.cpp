@@ -187,7 +187,7 @@ void ExampleRayTracing::createScene(GfxContext* ctx)
 	tlasDesc.instanceCount = 1;
 	m_tlas                 = Gfx_CreateAccelerationStructure(tlasDesc);
 
-	GfxOwn<GfxBuffer> instanceBuffer = Gfx_CreateBuffer(GfxBufferFlags::Transient);
+	GfxOwn<GfxBuffer> instanceBuffer = Gfx_CreateBuffer(GfxBufferFlags::Transient | GfxBufferFlags::RayTracing);
 	{
 		auto instanceData = Gfx_BeginUpdateBuffer<GfxRayTracingInstanceDesc>(ctx, instanceBuffer.get(), tlasDesc.instanceCount);
 		instanceData[0].init();

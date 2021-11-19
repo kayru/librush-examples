@@ -1,12 +1,12 @@
 #version 460
-#extension GL_NV_ray_tracing : enable
+#extension GL_EXT_ray_tracing : enable
 
 #include "Common.glsl"
 
-layout(location = 0) rayPayloadInNV DefaultPayload payload;
-hitAttributeNV vec2 hitAttributes;
+layout(location = 0) rayPayloadInEXT DefaultPayload payload;
+hitAttributeEXT vec2 hitAttributes;
 
-layout(shaderRecordNV) buffer block
+layout(shaderRecordEXT) buffer block
 {
 	MaterialConstants materialConstants;
 };
@@ -15,7 +15,7 @@ layout(shaderRecordNV) buffer block
 
 void main()
 {
-	payload.hitT = gl_HitTNV;
+	payload.hitT = gl_HitTEXT;
 
 	vec3 barycentrics = vec3(
 		1 - hitAttributes.x - hitAttributes.y,
@@ -57,7 +57,7 @@ void main()
 	payload.geoNormal = cross(getPosition(triVertices[1]) - getPosition(triVertices[0]), getPosition(triVertices[2]) - getPosition(triVertices[0]));
 	payload.geoNormal = normalize(payload.geoNormal);
 
-	if (gl_HitKindNV == 255)
+	if (gl_HitKindEXT == 255)
 	{
 		payload.normal = -payload.normal;
 		payload.geoNormal = -payload.geoNormal;

@@ -82,7 +82,7 @@ vec3 getNormal(Vertex v) { return vec3(v.normal[0], v.normal[1], v.normal[2]); }
 vec2 getTexcoord(Vertex v) { return vec2(v.texcoord[0], v.texcoord[1]); }
 
 layout(set=0, binding=7)
-uniform accelerationStructureNV TLAS;
+uniform accelerationStructureEXT TLAS;
 
 #define MaxTextures 1024
 layout(set=1, binding = 0)
