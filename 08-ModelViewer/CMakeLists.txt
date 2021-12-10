@@ -26,8 +26,8 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 		add_custom_command(
 			OUTPUT ${CMAKE_CFG_INTDIR}/${shaderName}.metal
 			COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CFG_INTDIR}
-			COMMAND ${GLSLC} -x hlsl -fentry-point=main -fshader-stage=${stage} -o ${CMAKE_CFG_INTDIR}/${shaderName}.bin ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
-			COMMAND ${spirv-cross} --msl --msl-version 200000 --msl-argument-buffers ${CMAKE_CFG_INTDIR}/${shaderName}.bin > ${CMAKE_CFG_INTDIR}/${shaderName}.metal
+			COMMAND ${glslangValidator} -V -D -Od -e main -S ${stage} -o ${CMAKE_CFG_INTDIR}/${shaderName}.bin ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
+			COMMAND ${spirv-cross} --msl --msl-version 200000 --msl-argument-buffers --msl-decoration-binding --msl-force-active-argument-buffer-resources ${CMAKE_CFG_INTDIR}/${shaderName}.bin > ${CMAKE_CFG_INTDIR}/${shaderName}.metal
 			MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
 		)
 	endfunction(hlsl_shader_compile_rule2)
@@ -35,11 +35,11 @@ else()
 	function(hlsl_shader_compile_rule2 shaderName stage)
 		add_custom_command(
 			OUTPUT ${CMAKE_CFG_INTDIR}/${shaderName}.bin
-			COMMAND ${GLSLC} -x hlsl -fentry-point=main -fshader-stage=${stage} -o ${CMAKE_CFG_INTDIR}/${shaderName}.bin ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
+			COMMAND ${glslangValidator} -V -D -e main -S ${stage} -o ${CMAKE_CFG_INTDIR}/${shaderName}.bin ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
 			MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
 		)
 	endfunction(hlsl_shader_compile_rule2)
 endif()
 
-hlsl_shader_compile_rule2("ModelPS.hlsl" fragment)
-hlsl_shader_compile_rule2("ModelVS.hlsl" vertex)
+hlsl_shader_compile_rule2("ModelPS.hlsl" frag)
+hlsl_shader_compile_rule2("ModelVS.hlsl" vert)

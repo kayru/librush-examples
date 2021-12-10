@@ -19,6 +19,13 @@ find_program(GLSLC NAMES glslc PATHS
 	"~/bin"
 )
 
+find_program(glslangValidator NAMES glslangValidator PATHS
+	$ENV{VULKAN_SDK}/Bin
+	$ENV{VK_SDK_PATH}/Bin
+	$ENV{PATH}
+	"~/bin"
+)
+
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 	find_program(spirv-cross NAMES spirv-cross PATHS
 		$ENV{VK_SDK_PATH}/Bin
