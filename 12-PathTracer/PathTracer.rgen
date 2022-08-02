@@ -4,12 +4,14 @@
 #include "Common.glsl"
 #include "BRDF.glsl"
 
-#define USE_DEBUG_FURNECE          false
-#define USE_DEBUG_REFLECTIONS      false
-#define USE_DEBUG_SKY              false
-#define USE_DIRECT_LIGHTING        true
-#define USE_INDIRECT_SPECULAR      true
-#define USE_ROUGHNESS_BIAS         true
+#define USE_DEBUG_FURNECE          bool(0)
+#define USE_DEBUG_REFLECTIONS      bool(0)
+#define USE_DEBUG_SKY              bool(0)
+#define USE_DIRECT_LIGHTING        bool(1)
+#define USE_INDIRECT_SPECULAR      bool(1)
+#define USE_ROUGHNESS_BIAS         bool(1)
+
+#define VIS_NORMAL bool(0)
 
 layout(location = 0) rayPayloadEXT DefaultPayload payload;
 
@@ -192,6 +194,12 @@ void main()
 			}
 
 			// We hit the sky, so we're done
+			break;
+		}
+
+		if (VIS_NORMAL && isHit)
+		{
+			result.rgb = payload.normal * 0.5 + 0.5;
 			break;
 		}
 

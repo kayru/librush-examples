@@ -54,6 +54,22 @@ void main()
 
 	payload.normal = normalize(INTERPOLATE(triVertices, getNormal, barycentrics));
 
+	const bool useNormalMapping = bool(flags & PT_FLAG_USE_NORMAL_MAPPING) && materialConstants.normalTextureId != 0;
+
+	if (useNormalMapping)
+	{
+		vec3 normalSample = texture(sampler2D(textureDescriptors[materialConstants.normalTextureId], defaultSampler), uv).xyz * 2.0 - 1.0;
+		normalSample.z = sqrt(max(0, 1.0 - normalSample.x * normalSample.x - normalSample.y * normalSample.y));
+
+		vec4 tangent = INTERPOLATE(triVertices, getTangent, barycentrics);
+		vec3 tanU = tangent.xyz;
+		vec3 tanV = cross(payload.normal, tangent.xyz) * tangent.w;
+
+		mat3 basis = mat3(tanU, tanV, payload.normal);
+
+		payload.normal = normalize(basis * normalSample);
+	}
+
 	payload.geoNormal = cross(getPosition(triVertices[1]) - getPosition(triVertices[0]), getPosition(triVertices[2]) - getPosition(triVertices[0]));
 	payload.geoNormal = normalize(payload.geoNormal);
 

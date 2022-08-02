@@ -200,6 +200,7 @@ void ExamplePathTracer::update()
 		renderSettingsChanged |= ImGui::Checkbox("Use envmap", &m_settings.m_useEnvmap);
 		renderSettingsChanged |= ImGui::Checkbox("Neutral background", &m_settings.m_useNeutralBackground);
 		renderSettingsChanged |= ImGui::Checkbox("Depth of Field", &m_settings.m_useDepthOfField);
+		renderSettingsChanged |= ImGui::Checkbox("Normal mapping", &m_settings.m_useNormalMapping);
 		renderSettingsChanged |= ImGui::SliderFloat("Focal length (mm)", &m_settings.m_focalLengthMM, 1.0f, 250.0f);
 		renderSettingsChanged |= ImGui::SliderFloat("Aperture size (mm)", &m_settings.m_apertureSizeMM, 0.0f, 100000.0, "%.3f", 3.0f);
 		renderSettingsChanged |= ImGui::SliderFloat("Focus distance", &m_settings.m_focusDistance, 0.0f, 1000.0, "%.3f", 3.0f);
@@ -335,6 +336,7 @@ void ExamplePathTracer::render()
 	constants.flags |= m_settings.m_useEnvmap ? PT_FLAG_USE_ENVMAP: 0;
 	constants.flags |= m_settings.m_useNeutralBackground ? PT_FLAG_USE_NEUTRAL_BACKGROUND : 0;
 	constants.flags |= m_settings.m_useDepthOfField ? PT_FLAG_USE_DEPTH_OF_FIELD : 0;
+	constants.flags |= m_settings.m_useNormalMapping && m_haveNormals && m_haveTangents && m_haveNormalMaps ? PT_FLAG_USE_NORMAL_MAPPING : 0;
 
 	GfxContext* ctx = Platform_GetGfxContext();
 
@@ -737,6 +739,17 @@ bool ExamplePathTracer::loadModelGLTF(const char* filename)
 			}
 		}
 
+		if (auto texture = inMaterial.normal_texture.texture)
+		{
+			if (texture->image && texture->image->uri)
+			{
+				m_haveNormalMaps = true;
+				std::string filename = directory + std::string(texture->image->uri);
+				fixDirectorySeparatorsInplace(filename);
+				constants.normalTextureId = enqueueLoadTexture(filename, GfxFormat::GfxFormat_RGBA8_Unorm);
+			}
+		}
+
 		materialMap[&inMaterial] = u32(m_materials.size());
 
 		m_materials.push_back(constants);
@@ -764,6 +777,7 @@ bool ExamplePathTracer::loadModelGLTF(const char* filename)
 			const cgltf_accessor* apos = nullptr;
 			const cgltf_accessor* anor = nullptr;
 			const cgltf_accessor* atex = nullptr;
+			const cgltf_accessor* atan = nullptr;
 
 			for (u32 ai = 0; ai < prim.attributes_count; ++ai)
 			{
@@ -779,6 +793,10 @@ bool ExamplePathTracer::loadModelGLTF(const char* filename)
 				else if (attr.type == cgltf_attribute_type_texcoord && attr.index == 0)
 				{
 					atex = attr.data;
+				}
+				else if (attr.type == cgltf_attribute_type_tangent && attr.index == 0)
+				{
+					atan = attr.data;
 				}
 			}
 
@@ -844,10 +862,9 @@ bool ExamplePathTracer::loadModelGLTF(const char* filename)
 
 			// normals
 
-			bool haveNormals = false;
 			if (anor && anor->count == apos->count)
 			{
-				haveNormals = true;
+				m_haveNormals = true;
 				auto ptr = getDataPtr<float>(anor);
 				for (u32 i = 0; i < anor->count; ++i)
 				{
@@ -857,12 +874,24 @@ bool ExamplePathTracer::loadModelGLTF(const char* filename)
 				}
 			}
 
+			// tangents
+
+			if (atan && atan->count == atan->count)
+			{
+				m_haveTangents = true;
+				auto ptr     = getDataPtr<float>(atan);
+				for (u32 i = 0; i < atan->count; ++i)
+				{
+					m_vertices[firstVertex + i].tangent = Vec4(ptr);
+					ptr += atan->stride / 4;
+				}
+			}
+
 			// texcoords
 
-			bool haveTexcoords = false;
 			if (atex && atex->count == apos->count)
 			{
-				haveTexcoords = true;
+				m_haveTexcoords = true;
 				auto ptr = getDataPtr<float>(atex);
 				for (u32 i = 0; i < atex->count; ++i)
 				{
@@ -871,7 +900,7 @@ bool ExamplePathTracer::loadModelGLTF(const char* filename)
 				}
 			}
 
-			if (!haveNormals)
+			if (!m_haveNormals)
 			{
 				// TODO: compute face normals
 			}

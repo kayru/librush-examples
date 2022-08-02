@@ -59,6 +59,7 @@ private:
 		Vec3 position;
 		Vec3 normal;
 		Vec2 texcoord;
+		Vec4 tangent; // bitangent = cross(normal, tangent.xyz) * tangent.w
 	};
 
 	std::vector<Vertex> m_vertices;
@@ -104,6 +105,11 @@ private:
 	std::string m_statusString;
 	bool m_valid = false;
 
+	bool m_haveNormals = false;
+	bool m_haveTangents = false;
+	bool m_haveTexcoords = false;
+	bool m_haveNormalMaps = false;
+
 	enum class AlphaMode : u32
 	{
 		Opaque,
@@ -123,6 +129,7 @@ private:
 		Vec4 specularFactor = Vec4(1.0f);
 		u32 albedoTextureId = 0;
 		u32 specularTextureId = 0;
+		u32 normalTextureId = 0;
 		u32 firstIndex = 0;
 		AlphaMode alphaMode = AlphaMode::Opaque;
 		float metallicFactor = 0;
@@ -184,6 +191,7 @@ private:
 		bool m_useEnvmap = false;
 		bool m_useNeutralBackground = false;
 		bool m_useDepthOfField = false;
+		bool  m_useNormalMapping = true;
 		float m_gamma = 1.8f;
 		float m_exposureEV100 = 2.0f;
 		Vec2 m_cameraSensorSizeMM = Vec2(36.0f, 24.0f); // 35mm film

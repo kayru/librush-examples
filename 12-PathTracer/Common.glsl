@@ -4,6 +4,7 @@
 #define PT_FLAG_USE_ENVMAP              (1 << 0)
 #define PT_FLAG_USE_NEUTRAL_BACKGROUND  (1 << 1)
 #define PT_FLAG_USE_DEPTH_OF_FIELD      (1 << 2)
+#define PT_FLAG_USE_NORMAL_MAPPING      (1 << 3)
 
 #define PT_MATERIAL_MODE_PBR_METALLIC_ROUGHNESS   0
 #define PT_MATERIAL_MODE_PBR_SPECULAR_GLOSSINESS  1
@@ -57,6 +58,7 @@ struct Vertex
 	float position[3];
 	float normal[3];
 	float texcoord[2];
+	float tangent[4];
 };
 
 layout(set=0, binding=5, std430)
@@ -80,6 +82,7 @@ buffer EnvmapDistributionBuffer
 vec3 getPosition(Vertex v) { return vec3(v.position[0], v.position[1], v.position[2]); }
 vec3 getNormal(Vertex v) { return vec3(v.normal[0], v.normal[1], v.normal[2]); }
 vec2 getTexcoord(Vertex v) { return vec2(v.texcoord[0], v.texcoord[1]); }
+vec4 getTangent(Vertex v) { return vec4(v.tangent[0], v.tangent[1], v.tangent[2], v.tangent[3]); }
 
 layout(set=0, binding=7)
 uniform accelerationStructureEXT TLAS;
@@ -96,6 +99,7 @@ struct MaterialConstants
 	vec4 specularFactor;
 	uint albedoTextureId;
 	uint specularTextureId;
+	uint normalTextureId;
 	uint firstIndex;
 	uint alphaMode;
 	float metallicFactor;
@@ -254,7 +258,7 @@ Surface unpack(DefaultPayload p)
 	result.diffuseColor = p.baseColor - p.baseColor * p.metalness;
 	result.specularColor = p.baseColor * p.metalness + (p.reflectance * (1.0 - p.metalness));
 	result.linearRoughness = max(0.0001, p.roughness * p.roughness);
-	return result;	
+	return result;
 }
 
 // Halton sequence implementation by Ollj
