@@ -1188,7 +1188,7 @@ void ExamplePathTracer::createGpuScene()
 		}
 
 		m_sbtBuffer = Gfx_CreateBuffer(
-		    GfxBufferFlags::Storage, u32(sbtData.size() / sbtRecordSize), sbtRecordSize, sbtData.data());
+		    GfxBufferFlags::Storage | GfxBufferFlags::RayTracing, u32(sbtData.size() / sbtRecordSize), sbtRecordSize, sbtData.data());
 
 		GfxAccelerationStructureDesc blasDesc;
 		blasDesc.type         = GfxAccelerationStructureType::BottomLevel;
