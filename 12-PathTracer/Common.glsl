@@ -14,6 +14,12 @@
 #define M_PI 3.14159265358979323846264338327950288
 #define saturate(x) clamp(x, 0.0, 1.0)
 
+vec3 safeNormalize(vec3 v)
+{
+	float l = length(v);
+	return l == 0 ? v : v / l;
+}
+
 // global resources
 
 layout(set=0, binding=0)
@@ -213,8 +219,7 @@ vec3 mapToUniformSphere(vec2 uv)
 {
 	float phi = uv.x * M_PI * 2.0;
 	float z = 1.0 - 2.0 * uv.y;
-	float t = uintBitsToFloat(0x1000000); // 2x smallest normal float
-	float r = sqrt(max(t, 1.0 - z * z)); // max to work around numerical issues around ~0
+	float r = sqrt(1.0 - z * z);
 	float x = r * cos(phi);
 	float y = r * sin(phi);
 	return vec3(x,y,z);

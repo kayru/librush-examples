@@ -314,7 +314,7 @@ void main()
 			throughput *= USE_INDIRECT_SPECULAR ? unpack(payload).diffuseColor : payload.baseColor;
 			throughput /= (1.0-specularProbability);
 
-			primaryRay.direction = normalize(N + mapToUniformSphere(reflectionSampleUV));
+			primaryRay.direction = safeNormalize(N + mapToUniformSphere(reflectionSampleUV));
 			scatterPdfW = 1.0 / M_PI;
 		}
 	}
