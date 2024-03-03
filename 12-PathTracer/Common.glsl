@@ -213,7 +213,8 @@ vec3 mapToUniformSphere(vec2 uv)
 {
 	float phi = uv.x * M_PI * 2.0;
 	float z = 1.0 - 2.0 * uv.y;
-	float r = sqrt(1.0 - z*z);
+	float t = uintBitsToFloat(0x1000000); // 2x smallest normal float
+	float r = sqrt(max(t, 1.0 - z * z)); // max to work around numerical issues around ~0
 	float x = r * cos(phi);
 	float y = r * sin(phi);
 	return vec3(x,y,z);
