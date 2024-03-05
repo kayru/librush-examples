@@ -8,6 +8,7 @@
 #include <stdio.h>
 
 #include <Common/ImGuiImpl.h>
+#include <Common/Utils.h>
 #include <imgui.h>
 
 class ImGuiApp : public Application
@@ -161,17 +162,7 @@ public:
 
 			m_prim->begin2D(Vec2(1.0f), Vec2(0.0f));
 
-			TexturedQuad2D q;
-
-			q.pos[0] = Vec2(-1.0f, 1.0f);
-			q.pos[1] = Vec2(1.0f, 1.0f);
-			q.pos[2] = Vec2(1.0f, -1.0f);
-			q.pos[3] = Vec2(-1.0f, -1.0f);
-
-			q.tex[0] = Vec2(0.0f, 0.0f);
-			q.tex[1] = Vec2(1.0f, 0.0);
-			q.tex[2] = Vec2(1.0f, 1.0f);
-			q.tex[3] = Vec2(0.0f, 1.0f);
+			TexturedQuad2D q = makeFullScreenQuad();
 
 			m_prim->setTexture(m_resolveTarget);
 			m_prim->drawTexturedQuad(&q);

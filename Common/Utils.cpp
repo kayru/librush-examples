@@ -1,6 +1,7 @@
 #include "Utils.h"
 
 #include <Rush/UtilFile.h>
+#include <Rush/UtilCamera.h>
 
 namespace Rush
 {
@@ -119,4 +120,30 @@ GfxShaderSource loadShaderFromFile(const char* filename, const char* shaderDirec
 
 	return source;
 }
+
+void interpolateCamera(
+    Camera& camera, const Camera& target, float deltaTime, float positionSmoothing, float rotationSmoothing)
+{
+	float t1 = 1.0f - float(pow(pow(positionSmoothing, 60.0f), deltaTime));
+	float t2 = 1.0f - float(pow(pow(rotationSmoothing, 60.0f), deltaTime));
+	camera.blendTo(target, t1, t2);
+}
+
+TexturedQuad2D makeFullScreenQuad()
+{
+	TexturedQuad2D q;
+
+	q.pos[0] = Vec2(-1.0f, 1.0f);
+	q.pos[1] = Vec2(1.0f, 1.0f);
+	q.pos[2] = Vec2(1.0f, -1.0f);
+	q.pos[3] = Vec2(-1.0f, -1.0f);
+
+	q.tex[0] = Vec2(0.0f, 0.0f);
+	q.tex[1] = Vec2(1.0f, 0.0);
+	q.tex[2] = Vec2(1.0f, 1.0f);
+	q.tex[3] = Vec2(0.0f, 1.0f);
+
+	return q;
+}
+
 }

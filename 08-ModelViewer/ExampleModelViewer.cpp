@@ -56,6 +56,8 @@ struct TimingScope
 
 ExampleModelViewer::ExampleModelViewer() : ExampleApp(), m_boundingBox(Vec3(0.0f), Vec3(0.0f))
 {
+	const GfxCapability& caps = Gfx_GetCapability();
+
 	Gfx_SetPresentInterval(1);
 
 	m_windowEvents.setOwner(m_window);
@@ -132,6 +134,10 @@ ExampleModelViewer::ExampleModelViewer() : ExampleApp(), m_boundingBox(Vec3(0.0f
 	{
 		m_loadingThreads.push_back(std::thread([this]() { this->loadingThreadFunction(); }));
 	}
+
+
+	const u32 sampleCountMask = (caps.colorSampleCounts & caps.depthSampleCounts);
+	m_msaaQuality             = min(8, 1 << (31 - bitScanReverse(sampleCountMask)));
 }
 
 ExampleModelViewer::~ExampleModelViewer()
@@ -189,8 +195,7 @@ void ExampleModelViewer::update()
 
 	m_cameraMan->update(&m_camera, dt, m_window->getKeyboardState(), m_window->getMouseState());
 
-	m_interpolatedCamera.blendTo(m_camera, 0.1f, 0.125f);
-	m_interpolatedCamera.blendTo(m_camera, 0.1f, 0.125f);
+	interpolateCamera(m_interpolatedCamera, m_camera, dt);
 
 	m_windowEvents.clear();
 
@@ -232,9 +237,40 @@ void ExampleModelViewer::update()
 	render();
 }
 
+void ExampleModelViewer::createRenderTargets()
+{
+	Tuple2i windowSize         = m_window->getSize();
+	if (m_colorTarget.valid())
+	{
+		GfxTextureDesc desc = Gfx_GetTextureDesc(m_colorTarget);
+		if (desc.width == windowSize.x && desc.height == windowSize.y)
+		{
+			return;
+		}
+	}
+
+	GfxTextureDesc desc = GfxTextureDesc::make2D(windowSize.x, windowSize.y);
+
+	desc.format   = GfxFormat_D24_Unorm_S8_Uint;
+	desc.usage    = GfxUsageFlags::DepthStencil;
+	desc.samples  = m_msaaQuality;
+	m_depthTarget = Gfx_CreateTexture(desc);
+
+	desc.format         = GfxFormat_RGBA8_Unorm;
+	desc.usage          = GfxUsageFlags::RenderTarget | GfxUsageFlags::TransferSrc;
+	desc.samples        = m_msaaQuality;
+	m_colorTarget       = Gfx_CreateTexture(desc);
+
+	desc.usage      = GfxUsageFlags::StorageImage | GfxUsageFlags::ShaderResource | GfxUsageFlags::TransferDst;
+	desc.samples    = 1;
+	m_resolveTarget = Gfx_CreateTexture(desc);
+}
+
 void ExampleModelViewer::render()
 {
 	const GfxCapability& caps = Gfx_GetCapability();
+
+	createRenderTargets();
 
 	Mat4 matView = m_interpolatedCamera.buildViewMatrix();
 	Mat4 matProj = m_interpolatedCamera.buildProjMatrix(m_reverseZ);
@@ -252,50 +288,76 @@ void ExampleModelViewer::render()
 		Gfx_UpdateBuffer(ctx, m_constantBuffer, &constants, sizeof(constants));
 	}
 
-	GfxPassDesc passDesc;
-	passDesc.flags          = GfxPassFlags::ClearAll;
-	passDesc.clearColors[0] = ColorRGBA8(11, 22, 33);
-	passDesc.clearDepth = m_reverseZ ? 0.0f : 1.0f;
-	Gfx_BeginPass(ctx, passDesc);
-
-	Gfx_SetViewport(ctx, GfxViewport(m_window->getSize()));
-	Gfx_SetScissorRect(ctx, m_window->getSize());
-
-	Gfx_SetDepthStencilState(ctx,
-		m_reverseZ
-		? m_depthStencilStates.writeGreaterEqual 
-		: m_depthStencilStates.writeLessEqual);
-
-	Gfx_SetRasterizerState(ctx, m_rasterizerStates.solidCullCW);
-
-	if (m_valid)
 	{
-		GfxMarkerScope markerFrame(ctx, "Model");
+		GfxPassDesc passDesc;
+		passDesc.flags          = GfxPassFlags::ClearAll;
+		passDesc.clearColors[0] = ColorRGBA8(11, 22, 33);
+		passDesc.clearDepth     = m_reverseZ ? 0.0f : 1.0f;
+		passDesc.color[0]       = m_colorTarget.get();
+		passDesc.depth          = m_depthTarget.get();
+		Gfx_BeginPass(ctx, passDesc);
 
-		TimingScope timingScope(m_stats.cpuModel);
+		Gfx_SetViewport(ctx, GfxViewport(m_window->getSize()));
+		Gfx_SetScissorRect(ctx, m_window->getSize());
 
-		Gfx_SetBlendState(ctx, m_blendStates.opaque);
+		Gfx_SetDepthStencilState(ctx,
+			m_reverseZ
+			? m_depthStencilStates.writeGreaterEqual 
+			: m_depthStencilStates.writeLessEqual);
 
-		Gfx_SetTechnique(ctx, m_technique);
-		Gfx_SetVertexStream(ctx, 0, m_vertexBuffer);
-		Gfx_SetIndexStream(ctx, m_indexBuffer);
-		Gfx_SetConstantBuffer(ctx, 0, m_constantBuffer); // scene constants
-		Gfx_SetSampler(ctx, 0, m_samplerStates.anisotropicWrap);
+		Gfx_SetRasterizerState(ctx, m_rasterizerStates.solidCullCW);
 
-		for (const MeshSegment& segment : m_segments)
+		if (m_valid)
 		{
-			const Material& material =
-			    (segment.material == 0xFFFFFFFF) ? m_defaultMaterial : m_materials[segment.material];
+			GfxMarkerScope markerFrame(ctx, "Model");
 
-			Gfx_SetDescriptors(ctx, 1, material.descriptorSet);
-			Gfx_DrawIndexed(ctx, segment.indexCount, segment.indexOffset, 0, m_vertexCount);
+			TimingScope timingScope(m_stats.cpuModel);
+
+			Gfx_SetBlendState(ctx, m_blendStates.opaque);
+
+			Gfx_SetTechnique(ctx, m_technique);
+			Gfx_SetVertexStream(ctx, 0, m_vertexBuffer);
+			Gfx_SetIndexStream(ctx, m_indexBuffer);
+			Gfx_SetConstantBuffer(ctx, 0, m_constantBuffer); // scene constants
+			Gfx_SetSampler(ctx, 0, m_samplerStates.anisotropicWrap);
+
+			for (const MeshSegment& segment : m_segments)
+			{
+				const Material& material =
+					(segment.material == 0xFFFFFFFF) ? m_defaultMaterial : m_materials[segment.material];
+
+				Gfx_SetDescriptors(ctx, 1, material.descriptorSet);
+				Gfx_DrawIndexed(ctx, segment.indexCount, segment.indexOffset, 0, m_vertexCount);
+			}
 		}
+
+		Gfx_EndPass(ctx);
+
+		Gfx_ResolveImage(ctx, m_colorTarget, m_resolveTarget);
+		Gfx_AddImageBarrier(ctx, m_resolveTarget, GfxResourceState_ShaderRead);
 	}
 
 	{
+		GfxPassDesc passDesc;
+		passDesc.flags          = GfxPassFlags::ClearAll;
+		passDesc.clearColors[0] = ColorRGBA8(11, 22, 33);
+		passDesc.clearDepth     = m_reverseZ ? 0.0f : 1.0f;
+		Gfx_BeginPass(ctx, passDesc);
+
 		GfxMarkerScope markerFrame(ctx, "UI");
 
 		TimingScope timingScope(m_stats.cpuUI);
+
+		{
+			Gfx_SetBlendState(ctx, m_blendStates.opaque);
+			Gfx_SetDepthStencilState(ctx, m_depthStencilStates.disable);
+
+			m_prim->begin2D(Vec2(1.0f), Vec2(0.0f));
+			TexturedQuad2D q = makeFullScreenQuad();
+			m_prim->setTexture(m_resolveTarget);
+			m_prim->drawTexturedQuad(&q);
+			m_prim->end2D();
+		}
 
 		Gfx_SetBlendState(ctx, m_blendStates.lerp);
 		Gfx_SetDepthStencilState(ctx, m_depthStencilStates.disable);
@@ -326,9 +388,9 @@ void ExampleModelViewer::render()
 		m_font->draw(m_prim, Vec2(10.0f, 30.0f), timingString);
 
 		m_prim->end2D();
-	}
 
-	Gfx_EndPass(ctx);
+		Gfx_EndPass(ctx);
+	}
 }
 
 void ExampleModelViewer::loadingThreadFunction()

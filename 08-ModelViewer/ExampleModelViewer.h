@@ -120,6 +120,8 @@ private:
 	const bool m_reverseZ = true;
 	float m_cameraScale = 1.0f;
 
+	u32 m_msaaQuality = 1;
+
 	struct TextureData
 	{
 		GfxTextureDesc     desc;
@@ -137,6 +139,11 @@ private:
 	bool        m_loadingThreadShouldExit = false;
 
 	std::mutex m_loadingMutex;
+
+	GfxOwn<GfxTexture> m_colorTarget;
+	GfxOwn<GfxTexture> m_depthTarget;
+	GfxOwn<GfxTexture> m_resolveTarget;
+	void               createRenderTargets();
 
 	void loadingThreadFunction();
 };

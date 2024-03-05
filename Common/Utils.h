@@ -2,12 +2,15 @@
 
 #include <Rush/Platform.h>
 #include <Rush/GfxCommon.h>
+#include <Rush/GfxPrimitiveBatch.h>
 #include <Rush/UtilDataStream.h>
 #include <vector>
 #include <string>
 
 namespace Rush
 {
+
+class Camera;
 
 #if RUSH_RENDER_API == RUSH_RENDER_API_MTL
 #define RUSH_SHADER_NAME(x) x ".metal"
@@ -95,5 +98,9 @@ struct HumanFriendlyValue
 HumanFriendlyValue getHumanFriendlyValue(double v);
 HumanFriendlyValue getHumanFriendlyValueShort(double v);
 
+void interpolateCamera(Camera& camera, const Camera& target, float deltaTime, float positionSmoothing = 0.9f,
+    float rotationSmoothing = 0.85f);
 
-}
+TexturedQuad2D makeFullScreenQuad();
+
+} // namespace Rush
