@@ -3,6 +3,12 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 project(RushExamples)
 
+set(CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "NO" CACHE STRING "Disable code signing for Xcode builds")
+
+if(APPLE)
+    set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64" CACHE STRING "Build architectures for Mac OS X" FORCE)
+endif(APPLE)
+
 # Multithreaded compilation in MSVC
 add_compile_options($<$<CXX_COMPILER_ID:MSVC>:/MP>)
 

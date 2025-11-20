@@ -38,8 +38,6 @@ public:
 
 		const GfxCapability& caps = Gfx_GetCapability();
 
-		// TODO: load a model from obj file
-
 		if (g_appCfg.argc >= 2)
 		{
 			loadMesh(g_appCfg.argv[1]);

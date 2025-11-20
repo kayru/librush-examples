@@ -5,6 +5,7 @@
 #include <Rush/GfxPrimitiveBatch.h>
 
 #include <imgui.h>
+#include <stdio.h>
 
 namespace Rush
 {
