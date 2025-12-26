@@ -18,6 +18,7 @@
 #include <tiny_obj_loader.h>
 #include <cgltf.h>
 #include <algorithm>
+#include <chrono>
 
 #include <Common/ImGuiImpl.h>
 #include <imgui.h>
