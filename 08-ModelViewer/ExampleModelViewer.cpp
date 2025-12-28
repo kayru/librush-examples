@@ -19,10 +19,7 @@
 #include <tiny_obj_loader.h>
 
 #include <chrono>
-
-#ifdef __GNUC__
-#define sprintf_s sprintf // TODO: make a common cross-compiler/platform equivalent
-#endif
+#include <stdio.h>
 
 static AppConfig g_appCfg;
 
@@ -370,7 +367,7 @@ void ExampleModelViewer::render()
 		m_font->setScale(1.0f);
 		char            timingString[1024];
 		const GfxStats& stats = Gfx_Stats();
-		sprintf_s(timingString,
+		snprintf(timingString, sizeof(timingString),
 		    "Draw calls: %d\n"
 		    "Vertices: %d\n"
 		    "GPU time: %.2f ms\n"

@@ -8,10 +8,6 @@
 #include <float.h>
 #include <stdio.h>
 
-#ifdef __GNUC__
-#define sprintf_s sprintf // TODO: make a common cross-compiler/platform equivalent
-#endif
-
 class VSyncTestApp : public Application
 {
 public:
@@ -61,10 +57,10 @@ public:
 
 		m_font->setScale(2.0f);
 		char str[1024];
-		sprintf_s(str, "Frame: %d", m_frameCounter);
+		snprintf(str, sizeof(str), "Frame: %d", m_frameCounter);
 		m_font->draw(m_prim, Vec2(posX - 50.0f, window->getSizeFloat().y * 0.5f), str);
 
-		sprintf_s(str, "CPU frame time: %.2f ms", deltaTime * 1000.0);
+		snprintf(str, sizeof(str), "CPU frame time: %.2f ms", deltaTime * 1000.0);
 		m_font->draw(m_prim, Vec2(10.0f), str);
 
 		m_prim->end2D();

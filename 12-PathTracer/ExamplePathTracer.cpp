@@ -19,13 +19,10 @@
 #include <cgltf.h>
 #include <algorithm>
 #include <chrono>
+#include <stdio.h>
 
 #include <Common/ImGuiImpl.h>
 #include <imgui.h>
-
-#ifdef __GNUC__
-#define sprintf_s sprintf // TODO: make a common cross-compiler/platform equivalent
-#endif
 
 static AppConfig g_appCfg;
 
@@ -429,7 +426,7 @@ void ExamplePathTracer::render()
 
 		char            timingString[1024];
 		const GfxStats& stats = Gfx_Stats();
-		sprintf_s(timingString,
+		snprintf(timingString, sizeof(timingString),
 		    "GPU time: %.2f ms\n"
 		    "CPU time: %.2f ms\n"
 		    "Total render time: %.2f sec\n"
@@ -877,7 +874,7 @@ bool ExamplePathTracer::loadModelGLTF(const char* filename)
 
 			// tangents
 
-			if (atan && atan->count == atan->count)
+			if (atan && apos && atan->count == apos->count)
 			{
 				m_haveTangents = true;
 				auto ptr     = getDataPtr<float>(atan);
