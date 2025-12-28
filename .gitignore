@@ -41,5 +41,6 @@
 # Local build files
 Build
 build
+build-*
 cmake-build-*
 out
