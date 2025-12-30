@@ -1,0 +1,185 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 20,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "Build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "ninja-debug-vk",
+      "displayName": "Ninja Debug (Vulkan)",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "RUSH_RENDER_API": "VK"
+      }
+    },
+    {
+      "name": "ninja-release-vk",
+      "displayName": "Ninja Release (Vulkan)",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "RUSH_RENDER_API": "VK"
+      }
+    },
+    {
+      "name": "ninja-debug-metal",
+      "displayName": "Ninja Debug (Metal)",
+      "inherits": "base",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "RUSH_RENDER_API": "MTL"
+      }
+    },
+    {
+      "name": "ninja-release-metal",
+      "displayName": "Ninja Release (Metal)",
+      "inherits": "base",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "RUSH_RENDER_API": "MTL"
+      }
+    },
+    {
+      "name": "xcode-vk",
+      "displayName": "Xcode (Vulkan)",
+      "generator": "Xcode",
+      "binaryDir": "Build/${presetName}",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      },
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "RUSH_RENDER_API": "VK"
+      }
+    },
+    {
+      "name": "xcode-metal",
+      "displayName": "Xcode (Metal)",
+      "generator": "Xcode",
+      "binaryDir": "Build/${presetName}",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      },
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "RUSH_RENDER_API": "MTL"
+      }
+    },
+    {
+      "name": "vs2022-vk",
+      "displayName": "Visual Studio 2022 (Vulkan)",
+      "generator": "Visual Studio 17 2022",
+      "binaryDir": "Build/${presetName}",
+      "architecture": "x64",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "RUSH_RENDER_API": "VK"
+      }
+    },
+    {
+      "name": "vs2026-vk",
+      "displayName": "Visual Studio 2026 (Vulkan)",
+      "generator": "Visual Studio 18 2026",
+      "binaryDir": "Build/${presetName}",
+      "architecture": "x64",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "RUSH_RENDER_API": "VK"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "ninja-debug-vk",
+      "configurePreset": "ninja-debug-vk"
+    },
+    {
+      "name": "ninja-release-vk",
+      "configurePreset": "ninja-release-vk"
+    },
+    {
+      "name": "ninja-debug-metal",
+      "configurePreset": "ninja-debug-metal"
+    },
+    {
+      "name": "ninja-release-metal",
+      "configurePreset": "ninja-release-metal"
+    },
+    {
+      "name": "xcode-debug-vk",
+      "configurePreset": "xcode-vk",
+      "configuration": "Debug"
+    },
+    {
+      "name": "xcode-release-vk",
+      "configurePreset": "xcode-vk",
+      "configuration": "Release"
+    },
+    {
+      "name": "xcode-debug-metal",
+      "configurePreset": "xcode-metal",
+      "configuration": "Debug"
+    },
+    {
+      "name": "xcode-release-metal",
+      "configurePreset": "xcode-metal",
+      "configuration": "Release"
+    },
+    {
+      "name": "vs2022-debug-vk",
+      "configurePreset": "vs2022-vk",
+      "configuration": "Debug"
+    },
+    {
+      "name": "vs2022-release-vk",
+      "configurePreset": "vs2022-vk",
+      "configuration": "Release"
+    },
+    {
+      "name": "vs2026-debug-vk",
+      "configurePreset": "vs2026-vk",
+      "configuration": "Debug"
+    },
+    {
+      "name": "vs2026-release-vk",
+      "configurePreset": "vs2026-vk",
+      "configuration": "Release"
+    }
+  ]
+}
