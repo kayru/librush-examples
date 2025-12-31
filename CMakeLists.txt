@@ -140,6 +140,7 @@ set(RUSH_EXAMPLE_TARGETS
 	10-MSAA
 	11-RayTracing
 	12-PathTracer
+	Tests
 )
 
 foreach(example_target IN LISTS RUSH_EXAMPLE_TARGETS)
@@ -157,6 +158,7 @@ if(APPLE AND DEFINED RUSH_RENDER_API AND RUSH_RENDER_API STREQUAL "VK" AND RUSH_
 	)
 	foreach(example_target IN LISTS RUSH_EXAMPLE_TARGETS)
 		if(TARGET ${example_target})
+			set_target_properties(${example_target} PROPERTIES BUILD_RPATH "@executable_path")
 			add_dependencies(${example_target} rush_copy_vulkan_runtime)
 			add_custom_command(TARGET rush_copy_vulkan_runtime POST_BUILD
 				COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:${example_target}>"
