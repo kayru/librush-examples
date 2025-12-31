@@ -201,16 +201,13 @@ void ExampleApp::SetupScreenshot(const AppConfig& cfg, int argc, char** argv)
 {
 	g_runSettings = {};
 
-	g_runSettings.frameLimit = 50;
 	bool hasFrames = getArgU32(argc, argv, "frames", nullptr, g_runSettings.frameLimit);
 	bool hasScreenshot = getArgString(argc, argv, "screenshot", nullptr, g_runSettings.screenshotPath);
 	getArgU32(argc, argv, "screenshot-size", nullptr, g_runSettings.maxScreenshotDim);
 
 	if (!hasFrames && !hasScreenshot)
 	{
-		g_runSettings.frameLimit = 50;
-		g_runSettings.exitAfterFrames = true;
-		g_runSettings.screenshotRequested = true;
+		// No opt-in flags: keep running without auto-exit or screenshots.
 	}
 	else if (hasFrames && !hasScreenshot)
 	{
@@ -223,7 +220,6 @@ void ExampleApp::SetupScreenshot(const AppConfig& cfg, int argc, char** argv)
 		{
 			g_runSettings.frameLimit = 50;
 		}
-		g_runSettings.exitAfterFrames = true;
 		g_runSettings.screenshotRequested = true;
 	}
 
