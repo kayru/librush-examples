@@ -16,7 +16,7 @@ add_executable(${app}
 	ExampleRayTracing.cpp
 )
 
-target_link_libraries(${app} Common Rush)
+target_link_libraries(${app} Common)
 target_compile_definitions(${app} PRIVATE RUSH_USING_NAMESPACE)
 
 function(rt_shader_compile_rule shaderName dependencies)

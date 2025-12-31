@@ -4,5 +4,5 @@ add_executable(${app}
 	ExampleMSAA.cpp
 )
 
-target_link_libraries(${app} Common Rush)
+target_link_libraries(${app} Common)
 target_compile_definitions(${app} PRIVATE RUSH_USING_NAMESPACE)

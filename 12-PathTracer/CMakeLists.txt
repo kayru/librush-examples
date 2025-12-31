@@ -19,7 +19,7 @@ add_executable(${app}
 	ExamplePathTracer.cpp
 )
 
-target_link_libraries(${app} Common Rush stb tiny_obj_loader cgltf)
+target_link_libraries(${app} Common stb tiny_obj_loader cgltf)
 target_compile_definitions(${app} PRIVATE RUSH_USING_NAMESPACE)
 
 function(rt_shader_compile_rule shaderName dependencies)

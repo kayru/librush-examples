@@ -13,7 +13,7 @@ add_executable(${app}
 	Model.cpp
 )
 
-target_link_libraries(${app} Common Rush stb tiny_obj_loader)
+target_link_libraries(${app} Common stb tiny_obj_loader)
 target_compile_definitions(${app} PRIVATE RUSH_USING_NAMESPACE)
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
