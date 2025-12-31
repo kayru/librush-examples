@@ -251,7 +251,7 @@ void ExampleModelViewer::createRenderTargets()
 
 	GfxTextureDesc desc = GfxTextureDesc::make2D(windowSize.x, windowSize.y);
 
-	desc.format   = GfxFormat_D24_Unorm_S8_Uint;
+	desc.format   = GfxFormat_D32_Float;
 	desc.usage    = GfxUsageFlags::DepthStencil;
 	desc.samples  = m_msaaQuality;
 	m_depthTarget = Gfx_CreateTexture(desc);
