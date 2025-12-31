@@ -10,6 +10,7 @@ cmake --list-presets
 cmake --preset <preset>
 cmake --build --preset <preset> [--target Tests]
 ```
+Build output goes to `Build/<preset>/...`.
 
 #### Common presets: 
 
