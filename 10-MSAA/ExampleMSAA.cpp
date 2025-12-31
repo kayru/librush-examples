@@ -7,17 +7,17 @@
 
 #include <stdio.h>
 
+#include <Common/ExampleApp.h>
 #include <Common/ImGuiImpl.h>
 #include <Common/Utils.h>
 #include <imgui.h>
 
-class ImGuiApp : public Application
+class ImGuiApp : public ExampleApp
 {
 public:
 	ImGuiApp()
 	{
-		m_prim = new PrimitiveBatch;
-		ImGuiImpl_Startup(Platform_GetWindow());
+		ImGuiImpl_Startup(m_window);
 
 		m_blendPremult = Gfx_CreateBlendState(GfxBlendStateDesc::makeLerp());
 		m_blendOpaque = Gfx_CreateBlendState(GfxBlendStateDesc::makeOpaque());
@@ -42,10 +42,9 @@ public:
 	~ImGuiApp()
 	{
 		ImGuiImpl_Shutdown();
-		delete m_prim;
 	}
 
-	void update()
+	void onUpdate() override
 	{
 		int desiredSampleCount = m_msaaModes[m_msaaQuality];
 		if (m_currentSampleCount != desiredSampleCount || m_currentZoom != m_zoom)
@@ -82,7 +81,7 @@ public:
 			m_animationTime += dt * 0.1f;
 		}
 
-		auto window = Platform_GetWindow();
+		auto window = m_window;
 		auto ctx    = Platform_GetGfxContext();
 
 		// off-screen rendering
@@ -204,9 +203,6 @@ public:
 	}
 
 private:
-
-	PrimitiveBatch* m_prim = nullptr;
-
 	bool m_enableWireframe = false;
 	bool m_enableAnimation = false;
 	int m_msaaQuality = 0;
@@ -227,7 +223,7 @@ private:
 	u32 m_maxResolution = 1024;
 };
 
-int main()
+int main(int argc, char** argv)
 {
 	AppConfig cfg;
 
@@ -235,10 +231,12 @@ int main()
 	cfg.width     = 1024;
 	cfg.height    = 1024;
 	cfg.resizable = true;
+	cfg.argc = argc;
+	cfg.argv = argv;
 
 #ifdef RUSH_DEBUG
 	cfg.debug = true;
 #endif
 
-	return Platform_Main<ImGuiApp>(cfg);
+	return Example_Main<ImGuiApp>(cfg, argc, argv);
 }

@@ -4,26 +4,16 @@
 #include <Rush/UtilLog.h>
 #include <Rush/Window.h>
 
+#include <Common/ExampleApp.h>
+
 #include <stdio.h>
 
-class PrimitivesApp : public Application
+class PrimitivesApp : public ExampleApp
 {
 public:
-	PrimitivesApp()
+	void onUpdate() override
 	{
-		m_prim = new PrimitiveBatch();
-		m_font = new BitmapFontRenderer(BitmapFontRenderer::createEmbeddedFont(true, 0, 1));
-	}
-
-	~PrimitivesApp()
-	{
-		delete m_font;
-		delete m_prim;
-	}
-
-	void update()
-	{
-		auto window = Platform_GetWindow();
+		auto window = m_window;
 		auto ctx    = Platform_GetGfxContext();
 
 		GfxPassDesc passDesc;
@@ -79,13 +69,9 @@ public:
 
 		Gfx_EndPass(ctx);
 	}
-
-private:
-	PrimitiveBatch*     m_prim = nullptr;
-	BitmapFontRenderer* m_font = nullptr;
 };
 
-int main()
+int main(int argc, char** argv)
 {
 	AppConfig cfg;
 
@@ -93,10 +79,12 @@ int main()
 	cfg.width     = 640;
 	cfg.height    = 480;
 	cfg.resizable = true;
+	cfg.argc = argc;
+	cfg.argv = argv;
 
 #ifdef RUSH_DEBUG
 	cfg.debug = true;
 #endif
 
-	return Platform_Main<PrimitivesApp>(cfg);
+	return Example_Main<PrimitivesApp>(cfg, argc, argv);
 }

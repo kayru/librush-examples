@@ -27,7 +27,7 @@ public:
 	ExamplePathTracer();
 	~ExamplePathTracer();
 
-	void update() override;
+	void onUpdate() override;
 
 private:
 

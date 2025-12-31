@@ -25,7 +25,7 @@ public:
 	ExampleModelViewer();
 	~ExampleModelViewer();
 
-	void update() override;
+	void onUpdate() override;
 
 private:
 

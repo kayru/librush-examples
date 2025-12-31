@@ -38,9 +38,10 @@ public:
 
 		const GfxCapability& caps = Gfx_GetCapability();
 
-		if (g_appCfg.argc >= 2)
+		const char* modelFilename = nullptr;
+		if (getPositionalArg(g_appCfg.argc, g_appCfg.argv, 0, modelFilename))
 		{
-			loadMesh(g_appCfg.argv[1]);
+			loadMesh(modelFilename);
 		}
 
 		if (m_meshIndexCount == 0)
@@ -343,7 +344,7 @@ public:
 		instanceConstants.world.rows[3] = Vec4(px, -py, pz, 1.0f);
 	};
 
-	void update() override
+	void onUpdate() override
 	{
 		auto ctx = Platform_GetGfxContext();
 
@@ -718,6 +719,7 @@ public:
 		}
 
 		m_frameCount++;
+
 	}
 
 private:
@@ -826,5 +828,5 @@ int main(int argc, char** argv)
 	g_appCfg.debug = true;
 #endif
 
-	return Platform_Main<InstancingApp>(g_appCfg);
+	return Example_Main<InstancingApp>(g_appCfg, argc, argv);
 }

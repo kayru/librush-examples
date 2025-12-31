@@ -32,7 +32,7 @@ int main(int argc, char** argv)
 	Log::breakOnError = true;
 #endif
 
-	return Platform_Main<ExampleRayTracing>(g_appCfg);
+	return Example_Main<ExampleRayTracing>(g_appCfg, argc, argv);
 }
 
 
@@ -69,7 +69,7 @@ ExampleRayTracing::~ExampleRayTracing()
 {
 }
 
-void ExampleRayTracing::update()
+void ExampleRayTracing::onUpdate()
 {
 	const GfxCapability& caps = Gfx_GetCapability();
 	GfxContext* ctx = Platform_GetGfxContext();

@@ -5,12 +5,13 @@
 #include <Rush/UtilTimer.h>
 #include <Rush/Window.h>
 
+#include <Common/ExampleApp.h>
 #include <Common/Utils.h>
 
 #include <memory>
 #include <stdio.h>
 
-class ShadersApp : public Rush::Application
+class ShadersApp : public Rush::ExampleApp
 {
 public:
 	ShadersApp()
@@ -46,9 +47,9 @@ public:
 	{
 	}
 
-	void update()
+	void onUpdate() override
 	{
-		auto window = Platform_GetWindow();
+		auto window = m_window;
 		auto ctx    = Platform_GetGfxContext();
 
 		m_constants.shaderParams.x = (float)window->getSize().x;
@@ -93,7 +94,7 @@ private:
 	Timer m_timer;
 };
 
-int main()
+int main(int argc, char** argv)
 {
 	AppConfig cfg;
 
@@ -101,10 +102,12 @@ int main()
 	cfg.width     = 800;
 	cfg.height    = 600;
 	cfg.resizable = true;
+	cfg.argc = argc;
+	cfg.argv = argv;
 
 #ifdef RUSH_DEBUG
 	cfg.debug = true;
 #endif
 
-	return Platform_Main<ShadersApp>(cfg);
+	return Example_Main<ShadersApp>(cfg, argc, argv);
 }

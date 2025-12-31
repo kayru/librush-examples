@@ -6,29 +6,28 @@
 
 #include <stdio.h>
 
+#include <Common/ExampleApp.h>
 #include <Common/ImGuiImpl.h>
 #include <imgui.h>
 
-class ImGuiApp : public Application
+class ImGuiApp : public ExampleApp
 {
 public:
 	ImGuiApp()
 	{
-		m_prim = new PrimitiveBatch;
-		ImGuiImpl_Startup(Platform_GetWindow());
+		ImGuiImpl_Startup(m_window);
 	}
 
 	~ImGuiApp()
 	{
 		ImGuiImpl_Shutdown();
-		delete m_prim;
 	}
 
-	void update()
+	void onUpdate() override
 	{
 		ImGuiImpl_Update(1.0f / 60.0f);
 
-		auto window = Platform_GetWindow();
+		auto window = m_window;
 		auto ctx    = Platform_GetGfxContext();
 
 		GfxPassDesc passDesc;
@@ -44,13 +43,9 @@ public:
 
 		Gfx_EndPass(ctx);
 	}
-
-private:
-
-	PrimitiveBatch* m_prim = nullptr;
 };
 
-int main()
+int main(int argc, char** argv)
 {
 	AppConfig cfg;
 
@@ -58,10 +53,12 @@ int main()
 	cfg.width     = 1280;
 	cfg.height    = 720;
 	cfg.resizable = true;
+	cfg.argc = argc;
+	cfg.argv = argv;
 
 #ifdef RUSH_DEBUG
 	cfg.debug = true;
 #endif
 
-	return Platform_Main<ImGuiApp>(cfg);
+	return Example_Main<ImGuiApp>(cfg, argc, argv);
 }

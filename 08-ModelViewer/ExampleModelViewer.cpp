@@ -12,6 +12,8 @@
 #include <Rush/UtilHash.h>
 #include <Rush/UtilLog.h>
 
+#include <Common/Utils.h>
+
 #include "Model.h"
 
 #include <stb_image.h>
@@ -38,7 +40,7 @@ int main(int argc, char** argv)
 	Log::breakOnError = true;
 #endif
 
-	return Platform_Main<ExampleModelViewer>(g_appCfg);
+	return Example_Main<ExampleModelViewer>(g_appCfg, argc, argv);
 }
 
 struct TimingScope
@@ -89,9 +91,9 @@ ExampleModelViewer::ExampleModelViewer() : ExampleApp(), m_boundingBox(Vec3(0.0f
 	GfxBufferDesc cbDesc(GfxBufferFlags::TransientConstant, GfxFormat_Unknown, 1, sizeof(Constants));
 	m_constantBuffer = Gfx_CreateBuffer(cbDesc);
 
-	if (g_appCfg.argc >= 2)
+	const char* modelFilename = nullptr;
+	if (getPositionalArg(g_appCfg.argc, g_appCfg.argv, 0, modelFilename))
 	{
-		const char* modelFilename = g_appCfg.argv[1];
 		m_statusString            = std::string("Model: ") + modelFilename;
 		m_valid                   = loadModel(modelFilename);
 
@@ -156,7 +158,7 @@ ExampleModelViewer::~ExampleModelViewer()
 	delete m_cameraMan;
 }
 
-void ExampleModelViewer::update()
+void ExampleModelViewer::onUpdate()
 {
 	TimingScope timingScope(m_stats.cpuTotal);
 
@@ -232,6 +234,7 @@ void ExampleModelViewer::update()
 	}
 
 	render();
+
 }
 
 void ExampleModelViewer::createRenderTargets()

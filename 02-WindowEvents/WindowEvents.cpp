@@ -3,19 +3,20 @@
 #include <Rush/Window.h>
 #include <Rush/GfxDevice.h>
 
+#include <Common/ExampleApp.h>
+
 #include <memory>
 #include <stdio.h>
 
-class WindowEventsApp : public Application
+class WindowEventsApp : public ExampleApp
 {
 public:
 	WindowEventsApp()
 	{
-		Window* window = Platform_GetWindow();
-		m_events.setOwner(window);
+		m_events.setOwner(m_window);
 	}
 
-	void update()
+	void onUpdate() override
 	{
 		for (const WindowEvent& e : m_events)
 		{
@@ -64,16 +65,18 @@ private:
 	WindowEventListener m_events;
 };
 
-int main()
+int main(int argc, char** argv)
 {
 	AppConfig cfg;
 
 	cfg.name      = "WindowEvents";
 	cfg.resizable = true;
+	cfg.argc = argc;
+	cfg.argv = argv;
 
 #ifdef RUSH_DEBUG
 	cfg.debug = true;
 #endif
 
-	return Platform_Main<WindowEventsApp>(cfg);
+	return Example_Main<WindowEventsApp>(cfg, argc, argv);
 }

@@ -24,7 +24,7 @@ public:
 	ExampleRayTracing();
 	~ExampleRayTracing();
 
-	void update() override;
+	void onUpdate() override;
 
 private:
 

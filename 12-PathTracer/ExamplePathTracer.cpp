@@ -22,6 +22,7 @@
 #include <stdio.h>
 
 #include <Common/ImGuiImpl.h>
+#include <Common/Utils.h>
 #include <imgui.h>
 
 static AppConfig g_appCfg;
@@ -41,7 +42,7 @@ int main(int argc, char** argv)
 	Log::breakOnError = true;
 #endif
 
-	return Platform_Main<ExamplePathTracer>(g_appCfg);
+	return Example_Main<ExamplePathTracer>(g_appCfg, argc, argv);
 }
 
 struct TimingScope
@@ -117,9 +118,9 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 		m_blitTonemap = Gfx_CreateTechnique(desc);
 	}
 
-	if (g_appCfg.argc >= 2)
+	const char* modelFilename = nullptr;
+	if (getPositionalArg(g_appCfg.argc, g_appCfg.argv, 0, modelFilename))
 	{
-		const char* modelFilename = g_appCfg.argv[1];
 		m_statusString            = std::string("Model: ") + modelFilename;
 		m_valid                   = loadModel(modelFilename);
 
@@ -130,12 +131,10 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 
 
 		std::string envFilename = std::string(Platform_GetExecutableDirectory()) + "/envmap.hdr";
-		if (g_appCfg.argc >= 4)
+		std::string envArg;
+		if (getArgString(g_appCfg.argc, g_appCfg.argv, "env", nullptr, envArg))
 		{
-			if (!strcmp(g_appCfg.argv[2], "--env"))
-			{
-				envFilename = g_appCfg.argv[3];
-			}
+			envFilename = envArg;
 		}
 
 		loadEnvmap(envFilename.c_str());
@@ -176,7 +175,7 @@ inline float focalLengthToFov(float focalLength, float sensorSize)
 	return 2.0f * atanf((sensorSize / 2.0f) / focalLength);
 }
 
-void ExamplePathTracer::update()
+void ExamplePathTracer::onUpdate()
 {
 	TimingScope timingScope(m_stats.cpuTotal);
 
@@ -291,6 +290,7 @@ void ExamplePathTracer::update()
 	render();
 
 	m_frameIndex++;
+
 }
 
 void ExamplePathTracer::createRayTracingScene(GfxContext* ctx)

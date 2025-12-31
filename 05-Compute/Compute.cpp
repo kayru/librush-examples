@@ -5,18 +5,17 @@
 #include <Rush/UtilTimer.h>
 #include <Rush/Window.h>
 
+#include <Common/ExampleApp.h>
 #include <Common/Utils.h>
 
 #include <memory>
 #include <stdio.h>
 
-class ComputeApp : public Application
+class ComputeApp : public ExampleApp
 {
 public:
 	ComputeApp()
 	{
-		m_prim = new PrimitiveBatch();
-
 		m_computeShader = Gfx_CreateComputeShader(loadShaderFromFile(RUSH_SHADER_NAME("ComputeShader.hlsl")));
 
 		GfxBufferDesc cbDesc(GfxBufferFlags::TransientConstant, GfxFormat_Unknown, 1, sizeof(m_constants));
@@ -34,14 +33,9 @@ public:
 		m_texture = Gfx_CreateTexture(textureDesc);
 	}
 
-	~ComputeApp()
+	void onUpdate() override
 	{
-		delete m_prim;
-	}
-
-	void update()
-	{
-		auto window = Platform_GetWindow();
+		auto window = m_window;
 		auto ctx    = Platform_GetGfxContext();
 
 		m_constants.x = (float)m_timer.time();
@@ -79,13 +73,12 @@ private:
 	GfxOwn<GfxComputeShader> m_computeShader;
 	GfxOwn<GfxTechnique>     m_technique;
 	GfxOwn<GfxTexture>       m_texture;
-	PrimitiveBatch*  m_prim      = nullptr;
 	Tuple2u          m_imageSize = {640, 480};
 	Timer            m_timer;
 	Vec4             m_constants = Vec4(0.0);
 };
 
-int main()
+int main(int argc, char** argv)
 {
 	AppConfig cfg;
 
@@ -94,10 +87,12 @@ int main()
 	cfg.width     = 640;
 	cfg.height    = 480;
 	cfg.resizable = true;
+	cfg.argc = argc;
+	cfg.argv = argv;
 
 #ifdef RUSH_DEBUG
 	cfg.debug = true;
 #endif
 
-	return Platform_Main<ComputeApp>(cfg);
+	return Example_Main<ComputeApp>(cfg, argc, argv);
 }
