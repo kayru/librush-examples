@@ -66,8 +66,8 @@ ExampleModelViewer::ExampleModelViewer() : ExampleApp(), m_boundingBox(Vec3(0.0f
 	m_defaultWhiteTexture                = Gfx_CreateTexture(textureDesc, whiteTexturePixels);
 
 	{
-		m_vs = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelVS.hlsl")));
-		m_ps = Gfx_CreatePixelShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelPS.hlsl")));
+		m_vs = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelVS.vert")));
+		m_ps = Gfx_CreatePixelShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelPS.frag")));
 	}
 
 	GfxVertexFormatDesc vfDesc;
@@ -77,13 +77,14 @@ ExampleModelViewer::ExampleModelViewer() : ExampleApp(), m_boundingBox(Vec3(0.0f
 
 	m_vf = Gfx_CreateVertexFormat(vfDesc);
 
-	m_materialDescriptorSetDesc.textures = 1; // albedo texture
 	m_materialDescriptorSetDesc.constantBuffers = 1; // material constants
+	m_materialDescriptorSetDesc.samplers = 1; // material sampler
+	m_materialDescriptorSetDesc.textures = 1; // albedo texture
 	m_materialDescriptorSetDesc.stageFlags = GfxStageFlags::VertexPixel;
 
 	GfxShaderBindingDesc bindings;
 	bindings.descriptorSets[0].constantBuffers = 1; // scene constants
-	bindings.descriptorSets[0].samplers = 1; // linear sampler
+	// Metal argument buffers expect sampler+texture to share a set for reliable pairing.
 	bindings.descriptorSets[1] = m_materialDescriptorSetDesc;
 
 	m_technique = Gfx_CreateTechnique(GfxTechniqueDesc(m_ps, m_vs, m_vf, bindings));
@@ -218,13 +219,13 @@ void ExampleModelViewer::onUpdate()
 			}
 
 			textureData->albedoTexture = Gfx_CreateTexture(textureData->desc, mipData, textureData->desc.mips);
-
 			for (u32 i : textureData->patchList)
 			{
 				m_materials[i].albedoTexture = textureData->albedoTexture.get();
+				GfxSampler sampler = m_samplerStates.anisotropicWrap.get();
 				Gfx_UpdateDescriptorSet(m_materials[i].descriptorSet,
 					&m_materials[i].constantBuffer,
-					nullptr, // samplers
+					&sampler,
 					&m_materials[i].albedoTexture,
 					nullptr, // storage images
 					nullptr  // storage buffers
@@ -319,8 +320,6 @@ void ExampleModelViewer::render()
 			Gfx_SetVertexStream(ctx, 0, m_vertexBuffer);
 			Gfx_SetIndexStream(ctx, m_indexBuffer);
 			Gfx_SetConstantBuffer(ctx, 0, m_constantBuffer); // scene constants
-			Gfx_SetSampler(ctx, 0, m_samplerStates.anisotropicWrap);
-
 			for (const MeshSegment& segment : m_segments)
 			{
 				const Material& material =
@@ -476,7 +475,6 @@ void ExampleModelViewer::enqueueLoadTexture(const std::string& filename, u32 mat
 	{
 		TextureData* textureData = new TextureData;
 		textureData->filename    = filename;
-
 		textureData->patchList.push_back(materialId);
 
 		m_textures[filename] = textureData;
@@ -541,9 +539,10 @@ bool ExampleModelViewer::loadModelObj(const char* filename)
 		}
 
 		material.descriptorSet = Gfx_CreateDescriptorSet(m_materialDescriptorSetDesc);
+		GfxSampler sampler = m_samplerStates.anisotropicWrap.get();
 		Gfx_UpdateDescriptorSet(material.descriptorSet,
 			&material.constantBuffer,
-			nullptr, // samplers
+			&sampler,
 			&material.albedoTexture,
 			nullptr, // storage images
 			nullptr  // storage buffers
@@ -560,9 +559,10 @@ bool ExampleModelViewer::loadModelObj(const char* filename)
 		m_defaultMaterial.albedoTexture = m_defaultWhiteTexture.get();
 
 		m_defaultMaterial.descriptorSet = Gfx_CreateDescriptorSet(m_materialDescriptorSetDesc);
+		GfxSampler sampler = m_samplerStates.anisotropicWrap.get();
 		Gfx_UpdateDescriptorSet(m_defaultMaterial.descriptorSet,
 			&m_defaultMaterial.constantBuffer,
-			nullptr, // samplers
+			&sampler,
 			&m_defaultMaterial.albedoTexture,
 			nullptr, // storage images
 			nullptr  // storage buffers
@@ -743,6 +743,16 @@ bool ExampleModelViewer::loadModelNative(const char* filename)
 		m_defaultConstantBuffer = Gfx_CreateBuffer(materialCbDesc, &constants);
 		m_defaultMaterial.constantBuffer = m_defaultConstantBuffer.get();
 		m_defaultMaterial.albedoTexture = m_defaultWhiteTexture.get();
+
+		m_defaultMaterial.descriptorSet = Gfx_CreateDescriptorSet(m_materialDescriptorSetDesc);
+		GfxSampler sampler = m_samplerStates.anisotropicWrap.get();
+		Gfx_UpdateDescriptorSet(m_defaultMaterial.descriptorSet,
+			&m_defaultMaterial.constantBuffer,
+			&sampler,
+			&m_defaultMaterial.albedoTexture,
+			nullptr, // storage images
+			nullptr  // storage buffers
+		);
 	}
 
 	m_segments.reserve(model.segments.size());

@@ -28,4 +28,5 @@ Build output goes to `Build/<preset>/...`.
 ## External dependencies
 
 - Vulkan builds require the Vulkan SDK (`VULKAN_SDK` or `VK_SDK_PATH` set). MoltenVK on macOS.
-- Shader tools: `glslc` and `glslangValidator` are used for shader compilation; `spirv-cross` is used on macOS for Metal shader translation.
+- Metal builds on macOS require the Metal toolchain (install with `xcodebuild -downloadComponent MetalToolchain`).
+- Shader tools: `glslc` is used for shader compilation; `spirv-cross` is used on macOS for Metal shader translation.

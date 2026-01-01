@@ -60,8 +60,8 @@ public:
 		m_vertexFormatInstanceId = Gfx_CreateVertexFormat(vfDescInstanceId);
 
 		{
-			auto vs = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelVS.hlsl")));
-			auto ps = Gfx_CreatePixelShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelPS.hlsl")));
+			auto vs = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelVS.vert")));
+			auto ps = Gfx_CreatePixelShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelPS.frag")));
 
 			struct SpecializationData
 			{

@@ -73,53 +73,47 @@ find_program(GLSLC NAMES glslc PATHS
 	"~/bin"
 )
 
-find_program(glslangValidator NAMES glslangValidator PATHS
-	$ENV{VULKAN_SDK}/Bin
-	$ENV{VK_SDK_PATH}/Bin
-	$ENV{PATH}
-	"~/bin"
-)
-
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 	find_program(spirv-cross NAMES spirv-cross PATHS
 		$ENV{VK_SDK_PATH}/Bin
 		$ENV{PATH}
 		"~/bin"
 	)
-	function(hlsl_shader_compile_rule shaderName stage)
-		add_custom_command(
-			OUTPUT ${CMAKE_CFG_INTDIR}/${shaderName}.metal
-			COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CFG_INTDIR}
-			COMMAND ${GLSLC} -O -x hlsl -fentry-point=main -fshader-stage=${stage} -o ${CMAKE_CFG_INTDIR}/${shaderName}.bin ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
-			COMMAND ${spirv-cross} --msl --msl-version 200000 --msl-argument-buffers --msl-decoration-binding ${extra_args} ${CMAKE_CFG_INTDIR}/${shaderName}.bin > ${CMAKE_CFG_INTDIR}/${shaderName}.metal
-			MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
-		)
-	endfunction(hlsl_shader_compile_rule)
+	find_program(xcrun NAMES xcrun)
 	function(glsl_shader_compile_rule shaderName)
+		set(shaderDeps ${ARGN})
 		add_custom_command(
-			OUTPUT ${CMAKE_CFG_INTDIR}/${shaderName}.metal
+			OUTPUT ${CMAKE_CFG_INTDIR}/${shaderName}.metallib
 			COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CFG_INTDIR}
 			COMMAND ${GLSLC} -O -o ${CMAKE_CFG_INTDIR}/${shaderName}.bin ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
-			COMMAND ${spirv-cross} --msl --msl-version 200000 --msl-argument-buffers --msl-decoration-binding ${spirv-cross-args} ${CMAKE_CFG_INTDIR}/${shaderName}.bin > ${CMAKE_CFG_INTDIR}/${shaderName}.metal
+			COMMAND ${spirv-cross} --msl --msl-version 200000 --msl-argument-buffers --msl-decoration-binding --msl-force-active-argument-buffer-resources ${CMAKE_CFG_INTDIR}/${shaderName}.bin > ${CMAKE_CFG_INTDIR}/${shaderName}.metal
+			COMMAND ${xcrun} -sdk macosx metal -c ${CMAKE_CFG_INTDIR}/${shaderName}.metal -o ${CMAKE_CFG_INTDIR}/${shaderName}.air
+			COMMAND ${xcrun} -sdk macosx metallib ${CMAKE_CFG_INTDIR}/${shaderName}.air -o ${CMAKE_CFG_INTDIR}/${shaderName}.metallib
 			MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
+			DEPENDS ${shaderDeps}
 		)
 	endfunction(glsl_shader_compile_rule)
 else()
-	function(hlsl_shader_compile_rule shaderName stage)
-		add_custom_command(
-			OUTPUT ${CMAKE_CFG_INTDIR}/${shaderName}.bin
-			COMMAND ${GLSLC} -O -x hlsl -fentry-point=main -fshader-stage=${stage} -o ${CMAKE_CFG_INTDIR}/${shaderName}.bin ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
-			MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
-		)
-	endfunction(hlsl_shader_compile_rule)
 	function(glsl_shader_compile_rule shaderName)
+		set(shaderDeps ${ARGN})
 		add_custom_command(
 			OUTPUT ${CMAKE_CFG_INTDIR}/${shaderName}.bin
 			COMMAND ${GLSLC} -O -o ${CMAKE_CFG_INTDIR}/${shaderName}.bin ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
 			MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
+			DEPENDS ${shaderDeps}
 		)
 	endfunction(glsl_shader_compile_rule)
 endif()
+
+function(rt_shader_compile_rule shaderName dependencies)
+	add_custom_command(
+		OUTPUT ${CMAKE_CFG_INTDIR}/${shaderName}.bin
+		COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CFG_INTDIR}
+		COMMAND ${GLSLC} --target-env=vulkan1.2 -o ${CMAKE_CFG_INTDIR}/${shaderName}.bin ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
+		MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
+		DEPENDS ${dependencies}
+	)
+endfunction()
 
 # Common code
 

@@ -15,7 +15,7 @@ namespace Rush
 class Camera;
 
 #if RUSH_RENDER_API == RUSH_RENDER_API_MTL
-#define RUSH_SHADER_NAME(x) x ".metal"
+#define RUSH_SHADER_NAME(x) x ".metallib"
 #else
 #define RUSH_SHADER_NAME(x) x ".bin"
 #endif

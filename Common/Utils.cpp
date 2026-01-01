@@ -281,7 +281,12 @@ GfxShaderSource loadShaderFromFile(const char* filename, const char* shaderDirec
 
 	bool isText = false;
 
-	if (endsWith(fullFilename, ".metal"))
+	if (endsWith(fullFilename, ".metallib"))
+	{
+		source.type = GfxShaderSourceType::GfxShaderSourceType_MSL_BIN;
+		source.entry = "main0";
+	}
+	else if (endsWith(fullFilename, ".metal"))
 	{
 		source.type = GfxShaderSourceType::GfxShaderSourceType_MSL;
 		source.entry = "main0";

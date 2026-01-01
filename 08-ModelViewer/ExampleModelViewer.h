@@ -96,7 +96,6 @@ private:
 	{
 		GfxTexture albedoTexture;
 		GfxBuffer constantBuffer;
-
 		GfxOwn<GfxDescriptorSet> descriptorSet;
 	};
 
