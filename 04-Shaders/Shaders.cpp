@@ -16,8 +16,8 @@ class ShadersApp : public Rush::ExampleApp
 public:
 	ShadersApp()
 	{
-		auto vs = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("Vertex.vert")));
-		auto ps = Gfx_CreatePixelShader(loadShaderFromFile(RUSH_SHADER_NAME("Pixel.frag")));
+		auto vs = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("Vertex.hlsl")));
+		auto ps = Gfx_CreatePixelShader(loadShaderFromFile(RUSH_SHADER_NAME("Pixel.hlsl")));
 
 		GfxVertexFormatDesc fmtDesc;
 		fmtDesc.add(0, GfxVertexFormatDesc::DataType::Float2, GfxVertexFormatDesc::Semantic::Position, 0);

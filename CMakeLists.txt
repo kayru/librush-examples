@@ -68,7 +68,22 @@ endif()
 
 find_program(GLSLC NAMES glslc PATHS
 	$ENV{VULKAN_SDK}/Bin
+	$ENV{VULKAN_SDK}/bin
+	$ENV{VULKAN_SDK}/macOS/bin
 	$ENV{VK_SDK_PATH}/Bin
+	$ENV{VK_SDK_PATH}/bin
+	$ENV{VK_SDK_PATH}/macOS/bin
+	$ENV{PATH}
+	"~/bin"
+)
+
+find_program(DXC NAMES dxc PATHS
+	$ENV{VULKAN_SDK}/Bin
+	$ENV{VULKAN_SDK}/bin
+	$ENV{VULKAN_SDK}/macOS/bin
+	$ENV{VK_SDK_PATH}/Bin
+	$ENV{VK_SDK_PATH}/bin
+	$ENV{VK_SDK_PATH}/macOS/bin
 	$ENV{PATH}
 	"~/bin"
 )
@@ -104,6 +119,36 @@ else()
 		)
 	endfunction(glsl_shader_compile_rule)
 endif()
+
+function(hlsl_shader_compile_rule shaderName profile)
+	set(shaderDeps ${ARGN})
+	if(NOT DXC)
+		message(FATAL_ERROR "DXC was not found. Set VULKAN_SDK or VK_SDK_PATH so dxc is available.")
+	endif()
+	if(APPLE AND DEFINED RUSH_RENDER_API AND RUSH_RENDER_API STREQUAL "MTL")
+		if(NOT spirv-cross OR NOT xcrun)
+			message(FATAL_ERROR "spirv-cross or xcrun was not found. Ensure spirv-cross is available in PATH for Metal shader compilation.")
+		endif()
+		add_custom_command(
+			OUTPUT ${CMAKE_CFG_INTDIR}/${shaderName}.metallib
+			COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CFG_INTDIR}
+			COMMAND ${DXC} -spirv -fspv-target-env=vulkan1.2 -T ${profile} -E main -Fo ${CMAKE_CFG_INTDIR}/${shaderName}.spv ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
+			COMMAND ${spirv-cross} --msl --msl-version 200000 --msl-argument-buffers --msl-decoration-binding --msl-force-active-argument-buffer-resources ${CMAKE_CFG_INTDIR}/${shaderName}.spv > ${CMAKE_CFG_INTDIR}/${shaderName}.metal
+			COMMAND ${xcrun} -sdk macosx metal -c ${CMAKE_CFG_INTDIR}/${shaderName}.metal -o ${CMAKE_CFG_INTDIR}/${shaderName}.air
+			COMMAND ${xcrun} -sdk macosx metallib ${CMAKE_CFG_INTDIR}/${shaderName}.air -o ${CMAKE_CFG_INTDIR}/${shaderName}.metallib
+			MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
+			DEPENDS ${shaderDeps}
+		)
+	else()
+		add_custom_command(
+			OUTPUT ${CMAKE_CFG_INTDIR}/${shaderName}.bin
+			COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CFG_INTDIR}
+			COMMAND ${DXC} -spirv -fspv-target-env=vulkan1.2 -T ${profile} -E main -Fo ${CMAKE_CFG_INTDIR}/${shaderName}.bin ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
+			MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
+			DEPENDS ${shaderDeps}
+		)
+	endif()
+endfunction()
 
 function(rt_shader_compile_rule shaderName dependencies)
 	add_custom_command(
