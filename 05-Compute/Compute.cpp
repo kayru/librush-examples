@@ -16,7 +16,7 @@ class ComputeApp : public ExampleApp
 public:
 	ComputeApp()
 	{
-		m_computeShader = Gfx_CreateComputeShader(loadShaderFromFile(RUSH_SHADER_NAME("ComputeShader.comp")));
+		m_computeShader = Gfx_CreateComputeShader(loadShaderFromFile(RUSH_SHADER_NAME("ComputeShader.hlsl")));
 
 		GfxBufferDesc cbDesc(GfxBufferFlags::TransientConstant, GfxFormat_Unknown, 1, sizeof(m_constants));
 		m_constantBuffer = Gfx_CreateBuffer(cbDesc);
