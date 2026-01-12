@@ -60,8 +60,8 @@ public:
 		m_vertexFormatInstanceId = Gfx_CreateVertexFormat(vfDescInstanceId);
 
 		{
-			auto vs = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelVS.vert")));
-			auto ps = Gfx_CreatePixelShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelPS.frag")));
+			auto vs = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelVS.hlsl")));
+			auto ps = Gfx_CreatePixelShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelPS.hlsl")));
 
 			struct SpecializationData
 			{
@@ -83,7 +83,7 @@ public:
 
 			if (caps.pushConstants)
 			{
-				auto vsPush = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelPush.vert")));
+				auto vsPush = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelPush.hlsl")));
 				GfxShaderBindingDesc bindings;
 				bindings.pushConstantSize       = u8(sizeof(Mat4));
 				bindings.pushConstantStageFlags = GfxStageFlags::Vertex;
@@ -98,7 +98,7 @@ public:
 
 			if (caps.pushConstants)
 			{
-				auto vsPushOffset = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelPushOffset.vert")));
+				auto vsPushOffset = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelPushOffset.hlsl")));
 				GfxShaderBindingDesc bindings;
 				bindings.pushConstantSize       = u8(sizeof(u32));
 				bindings.pushConstantStageFlags = GfxStageFlags::Vertex;
@@ -113,7 +113,7 @@ public:
 
 			if (caps.instancing)
 			{
-				auto vsInstanced = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelInstanced.vert")));
+				auto vsInstanced = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelInstanced.hlsl")));
 				GfxShaderBindingDesc bindings;
 				bindings.descriptorSets[0].constantBuffers = 2; // Global, Instance
 				GfxTechniqueDesc techDesc(ps, vsInstanced, m_vertexFormat, bindings);
@@ -126,7 +126,7 @@ public:
 
 			if (caps.instancing)
 			{
-				auto vsInstanceId = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelInstanced.vert")));
+				auto vsInstanceId = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelInstanced.hlsl")));
 				GfxShaderBindingDesc bindings;
 				bindings.descriptorSets[0].constantBuffers = 2; // Global, Instance
 				GfxTechniqueDesc techDesc(ps, vsInstanceId, m_vertexFormatInstanceId, bindings);

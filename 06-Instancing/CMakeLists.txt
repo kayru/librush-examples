@@ -1,14 +1,14 @@
 set(app 06-Instancing)
 
 set(shaders
-	ModelPS.frag
-	ModelVS.vert
+	ModelPS.hlsl
+	ModelVS.hlsl
 )
 
 set(shaders ${shaders}
-	ModelInstanced.vert
-	ModelPush.vert
-	ModelPushOffset.vert
+	ModelInstanced.hlsl
+	ModelPush.hlsl
+	ModelPushOffset.hlsl
 )
 
 add_executable(${app}
@@ -19,9 +19,9 @@ add_executable(${app}
 target_link_libraries(${app} Common tiny_obj_loader)
 target_compile_definitions(${app} PRIVATE RUSH_USING_NAMESPACE)
 
-glsl_shader_compile_rule(ModelPS.frag)
-glsl_shader_compile_rule(ModelVS.vert)
+hlsl_shader_compile_rule(ModelPS.hlsl ps_6_0)
+hlsl_shader_compile_rule(ModelVS.hlsl vs_6_0)
 
-glsl_shader_compile_rule(ModelInstanced.vert)
-glsl_shader_compile_rule(ModelPush.vert)
-glsl_shader_compile_rule(ModelPushOffset.vert)
+hlsl_shader_compile_rule(ModelInstanced.hlsl vs_6_0)
+hlsl_shader_compile_rule(ModelPush.hlsl vs_6_0)
+hlsl_shader_compile_rule(ModelPushOffset.hlsl vs_6_0)
