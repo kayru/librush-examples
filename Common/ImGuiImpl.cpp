@@ -96,11 +96,19 @@ static void ImGuiImpl_Render(ImDrawData* drawData)
 	Gfx_SetRasterizerState(s_context, s_rasterState);
 	Gfx_SetDepthStencilState(s_context, s_depthState);
 
-	s_prim->begin2D(s_window->getSize());
+	ImVec2 displaySize = drawData->DisplaySize;
+	if (displaySize.x <= 0.0f || displaySize.y <= 0.0f)
+	{
+		const Tuple2i windowSize = s_window->getSize();
+		displaySize = ImVec2((float)windowSize.x, (float)windowSize.y);
+	}
+
+	s_prim->begin2D(displaySize.x, displaySize.y);
 	s_prim->setTexture(s_fontTexture);
 	s_prim->setSampler(PrimitiveBatch::SamplerState_Point);
 
-	const Vec2 framebufferScale = s_window->getResolutionScale();
+	const ImVec2 clipOffset = drawData->DisplayPos;
+	const ImVec2 clipScale = ImGui::GetIO().DisplayFramebufferScale;
 
 	for (int cmdListIndex = 0; cmdListIndex < drawData->CmdListsCount; ++cmdListIndex)
 	{
@@ -130,10 +138,15 @@ static void ImGuiImpl_Render(ImDrawData* drawData)
 
 			GfxRect scissor;
 
-			scissor.top = (int)(cmd.ClipRect.y * framebufferScale.y);
-			scissor.bottom = (int)(cmd.ClipRect.w * framebufferScale.y);
-			scissor.left = (int)(cmd.ClipRect.x * framebufferScale.x);
-			scissor.right = (int)(cmd.ClipRect.z * framebufferScale.x);
+			const float clipMinX = (cmd.ClipRect.x - clipOffset.x) * clipScale.x;
+			const float clipMinY = (cmd.ClipRect.y - clipOffset.y) * clipScale.y;
+			const float clipMaxX = (cmd.ClipRect.z - clipOffset.x) * clipScale.x;
+			const float clipMaxY = (cmd.ClipRect.w - clipOffset.y) * clipScale.y;
+
+			scissor.top = (int)clipMinY;
+			scissor.bottom = (int)clipMaxY;
+			scissor.left = (int)clipMinX;
+			scissor.right = (int)clipMaxX;
 
 			Gfx_SetScissorRect(s_context, scissor);
 			s_prim->flush();
@@ -202,7 +215,6 @@ void ImGuiImpl_Startup(Window* window)
 void ImGuiImpl_Update(float dt)
 {
 	ImGuiIO& io = ImGui::GetIO();
-
 	io.DeltaTime = dt;
 
 	io.MousePos.x = s_window->getMouseState().pos.x;
@@ -211,14 +223,16 @@ void ImGuiImpl_Update(float dt)
 	io.MouseDown[0] = s_window->getMouseState().buttons[0];
 	io.MouseDown[1] = s_window->getMouseState().buttons[1];
 
-	if (s_window->getWidth() != 0)
-		io.DisplaySize.x = (float)s_window->getWidth();
-
-	if (s_window->getHeight() != 0)
-		io.DisplaySize.y = (float)s_window->getHeight();
-
 	io.DisplayFramebufferScale.x = s_window->getResolutionScale().x;
 	io.DisplayFramebufferScale.y = s_window->getResolutionScale().y;
+
+	const Tuple2i framebufferSize = s_window->getFramebufferSize();
+	const float scaleX = (io.DisplayFramebufferScale.x > 0.0f) ? io.DisplayFramebufferScale.x : 1.0f;
+	const float scaleY = (io.DisplayFramebufferScale.y > 0.0f) ? io.DisplayFramebufferScale.y : 1.0f;
+	if (framebufferSize.x > 0)
+		io.DisplaySize.x = (float)framebufferSize.x / scaleX;
+	if (framebufferSize.y > 0)
+		io.DisplaySize.y = (float)framebufferSize.y / scaleY;
 
 	ImGui::NewFrame();
 }
