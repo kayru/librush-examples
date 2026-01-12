@@ -40,7 +40,7 @@ public:
 			Log::message("Long frame time: %f ms", deltaTime * 1000.0);
 		}
 
-		m_prim->begin2D(window->getFramebufferSize());
+		m_prim->begin2D(window->getSize());
 
 		const double t    = m_timer.time() * 1.0f;
 		const float  posX = float(t - (int)t) * window->getSizeFloat().x;

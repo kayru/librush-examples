@@ -100,6 +100,8 @@ static void ImGuiImpl_Render(ImDrawData* drawData)
 	s_prim->setTexture(s_fontTexture);
 	s_prim->setSampler(PrimitiveBatch::SamplerState_Point);
 
+	const Vec2 framebufferScale = s_window->getResolutionScale();
+
 	for (int cmdListIndex = 0; cmdListIndex < drawData->CmdListsCount; ++cmdListIndex)
 	{
 		ImDrawList* cmdList = drawData->CmdLists[cmdListIndex];
@@ -128,10 +130,10 @@ static void ImGuiImpl_Render(ImDrawData* drawData)
 
 			GfxRect scissor;
 
-			scissor.top = (int)cmd.ClipRect.y;
-			scissor.bottom = (int)cmd.ClipRect.w;
-			scissor.left = (int)cmd.ClipRect.x;
-			scissor.right = (int)cmd.ClipRect.z;
+			scissor.top = (int)(cmd.ClipRect.y * framebufferScale.y);
+			scissor.bottom = (int)(cmd.ClipRect.w * framebufferScale.y);
+			scissor.left = (int)(cmd.ClipRect.x * framebufferScale.x);
+			scissor.right = (int)(cmd.ClipRect.z * framebufferScale.x);
 
 			Gfx_SetScissorRect(s_context, scissor);
 			s_prim->flush();
@@ -214,6 +216,9 @@ void ImGuiImpl_Update(float dt)
 
 	if (s_window->getHeight() != 0)
 		io.DisplaySize.y = (float)s_window->getHeight();
+
+	io.DisplayFramebufferScale.x = s_window->getResolutionScale().x;
+	io.DisplayFramebufferScale.y = s_window->getResolutionScale().y;
 
 	ImGui::NewFrame();
 }

@@ -65,10 +65,11 @@ void ExampleRayTracing::onUpdate()
 	GfxContext* ctx = Platform_GetGfxContext();
 
 	GfxTextureDesc outputImageDesc = Gfx_GetTextureDesc(m_outputImage);
-	if (!m_outputImage.valid() || outputImageDesc.getSize2D() != m_window->getSize())
+	const Tuple2i framebufferSize = m_window->getFramebufferSize();
+	if (!m_outputImage.valid() || outputImageDesc.getSize2D() != framebufferSize)
 	{
 		outputImageDesc = GfxTextureDesc::make2D(
-		    m_window->getSize(), GfxFormat_RGBA16_Float, GfxUsageFlags::StorageImage_ShaderResource);
+		    framebufferSize, GfxFormat_RGBA16_Float, GfxUsageFlags::StorageImage_ShaderResource);
 
 		m_outputImage = Gfx_CreateTexture(outputImageDesc);
 	}

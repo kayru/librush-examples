@@ -339,10 +339,11 @@ void ExamplePathTracer::render()
 	GfxContext* ctx = Platform_GetGfxContext();
 
 	GfxTextureDesc outputImageDesc = Gfx_GetTextureDesc(m_outputImage);
-	if (!m_outputImage.valid() || outputImageDesc.getSize2D() != m_window->getSize())
+	const Tuple2i framebufferSize = m_window->getFramebufferSize();
+	if (!m_outputImage.valid() || outputImageDesc.getSize2D() != framebufferSize)
 	{
 		outputImageDesc = GfxTextureDesc::make2D(
-			m_window->getSize(), GfxFormat_RGBA32_Float, GfxUsageFlags::StorageImage_ShaderResource);
+			framebufferSize, GfxFormat_RGBA32_Float, GfxUsageFlags::StorageImage_ShaderResource);
 
 		m_outputImage = Gfx_CreateTexture(outputImageDesc);
 	}
@@ -388,8 +389,8 @@ void ExamplePathTracer::render()
 	passDesc.clearColors[0] = ColorRGBA8(11, 22, 33);
 	Gfx_BeginPass(ctx, passDesc);
 
-	Gfx_SetViewport(ctx, GfxViewport(m_window->getSize()));
-	Gfx_SetScissorRect(ctx, m_window->getSize());
+	Gfx_SetViewport(ctx, GfxViewport(m_window->getFramebufferSize()));
+	Gfx_SetScissorRect(ctx, m_window->getFramebufferSize());
 
 	Gfx_SetDepthStencilState(ctx, m_depthStencilStates.writeLessEqual);
 	Gfx_SetRasterizerState(ctx, m_rasterizerStates.solidCullCW);

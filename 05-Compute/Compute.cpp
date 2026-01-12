@@ -56,8 +56,8 @@ public:
 		backBufferPassDesc.flags          = GfxPassFlags::ClearAll;
 		backBufferPassDesc.clearColors[0] = ColorRGBA8(11, 22, 33);
 		Gfx_BeginPass(ctx, backBufferPassDesc);
-		Gfx_SetViewport(ctx, window->getSize());
-		Gfx_SetScissorRect(ctx, window->getSize());
+		Gfx_SetViewport(ctx, window->getFramebufferSize());
+		Gfx_SetScissorRect(ctx, window->getFramebufferSize());
 
 		m_prim->begin2D(window->getSize());
 		m_prim->setTexture(m_texture);

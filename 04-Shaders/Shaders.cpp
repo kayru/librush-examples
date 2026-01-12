@@ -52,8 +52,9 @@ public:
 		auto window = m_window;
 		auto ctx    = Platform_GetGfxContext();
 
-		m_constants.shaderParams.x = (float)window->getSize().x;
-		m_constants.shaderParams.y = (float)window->getSize().y;
+		const Tuple2i framebufferSize = window->getFramebufferSize();
+		m_constants.shaderParams.x = (float)framebufferSize.x;
+		m_constants.shaderParams.y = (float)framebufferSize.y;
 		m_constants.shaderParams.z = (float)m_timer.time();
 		m_constants.shaderParams.w = 0;
 		Gfx_UpdateBuffer(ctx, m_cb, &m_constants, sizeof(m_constants));
@@ -63,8 +64,8 @@ public:
 		passDesc.clearColors[0] = ColorRGBA8(30, 40, 50);
 		Gfx_BeginPass(ctx, passDesc);
 
-		Gfx_SetViewport(ctx, window->getSize());
-		Gfx_SetScissorRect(ctx, window->getSize());
+		Gfx_SetViewport(ctx, window->getFramebufferSize());
+		Gfx_SetScissorRect(ctx, window->getFramebufferSize());
 
 		Gfx_SetTechnique(ctx, m_tech);
 		Gfx_SetVertexStream(ctx, 0, m_vb);

@@ -156,8 +156,8 @@ public:
 			Gfx_BeginPass(ctx, passDesc);
 			Gfx_SetBlendState(ctx, m_blendOpaque);
 
-			Gfx_SetViewport(ctx, GfxViewport(window->getSize()));
-			Gfx_SetScissorRect(ctx, window->getSize());
+			Gfx_SetViewport(ctx, GfxViewport(window->getFramebufferSize()));
+			Gfx_SetScissorRect(ctx, window->getFramebufferSize());
 
 			m_prim->begin2D(Vec2(1.0f), Vec2(0.0f));
 
