@@ -90,25 +90,19 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 		${RUSH_VK_SDK_BIN_PATHS}
 	)
 	find_program(xcrun NAMES xcrun)
-	function(spv_to_metallib spvInput outBase)
-		add_custom_command(
-			OUTPUT ${CMAKE_CFG_INTDIR}/${outBase}.metallib
-			COMMAND ${spirv-cross} --msl --msl-version 200000 --msl-argument-buffers --msl-decoration-binding --msl-force-active-argument-buffer-resources ${CMAKE_CFG_INTDIR}/${spvInput} > ${CMAKE_CFG_INTDIR}/${outBase}.metal
-			COMMAND ${xcrun} -sdk macosx metal -c ${CMAKE_CFG_INTDIR}/${outBase}.metal -o ${CMAKE_CFG_INTDIR}/${outBase}.air
-			COMMAND ${xcrun} -sdk macosx metallib ${CMAKE_CFG_INTDIR}/${outBase}.air -o ${CMAKE_CFG_INTDIR}/${outBase}.metallib
-			DEPENDS ${CMAKE_CFG_INTDIR}/${spvInput}
-		)
-	endfunction()
 	function(glsl_shader_compile_rule shaderName)
 		set(shaderDeps ${ARGN})
 		add_custom_command(
-			OUTPUT ${CMAKE_CFG_INTDIR}/${shaderName}.bin
+			OUTPUT ${CMAKE_CFG_INTDIR}/${shaderName}.bin ${CMAKE_CFG_INTDIR}/${shaderName}.metallib
+			BYPRODUCTS ${CMAKE_CFG_INTDIR}/${shaderName}.metal ${CMAKE_CFG_INTDIR}/${shaderName}.air
 			COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CFG_INTDIR}
 			COMMAND ${GLSLC} -O -o ${CMAKE_CFG_INTDIR}/${shaderName}.bin ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
+			COMMAND ${spirv-cross} --msl --msl-version 200000 --msl-argument-buffers --msl-decoration-binding --msl-force-active-argument-buffer-resources ${CMAKE_CFG_INTDIR}/${shaderName}.bin > ${CMAKE_CFG_INTDIR}/${shaderName}.metal
+			COMMAND ${xcrun} -sdk macosx metal -c ${CMAKE_CFG_INTDIR}/${shaderName}.metal -o ${CMAKE_CFG_INTDIR}/${shaderName}.air
+			COMMAND ${xcrun} -sdk macosx metallib ${CMAKE_CFG_INTDIR}/${shaderName}.air -o ${CMAKE_CFG_INTDIR}/${shaderName}.metallib
 			MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
 			DEPENDS ${shaderDeps}
 		)
-		spv_to_metallib(${shaderName}.bin ${shaderName})
 	endfunction(glsl_shader_compile_rule)
 else()
 	function(glsl_shader_compile_rule shaderName)
@@ -132,13 +126,16 @@ function(hlsl_shader_compile_rule shaderName profile)
 			message(FATAL_ERROR "spirv-cross or xcrun was not found. Ensure spirv-cross is available in PATH for Metal shader compilation.")
 		endif()
 		add_custom_command(
-			OUTPUT ${CMAKE_CFG_INTDIR}/${shaderName}.spv
+			OUTPUT ${CMAKE_CFG_INTDIR}/${shaderName}.spv ${CMAKE_CFG_INTDIR}/${shaderName}.metallib
+			BYPRODUCTS ${CMAKE_CFG_INTDIR}/${shaderName}.metal ${CMAKE_CFG_INTDIR}/${shaderName}.air
 			COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CFG_INTDIR}
 			COMMAND ${DXC} -spirv -fspv-target-env=vulkan1.2 -T ${profile} -E main -Fo ${CMAKE_CFG_INTDIR}/${shaderName}.spv ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
+			COMMAND ${spirv-cross} --msl --msl-version 200000 --msl-argument-buffers --msl-decoration-binding --msl-force-active-argument-buffer-resources ${CMAKE_CFG_INTDIR}/${shaderName}.spv > ${CMAKE_CFG_INTDIR}/${shaderName}.metal
+			COMMAND ${xcrun} -sdk macosx metal -c ${CMAKE_CFG_INTDIR}/${shaderName}.metal -o ${CMAKE_CFG_INTDIR}/${shaderName}.air
+			COMMAND ${xcrun} -sdk macosx metallib ${CMAKE_CFG_INTDIR}/${shaderName}.air -o ${CMAKE_CFG_INTDIR}/${shaderName}.metallib
 			MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
 			DEPENDS ${shaderDeps}
 		)
-		spv_to_metallib(${shaderName}.spv ${shaderName})
 	else()
 		add_custom_command(
 			OUTPUT ${CMAKE_CFG_INTDIR}/${shaderName}.bin
