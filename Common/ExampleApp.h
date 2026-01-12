@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Rush/GfxCommon.h>
 #include <Rush/GfxDevice.h>
 #include <Rush/Platform.h>
 
@@ -27,6 +28,8 @@ public:
 
 protected:
 	virtual void onUpdate() = 0;
+	void renderMessage(const char* message);
+	void renderMessage(const char* message, const ColorRGBA8& color, float scale);
 	struct DepthStencilStates
 	{
 		GfxOwn<GfxDepthStencilState> writeLessEqual;

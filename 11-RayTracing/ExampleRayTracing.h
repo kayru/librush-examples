@@ -39,4 +39,5 @@ private:
 	GfxOwn<GfxAccelerationStructure> m_tlas;
 
 	WindowEventListener m_windowEvents;
+	std::string m_startupError;
 };

@@ -42,16 +42,37 @@ ExampleRayTracing::ExampleRayTracing() : ExampleApp()
 
 	m_constantBuffer = Gfx_CreateBuffer(GfxBufferFlags::TransientConstant);
 
-	if (Gfx_GetCapability().rayTracingInline)
+	const GfxCapability& caps = Gfx_GetCapability();
+	if (!caps.rayTracingInline)
 	{
-		m_computeShader = Gfx_CreateComputeShader(loadShaderFromFile(RUSH_SHADER_NAME("RayQuery.comp")));
+		m_startupError = "Ray queries are not supported.";
+		return;
+	}
 
-		GfxShaderBindingDesc bindings;
-		bindings.descriptorSets[0].constantBuffers        = 1;
-		bindings.descriptorSets[0].rwImages               = 1;
-		bindings.descriptorSets[0].accelerationStructures = 1;
+	GfxShaderSource shaderSource = loadShaderFromFile(RUSH_SHADER_NAME("RayQuery.comp"));
+	if (shaderSource.empty())
+	{
+		m_startupError = "Failed to load RayQuery shader.";
+		return;
+	}
 
-		m_technique = Gfx_CreateTechnique(GfxTechniqueDesc(m_computeShader, bindings, {8, 8, 1}));
+	m_computeShader = Gfx_CreateComputeShader(shaderSource);
+	if (!m_computeShader.valid())
+	{
+		m_startupError = "Failed to create RayQuery shader.";
+		return;
+	}
+
+	GfxShaderBindingDesc bindings;
+	bindings.descriptorSets[0].constantBuffers        = 1;
+	bindings.descriptorSets[0].rwImages               = 1;
+	bindings.descriptorSets[0].accelerationStructures = 1;
+
+	m_technique = Gfx_CreateTechnique(GfxTechniqueDesc(m_computeShader, bindings, {8, 8, 1}));
+	if (!m_technique.valid())
+	{
+		m_startupError = "Failed to create RayQuery pipeline.";
+		return;
 	}
 }
 
@@ -61,7 +82,12 @@ ExampleRayTracing::~ExampleRayTracing()
 
 void ExampleRayTracing::onUpdate()
 {
-	const GfxCapability& caps = Gfx_GetCapability();
+	if (!m_startupError.empty())
+	{
+		renderMessage(m_startupError.c_str());
+		return;
+	}
+
 	GfxContext* ctx = Platform_GetGfxContext();
 
 	GfxTextureDesc outputImageDesc = Gfx_GetTextureDesc(m_outputImage);
@@ -87,27 +113,24 @@ void ExampleRayTracing::onUpdate()
 
 	GfxMarkerScope markerFrame(ctx, "Frame");
 
-	if (Gfx_GetCapability().rayTracingInline)
+	if (!m_tlas.valid())
 	{
-		if (!m_tlas.valid())
-		{
-			createScene(ctx);
-		}
-
-		GfxMarkerScope markerRT(ctx, "Ray Query");
-		Gfx_SetTechnique(ctx, m_technique);
-		Gfx_SetStorageImage(ctx, 0, m_outputImage);
-		Gfx_SetConstantBuffer(ctx, 0, m_constantBuffer);
-		Gfx_SetAccelerationStructure(ctx, 0, m_tlas);
-
-		const u32 groupSizeX = 8;
-		const u32 groupSizeY = 8;
-		const u32 dispatchX  = (outputImageDesc.width + groupSizeX - 1) / groupSizeX;
-		const u32 dispatchY  = (outputImageDesc.height + groupSizeY - 1) / groupSizeY;
-		Gfx_Dispatch(ctx, dispatchX, dispatchY, 1);
-
-		Gfx_AddImageBarrier(ctx, m_outputImage, GfxResourceState_ShaderRead);
+		createScene(ctx);
 	}
+
+	GfxMarkerScope markerRT(ctx, "Ray Query");
+	Gfx_SetTechnique(ctx, m_technique);
+	Gfx_SetStorageImage(ctx, 0, m_outputImage);
+	Gfx_SetConstantBuffer(ctx, 0, m_constantBuffer);
+	Gfx_SetAccelerationStructure(ctx, 0, m_tlas);
+
+	const u32 groupSizeX = 8;
+	const u32 groupSizeY = 8;
+	const u32 dispatchX  = (outputImageDesc.width + groupSizeX - 1) / groupSizeX;
+	const u32 dispatchY  = (outputImageDesc.height + groupSizeY - 1) / groupSizeY;
+	Gfx_Dispatch(ctx, dispatchX, dispatchY, 1);
+
+	Gfx_AddImageBarrier(ctx, m_outputImage, GfxResourceState_ShaderRead);
 
 	{
 		GfxPassDesc passDesc;
@@ -122,20 +145,9 @@ void ExampleRayTracing::onUpdate()
 
 		m_prim->begin2D(m_window->getSize());
 
-		if (Gfx_GetCapability().rayTracingInline)
-		{
-			m_prim->setTexture(m_outputImage);
-			Box2 rect(Vec2(0.0f), m_window->getSizeFloat());
-			m_prim->drawTexturedQuad(rect);
-		}
-		else
-		{
-			m_font->setScale(4.0f);
-			const char* msg     = "Ray queries are not supported.";
-			Vec2        msgSize = m_font->measure(msg);
-			Vec2        pos     = (m_window->getSizeFloat() - msgSize) / 2.0f;
-			m_font->draw(m_prim, pos, msg, ColorRGBA8::Red());
-		}
+		m_prim->setTexture(m_outputImage);
+		Box2 rect(Vec2(0.0f), m_window->getSizeFloat());
+		m_prim->drawTexturedQuad(rect);
 
 		m_prim->end2D();
 

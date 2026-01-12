@@ -174,6 +174,7 @@ private:
 	bool m_loadingThreadShouldExit = false;
 	u32 m_frameIndex = 0;
 	bool m_showUI = true;
+	std::string m_startupError;
 
 	std::mutex m_loadingMutex;
 

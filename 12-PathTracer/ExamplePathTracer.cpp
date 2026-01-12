@@ -63,6 +63,17 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 
 	m_windowEvents.setOwner(m_window);
 
+	auto setError = [this](const char* message)
+	{
+		if (m_startupError.empty())
+		{
+			m_startupError = message;
+		}
+	};
+
+	const GfxCapability& caps = Gfx_GetCapability();
+	const bool rtAvailable = caps.rayTracing;
+
 	const u32      whiteTexturePixels[4] = {0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF};
 	GfxTextureDesc textureDesc           = GfxTextureDesc::make2D(2, 2);
 
@@ -73,7 +84,18 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 	materialDescriptorSetDesc.flags = GfxDescriptorSetFlags::TextureArray;
 	materialDescriptorSetDesc.stageFlags = GfxStageFlags::RayTracing;
 	materialDescriptorSetDesc.textures = MaxTextures;
-	m_materialDescriptorSet = Gfx_CreateDescriptorSet(materialDescriptorSetDesc);
+	if (rtAvailable)
+	{
+		m_materialDescriptorSet = Gfx_CreateDescriptorSet(materialDescriptorSetDesc);
+		if (!m_materialDescriptorSet.valid())
+		{
+			setError("Failed to create material descriptors.");
+		}
+	}
+	else
+	{
+		setError("Ray tracing is not supported.");
+	}
 
 	{
 		GfxBufferDesc cbDesc(GfxBufferFlags::TransientConstant, GfxFormat_Unknown, 1, sizeof(SceneConstants));
@@ -85,12 +107,17 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 		m_tonemapConstantBuffer = Gfx_CreateBuffer(cbDesc);
 	}
 	
-	if (Gfx_GetCapability().rayTracing)
+	if (rtAvailable && m_startupError.empty())
 	{
 		GfxRayTracingPipelineDesc pipelineDesc;
 		pipelineDesc.rayGen = loadShaderFromFile(RUSH_SHADER_NAME("PathTracer.rgen"));
 		pipelineDesc.miss = loadShaderFromFile(RUSH_SHADER_NAME("PathTracer.rmiss"));
 		pipelineDesc.closestHit = loadShaderFromFile(RUSH_SHADER_NAME("PathTracer.rchit"));
+
+		if (pipelineDesc.rayGen.empty() || pipelineDesc.miss.empty() || pipelineDesc.closestHit.empty())
+		{
+			setError("Failed to load ray tracing shaders.");
+		}
 
 		pipelineDesc.bindings.descriptorSets[0].constantBuffers = 1; // scene constants
 		pipelineDesc.bindings.descriptorSets[0].samplers = 1; // default sampler
@@ -100,22 +127,47 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 		pipelineDesc.bindings.descriptorSets[0].accelerationStructures = 1; // TLAS
 		pipelineDesc.bindings.descriptorSets[1] = materialDescriptorSetDesc;
 
-		m_rtPipeline = Gfx_CreateRayTracingPipeline(pipelineDesc);
+		if (m_startupError.empty())
+		{
+			m_rtPipeline = Gfx_CreateRayTracingPipeline(pipelineDesc);
+			if (!m_rtPipeline.valid())
+			{
+				setError("Failed to create ray tracing pipeline.");
+			}
+		}
 	}
 
+	if (m_startupError.empty())
 	{
-		auto vs = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("Blit.vert")));
-		auto ps = Gfx_CreatePixelShader(loadShaderFromFile(RUSH_SHADER_NAME("BlitTonemap.frag")));
-		auto vf = Gfx_CreateVertexFormat({});
+		GfxShaderSource vsSource = loadShaderFromFile(RUSH_SHADER_NAME("Blit.vert"));
+		GfxShaderSource psSource = loadShaderFromFile(RUSH_SHADER_NAME("BlitTonemap.frag"));
+		if (vsSource.empty() || psSource.empty())
+		{
+			setError("Failed to load tonemap shaders.");
+		}
+		else
+		{
+			auto vs = Gfx_CreateVertexShader(vsSource);
+			auto ps = Gfx_CreatePixelShader(psSource);
+			auto vf = Gfx_CreateVertexFormat({});
 
-		GfxTechniqueDesc desc;
-		desc.vs = vs.get();
-		desc.ps = ps.get();
-		desc.vf = vf.get();
-		desc.bindings.descriptorSets[0].constantBuffers = 1;
-		desc.bindings.descriptorSets[0].samplers = 1; // linear sampler
-		desc.bindings.descriptorSets[0].textures = 1; // input texture
-		m_blitTonemap = Gfx_CreateTechnique(desc);
+			if (vs.valid() && ps.valid())
+			{
+				GfxTechniqueDesc desc;
+				desc.vs = vs.get();
+				desc.ps = ps.get();
+				desc.vf = vf.get();
+				desc.bindings.descriptorSets[0].constantBuffers = 1;
+				desc.bindings.descriptorSets[0].samplers = 1; // linear sampler
+				desc.bindings.descriptorSets[0].textures = 1; // input texture
+				m_blitTonemap = Gfx_CreateTechnique(desc);
+			}
+
+			if (!m_blitTonemap.valid())
+			{
+				setError("Failed to create tonemap pipeline.");
+			}
+		}
 	}
 
 	const char* modelFilename = nullptr;
@@ -177,6 +229,12 @@ inline float focalLengthToFov(float focalLength, float sensorSize)
 
 void ExamplePathTracer::onUpdate()
 {
+	if (!m_startupError.empty())
+	{
+		renderMessage(m_startupError.c_str());
+		return;
+	}
+
 	TimingScope timingScope(m_stats.cpuTotal);
 
 	m_stats.gpuTotal.add(Gfx_Stats().lastFrameGpuTime);
@@ -359,11 +417,12 @@ void ExamplePathTracer::render()
 
 	Gfx_UpdateBuffer(ctx, m_sceneConstantBuffer, &constants, sizeof(constants));
 
-	if (m_valid && Gfx_GetCapability().rayTracing)
+	const bool rtReady = m_rtPipeline.valid() && m_materialDescriptorSet.valid();
+	if (m_valid && rtReady)
 	{
 		GfxMarkerScope markerFrame(ctx, "Model");
 
-		if (!m_tlas.valid() && Gfx_GetCapability().rayTracing)
+		if (!m_tlas.valid())
 		{
 			createRayTracingScene(ctx);
 		}
@@ -406,11 +465,14 @@ void ExamplePathTracer::render()
 		Gfx_SetDepthStencilState(ctx, m_depthStencilStates.disable);
 		Gfx_SetRasterizerState(ctx, m_rasterizerStates.solidNoCull);
 		Gfx_SetBlendState(ctx, m_blendStates.opaque);
-		Gfx_SetTechnique(ctx, m_blitTonemap);
-		Gfx_SetConstantBuffer(ctx, 0, m_tonemapConstantBuffer);
-		Gfx_SetSampler(ctx, 0, m_samplerStates.linearClamp);
-		Gfx_SetTexture(ctx, 0, m_outputImage);
-		Gfx_Draw(ctx, 0, 3);
+		if (m_blitTonemap.valid())
+		{
+			Gfx_SetTechnique(ctx, m_blitTonemap);
+			Gfx_SetConstantBuffer(ctx, 0, m_tonemapConstantBuffer);
+			Gfx_SetSampler(ctx, 0, m_samplerStates.linearClamp);
+			Gfx_SetTexture(ctx, 0, m_outputImage);
+			Gfx_Draw(ctx, 0, 3);
+		}
 	}
 
 	if (m_showUI)
@@ -438,15 +500,6 @@ void ExamplePathTracer::render()
 		    m_frameIndex);
 
 		m_font->draw(m_prim, Vec2(10.0f, 30.0f), timingString);
-
-		if (!Gfx_GetCapability().rayTracing)
-		{
-			m_font->setScale(4.0f);
-			const char* msg = "Ray tracing is not supported.";
-			Vec2 msgSize = m_font->measure(msg);
-			Vec2 pos = (m_window->getSizeFloat() - msgSize) / 2.0f;
-			m_font->draw(m_prim, pos, msg, ColorRGBA8::Red());
-		}
 
 		m_prim->end2D();
 
@@ -1137,15 +1190,19 @@ void ExamplePathTracer::createGpuScene()
 		}
 	}
 
-	Gfx_UpdateDescriptorSet(m_materialDescriptorSet,
-		nullptr, // constant buffers
-		nullptr, // samplers
-		textureDescriptors.data(),
-		nullptr, // storage images
-		nullptr  // storage buffers
-	);
+	if (m_materialDescriptorSet.valid())
+	{
+		Gfx_UpdateDescriptorSet(m_materialDescriptorSet,
+			nullptr, // constant buffers
+			nullptr, // samplers
+			textureDescriptors.data(),
+			nullptr, // storage images
+			nullptr  // storage buffers
+		);
+	}
 
-	if (Gfx_GetCapability().rayTracing)
+	const bool rtReady = m_rtPipeline.valid() && m_materialDescriptorSet.valid();
+	if (rtReady)
 	{
 		RUSH_LOG("Creating ray tracing data");
 

@@ -257,6 +257,33 @@ void ExampleApp::update()
 	}
 }
 
+void ExampleApp::renderMessage(const char* message)
+{
+	renderMessage(message, ColorRGBA8::Red(), 4.0f);
+}
+
+void ExampleApp::renderMessage(const char* message, const ColorRGBA8& color, float scale)
+{
+	auto ctx = Platform_GetGfxContext();
+
+	GfxPassDesc passDesc;
+	passDesc.flags = GfxPassFlags::ClearAll;
+	passDesc.clearColors[0] = ColorRGBA8(11, 22, 33);
+	Gfx_BeginPass(ctx, passDesc);
+
+	Gfx_SetBlendState(ctx, m_blendStates.lerp);
+	Gfx_SetDepthStencilState(ctx, m_depthStencilStates.disable);
+
+	m_prim->begin2D(m_window->getSize());
+	m_font->setScale(scale);
+	Vec2 msgSize = m_font->measure(message);
+	Vec2 pos = (m_window->getSizeFloat() - msgSize) * 0.5f;
+	m_font->draw(m_prim, pos, message, color);
+	m_prim->end2D();
+
+	Gfx_EndPass(ctx);
+}
+
 void ExampleApp::requestScreenshot()
 {
 	if (m_screenshotInFlight || m_screenshotComplete)
