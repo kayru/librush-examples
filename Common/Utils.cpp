@@ -74,6 +74,22 @@ namespace
 		return false;
 	}
 
+	bool matchArgKey(const char* arg, const char* key)
+	{
+		if (!arg || !key)
+		{
+			return false;
+		}
+
+		if (std::strncmp(arg, "--", 2) != 0)
+		{
+			return false;
+		}
+
+		const char* name = arg + 2;
+		return std::strcmp(name, key) == 0;
+	}
+
 	bool findArgValue(int argc, char** argv, const char* longKey, const char* shortKey, const char*& value)
 	{
 		const char* lastValue = nullptr;
@@ -94,6 +110,15 @@ namespace
 					lastValue = foundValue;
 				}
 				continue;
+			}
+
+			if (matchArgKey(arg, longKey) || matchArgKey(arg, shortKey))
+			{
+				const char* next = (i + 1 < argc) ? argv[i + 1] : nullptr;
+				if (next && next[0] != '-')
+				{
+					lastValue = next;
+				}
 			}
 		}
 
