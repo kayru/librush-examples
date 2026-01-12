@@ -28,7 +28,6 @@ public:
 	void onUpdate() override;
 
 private:
-
 	void render();
 
 	bool loadModel(const char* filename);

@@ -136,8 +136,12 @@ ExampleModelViewer::ExampleModelViewer() : ExampleApp(), m_boundingBox(Vec3(0.0f
 	}
 
 
-	const u32 sampleCountMask = (caps.colorSampleCounts & caps.depthSampleCounts);
-	m_msaaQuality             = min(8, 1 << (31 - bitScanReverse(sampleCountMask)));
+	u32 sampleCountMask = (caps.colorSampleCounts & caps.depthSampleCounts);
+	if (sampleCountMask == 0)
+	{
+		sampleCountMask = 1;
+	}
+	m_msaaQuality = 1u << (31 - bitScanReverse(sampleCountMask));
 }
 
 ExampleModelViewer::~ExampleModelViewer()
@@ -240,17 +244,17 @@ void ExampleModelViewer::onUpdate()
 
 void ExampleModelViewer::createRenderTargets()
 {
-	Tuple2i windowSize         = m_window->getSize();
+	Tuple2i framebufferSize = m_window->getFramebufferSize();
 	if (m_colorTarget.valid())
 	{
 		GfxTextureDesc desc = Gfx_GetTextureDesc(m_colorTarget);
-		if (desc.width == windowSize.x && desc.height == windowSize.y)
+		if (desc.width == framebufferSize.x && desc.height == framebufferSize.y)
 		{
 			return;
 		}
 	}
 
-	GfxTextureDesc desc = GfxTextureDesc::make2D(windowSize.x, windowSize.y);
+	GfxTextureDesc desc = GfxTextureDesc::make2D(framebufferSize.x, framebufferSize.y);
 
 	desc.format   = GfxFormat_D32_Float;
 	desc.usage    = GfxUsageFlags::DepthStencil;
@@ -298,8 +302,8 @@ void ExampleModelViewer::render()
 		passDesc.depth          = m_depthTarget.get();
 		Gfx_BeginPass(ctx, passDesc);
 
-		Gfx_SetViewport(ctx, GfxViewport(m_window->getSize()));
-		Gfx_SetScissorRect(ctx, m_window->getSize());
+		Gfx_SetViewport(ctx, GfxViewport(m_window->getFramebufferSize()));
+		Gfx_SetScissorRect(ctx, m_window->getFramebufferSize());
 
 		Gfx_SetDepthStencilState(ctx,
 			m_reverseZ
@@ -343,6 +347,9 @@ void ExampleModelViewer::render()
 		passDesc.clearDepth     = m_reverseZ ? 0.0f : 1.0f;
 		Gfx_BeginPass(ctx, passDesc);
 
+		Gfx_SetViewport(ctx, GfxViewport(m_window->getFramebufferSize()));
+		Gfx_SetScissorRect(ctx, m_window->getFramebufferSize());
+
 		GfxMarkerScope markerFrame(ctx, "UI");
 
 		TimingScope timingScope(m_stats.cpuUI);
@@ -351,8 +358,17 @@ void ExampleModelViewer::render()
 			Gfx_SetBlendState(ctx, m_blendStates.opaque);
 			Gfx_SetDepthStencilState(ctx, m_depthStencilStates.disable);
 
-			m_prim->begin2D(Vec2(1.0f), Vec2(0.0f));
-			TexturedQuad2D q = makeFullScreenQuad();
+			const Tuple2i framebufferSize = m_window->getFramebufferSize();
+			m_prim->begin2D(framebufferSize);
+			TexturedQuad2D q;
+			q.pos[0] = Vec2(0.0f, 0.0f);
+			q.pos[1] = Vec2((float)framebufferSize.x, 0.0f);
+			q.pos[2] = Vec2((float)framebufferSize.x, (float)framebufferSize.y);
+			q.pos[3] = Vec2(0.0f, (float)framebufferSize.y);
+			q.tex[0] = Vec2(0.0f, 0.0f);
+			q.tex[1] = Vec2(1.0f, 0.0);
+			q.tex[2] = Vec2(1.0f, 1.0f);
+			q.tex[3] = Vec2(0.0f, 1.0f);
 			m_prim->setTexture(m_resolveTarget);
 			m_prim->drawTexturedQuad(&q);
 			m_prim->end2D();
