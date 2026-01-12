@@ -66,8 +66,8 @@ ExampleModelViewer::ExampleModelViewer() : ExampleApp(), m_boundingBox(Vec3(0.0f
 	m_defaultWhiteTexture                = Gfx_CreateTexture(textureDesc, whiteTexturePixels);
 
 	{
-		m_vs = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelVS.vert")));
-		m_ps = Gfx_CreatePixelShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelPS.frag")));
+		m_vs = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelVS.hlsl")));
+		m_ps = Gfx_CreatePixelShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelPS.hlsl")));
 	}
 
 	GfxVertexFormatDesc vfDesc;

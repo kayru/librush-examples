@@ -1,9 +1,9 @@
 set(app 08-ModelViewer)
 
 set(shaders
-	Common.glsl
-	ModelPS.frag
-	ModelVS.vert
+	Common.hlsl
+	ModelPS.hlsl
+	ModelVS.hlsl
 )
 
 add_executable(${app}
@@ -17,5 +17,5 @@ add_executable(${app}
 target_link_libraries(${app} Common stb tiny_obj_loader)
 target_compile_definitions(${app} PRIVATE RUSH_USING_NAMESPACE)
 
-glsl_shader_compile_rule("ModelPS.frag" "Common.glsl")
-glsl_shader_compile_rule("ModelVS.vert" "Common.glsl")
+hlsl_shader_compile_rule("ModelPS.hlsl" ps_6_0 "Common.hlsl")
+hlsl_shader_compile_rule("ModelVS.hlsl" vs_6_0 "Common.hlsl")
