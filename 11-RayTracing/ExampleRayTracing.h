@@ -33,10 +33,10 @@ private:
 	GfxOwn<GfxTexture> m_outputImage;
 	GfxOwn<GfxBuffer> m_constantBuffer;
 
-	GfxOwn<GfxRayTracingPipeline>    m_rtPipeline;
+	GfxOwn<GfxComputeShader>         m_computeShader;
+	GfxOwn<GfxTechnique>             m_technique;
 	GfxOwn<GfxAccelerationStructure> m_blas;
 	GfxOwn<GfxAccelerationStructure> m_tlas;
-	GfxOwn<GfxBuffer>                m_sbtBuffer;
 
 	WindowEventListener m_windowEvents;
 };

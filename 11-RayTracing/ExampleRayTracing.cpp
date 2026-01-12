@@ -42,26 +42,16 @@ ExampleRayTracing::ExampleRayTracing() : ExampleApp()
 
 	m_constantBuffer = Gfx_CreateBuffer(GfxBufferFlags::TransientConstant);
 
-	if (Gfx_GetCapability().rayTracing)
+	if (Gfx_GetCapability().rayTracingInline)
 	{
-		GfxRayTracingPipelineDesc pipelineDesc;
-		pipelineDesc.rayGen     = loadShaderFromFile(RUSH_SHADER_NAME("Primary.rgen"));
-		pipelineDesc.miss       = loadShaderFromFile(RUSH_SHADER_NAME("Primary.rmiss"));
-		pipelineDesc.closestHit = loadShaderFromFile(RUSH_SHADER_NAME("Primary.rchit"));
+		m_computeShader = Gfx_CreateComputeShader(loadShaderFromFile(RUSH_SHADER_NAME("RayQuery.comp")));
 
-		pipelineDesc.bindings.descriptorSets[0].constantBuffers        = 1;
-		pipelineDesc.bindings.descriptorSets[0].rwImages               = 1;
-		pipelineDesc.bindings.descriptorSets[0].accelerationStructures = 1;
+		GfxShaderBindingDesc bindings;
+		bindings.descriptorSets[0].constantBuffers        = 1;
+		bindings.descriptorSets[0].rwImages               = 1;
+		bindings.descriptorSets[0].accelerationStructures = 1;
 
-		m_rtPipeline = Gfx_CreateRayTracingPipeline(pipelineDesc);
-
-		// TODO: write a utility function to generate SBT easily and correctly
-		const size_t     shaderHandleSize = Gfx_GetCapability().rtShaderHandleSize;
-		const size_t     shaderCount      = 1; // one hit group
-		DynamicArray<u8> sbt(shaderHandleSize * shaderCount);
-		memcpy(sbt.data() + shaderHandleSize * 0,
-		    Gfx_GetRayTracingShaderHandle(m_rtPipeline, GfxRayTracingShaderType::HitGroup, 0), shaderHandleSize);
-		m_sbtBuffer = Gfx_CreateBuffer(GfxBufferFlags::RayTracing, shaderCount, u32(shaderHandleSize), sbt.data());
+		m_technique = Gfx_CreateTechnique(GfxTechniqueDesc(m_computeShader, bindings, {8, 8, 1}));
 	}
 }
 
@@ -96,19 +86,24 @@ void ExampleRayTracing::onUpdate()
 
 	GfxMarkerScope markerFrame(ctx, "Frame");
 
-	if (Gfx_GetCapability().rayTracing)
+	if (Gfx_GetCapability().rayTracingInline)
 	{
 		if (!m_tlas.valid())
 		{
 			createScene(ctx);
 		}
 
-		GfxMarkerScope markerRT(ctx, "RT");
-		Gfx_SetConstantBuffer(ctx, 0, m_constantBuffer);
+		GfxMarkerScope markerRT(ctx, "Ray Query");
+		Gfx_SetTechnique(ctx, m_technique);
 		Gfx_SetStorageImage(ctx, 0, m_outputImage);
+		Gfx_SetConstantBuffer(ctx, 0, m_constantBuffer);
 		Gfx_SetAccelerationStructure(ctx, 0, m_tlas);
 
-		Gfx_TraceRays(ctx, m_rtPipeline, m_sbtBuffer, outputImageDesc.width, outputImageDesc.height);
+		const u32 groupSizeX = 8;
+		const u32 groupSizeY = 8;
+		const u32 dispatchX  = (outputImageDesc.width + groupSizeX - 1) / groupSizeX;
+		const u32 dispatchY  = (outputImageDesc.height + groupSizeY - 1) / groupSizeY;
+		Gfx_Dispatch(ctx, dispatchX, dispatchY, 1);
 
 		Gfx_AddImageBarrier(ctx, m_outputImage, GfxResourceState_ShaderRead);
 	}
@@ -126,7 +121,7 @@ void ExampleRayTracing::onUpdate()
 
 		m_prim->begin2D(m_window->getSize());
 
-		if (Gfx_GetCapability().rayTracing)
+		if (Gfx_GetCapability().rayTracingInline)
 		{
 			m_prim->setTexture(m_outputImage);
 			Box2 rect(Vec2(0.0f), m_window->getSizeFloat());
@@ -135,7 +130,7 @@ void ExampleRayTracing::onUpdate()
 		else
 		{
 			m_font->setScale(4.0f);
-			const char* msg     = "Ray tracing is not supported.";
+			const char* msg     = "Ray queries are not supported.";
 			Vec2        msgSize = m_font->measure(msg);
 			Vec2        pos     = (m_window->getSizeFloat() - msgSize) / 2.0f;
 			m_font->draw(m_prim, pos, msg, ColorRGBA8::Red());
@@ -201,4 +196,3 @@ void ExampleRayTracing::createScene(GfxContext* ctx)
 	Gfx_BuildAccelerationStructure(ctx, m_tlas, instanceBuffer);
 	Gfx_AddFullPipelineBarrier(ctx);
 }
-
