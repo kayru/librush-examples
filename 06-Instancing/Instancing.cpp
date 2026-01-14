@@ -509,6 +509,7 @@ public:
 		}
 		else if (m_method == Method::Instancing && caps.instancing)
 		{
+			// TODO: Investigate Metal rendering artifacts in instancing path.
 			Gfx_SetTechnique(ctx, m_techniqueInstanced);
 
 			const u32 batchSize  = MaxBatchSize;

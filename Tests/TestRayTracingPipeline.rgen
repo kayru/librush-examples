@@ -1,0 +1,36 @@
+#version 460
+#extension GL_EXT_ray_tracing : enable
+
+layout(location = 0) rayPayloadEXT uint payload;
+
+layout(set = 0, binding = 0, std430) buffer OutputBuffer
+{
+	uvec4 values[1];
+} outputBuffer;
+
+layout(set = 0, binding = 1) uniform accelerationStructureEXT TLAS;
+
+uint traceRayForIndex(vec3 origin, vec3 direction)
+{
+	payload = 0u;
+	traceRayEXT(
+		TLAS,
+		gl_RayFlagsOpaqueEXT,
+		0xFF,
+		0,
+		0,
+		0,
+		origin,
+		0.001,
+		direction,
+		10000.0,
+		0);
+	return payload;
+}
+
+void main()
+{
+	uint hitValue = traceRayForIndex(vec3(0.0, 0.0, -1.0), vec3(0.0, 0.0, 1.0));
+	uint missValue = traceRayForIndex(vec3(2.0, 2.0, -1.0), vec3(0.0, 0.0, 1.0));
+	outputBuffer.values[0] = uvec4(hitValue, missValue, 0u, 0u);
+}

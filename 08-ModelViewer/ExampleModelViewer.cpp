@@ -117,7 +117,8 @@ ExampleModelViewer::ExampleModelViewer() : ExampleApp(), m_boundingBox(Vec3(0.0f
 	}
 	else
 	{
-		m_statusString = "Usage: ExampleModelViewer <filename.obj>";
+		m_statusString = "Procedural scene (cube + plane)";
+		m_valid = buildProceduralModel();
 	}
 
 	float aspect = m_window->getAspect();
@@ -814,6 +815,110 @@ bool ExampleModelViewer::loadModelNative(const char* filename)
 	m_indexBuffer = Gfx_CreateBuffer(ibDesc, model.indices.data());
 
 	return true;
+}
+
+bool ExampleModelViewer::buildProceduralModel()
+{
+	ProceduralSceneData data;
+	buildProceduralScene(data);
+	if (data.vertices.empty() || data.indices.empty())
+	{
+		return false;
+	}
+
+	m_materials.clear();
+	m_segments.clear();
+	m_materialConstantBuffers.clear();
+
+	const GfxBufferDesc materialCbDesc(GfxBufferFlags::Constant, GfxFormat_Unknown, 1, sizeof(MaterialConstants));
+	for (const auto& srcMaterial : data.materials)
+	{
+		MaterialConstants constants;
+		constants.baseColor = srcMaterial.baseColor;
+
+		Material material;
+		material.albedoTexture = m_defaultWhiteTexture.get();
+
+		{
+			u64  constantHash = hashFnv1a64(&constants, sizeof(constants));
+			auto it           = m_materialConstantBuffers.find(constantHash);
+			if (it == m_materialConstantBuffers.end())
+			{
+				GfxOwn<GfxBuffer> cb = Gfx_CreateBuffer(materialCbDesc, &constants);
+				material.constantBuffer = cb.get();
+				m_materialConstantBuffers[constantHash] = std::move(cb);
+			}
+			else
+			{
+				material.constantBuffer = it->second.get();
+			}
+		}
+
+		material.descriptorSet = Gfx_CreateDescriptorSet(m_materialDescriptorSetDesc);
+		GfxSampler sampler = m_samplerStates.anisotropicWrap.get();
+		Gfx_UpdateDescriptorSet(material.descriptorSet,
+			&material.constantBuffer,
+			&sampler,
+			&material.albedoTexture,
+			nullptr, // storage images
+			nullptr  // storage buffers
+		);
+
+		m_materials.push_back(std::move(material));
+	}
+
+	{
+		MaterialConstants constants;
+		constants.baseColor = Vec4(1.0f);
+		m_defaultConstantBuffer = Gfx_CreateBuffer(materialCbDesc, &constants);
+		m_defaultMaterial.constantBuffer = m_defaultConstantBuffer.get();
+		m_defaultMaterial.albedoTexture = m_defaultWhiteTexture.get();
+
+		m_defaultMaterial.descriptorSet = Gfx_CreateDescriptorSet(m_materialDescriptorSetDesc);
+		GfxSampler sampler = m_samplerStates.anisotropicWrap.get();
+		Gfx_UpdateDescriptorSet(m_defaultMaterial.descriptorSet,
+			&m_defaultMaterial.constantBuffer,
+			&sampler,
+			&m_defaultMaterial.albedoTexture,
+			nullptr, // storage images
+			nullptr  // storage buffers
+		);
+	}
+
+	m_segments.reserve(data.segments.size());
+	for (const auto& srcSegment : data.segments)
+	{
+		MeshSegment segment;
+		segment.material = srcSegment.material;
+		segment.indexOffset = srcSegment.indexOffset;
+		segment.indexCount = srcSegment.indexCount;
+		m_segments.push_back(segment);
+	}
+
+	m_vertexCount = u32(data.vertices.size());
+	m_indexCount = u32(data.indices.size());
+	m_boundingBox = data.bounds;
+
+	std::vector<Vertex> vertices;
+	vertices.reserve(m_vertexCount);
+	for (const auto& srcVertex : data.vertices)
+	{
+		Vertex v;
+		v.position = srcVertex.position;
+		v.normal = srcVertex.normal;
+		v.texcoord = srcVertex.texcoord;
+		vertices.push_back(v);
+	}
+
+	RUSH_LOG("Uploading procedural mesh to GPU");
+
+	GfxBufferDesc vbDesc(GfxBufferFlags::Vertex, GfxFormat_Unknown, m_vertexCount, sizeof(Vertex));
+	m_vertexBuffer = Gfx_CreateBuffer(vbDesc, vertices.data());
+
+	GfxBufferDesc ibDesc(GfxBufferFlags::Index, GfxFormat_R32_Uint, m_indexCount, 4);
+	m_indexBuffer = Gfx_CreateBuffer(ibDesc, data.indices.data());
+
+	return m_vertexBuffer.valid() && m_indexBuffer.valid();
 }
 
 bool ExampleModelViewer::loadModel(const char* filename)

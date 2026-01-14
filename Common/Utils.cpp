@@ -3,6 +3,7 @@
 #include <Rush/UtilFile.h>
 #include <Rush/UtilCamera.h>
 
+#include <algorithm>
 #include <cctype>
 #include <cstdlib>
 #include <cstring>
@@ -369,6 +370,112 @@ TexturedQuad2D makeFullScreenQuad()
 	q.tex[3] = Vec2(0.0f, 1.0f);
 
 	return q;
+}
+
+void buildProceduralScene(ProceduralSceneData& out)
+{
+	out.vertices.clear();
+	out.indices.clear();
+	out.segments.clear();
+	out.materials.clear();
+
+	ProceduralSceneMaterial planeMaterial;
+	planeMaterial.baseColor = Vec4(0.7f, 0.7f, 0.7f, 1.0f);
+	out.materials.push_back(planeMaterial);
+
+	ProceduralSceneMaterial cubeMaterial = planeMaterial;
+	cubeMaterial.baseColor = Vec4(0.2f, 0.6f, 1.0f, 1.0f);
+	out.materials.push_back(cubeMaterial);
+
+	auto addFace = [&out](const Vec3& v0, const Vec3& v1, const Vec3& v2, const Vec3& v3,
+		const Vec3& normal, const Vec3& tangent, u32 material)
+	{
+		const u32 baseIndex = u32(out.vertices.size());
+		const Vec3 bitangent = cross(normal, tangent);
+
+		ProceduralSceneVertex verts[4];
+		verts[0] = { v0, normal, Vec2(0.0f, 0.0f), tangent, bitangent };
+		verts[1] = { v1, normal, Vec2(1.0f, 0.0f), tangent, bitangent };
+		verts[2] = { v2, normal, Vec2(1.0f, 1.0f), tangent, bitangent };
+		verts[3] = { v3, normal, Vec2(0.0f, 1.0f), tangent, bitangent };
+		out.vertices.insert(out.vertices.end(), std::begin(verts), std::end(verts));
+
+		out.indices.push_back(baseIndex + 0);
+		out.indices.push_back(baseIndex + 1);
+		out.indices.push_back(baseIndex + 2);
+		out.indices.push_back(baseIndex + 0);
+		out.indices.push_back(baseIndex + 2);
+		out.indices.push_back(baseIndex + 3);
+
+		if (out.segments.empty() || out.segments.back().material != material)
+		{
+			ProceduralSceneSegment segment;
+			segment.material = material;
+			segment.indexOffset = u32(out.indices.size()) - 6;
+			segment.indexCount = 6;
+			out.segments.push_back(segment);
+		}
+		else
+		{
+			out.segments.back().indexCount += 6;
+		}
+	};
+
+	const float planeSize = 4.0f;
+	addFace(Vec3(-planeSize, 0.0f, -planeSize),
+	        Vec3(-planeSize, 0.0f,  planeSize),
+	        Vec3( planeSize, 0.0f,  planeSize),
+	        Vec3( planeSize, 0.0f, -planeSize),
+	        Vec3(0.0f, 1.0f, 0.0f), Vec3(1.0f, 0.0f, 0.0f), 0);
+
+	const float cubeSize = 1.0f;
+	const Vec3 c(0.0f, 0.75f, 0.0f);
+	const float hs = cubeSize * 0.5f;
+
+	addFace(Vec3(c.x - hs, c.y - hs, c.z + hs),
+	        Vec3(c.x + hs, c.y - hs, c.z + hs),
+	        Vec3(c.x + hs, c.y + hs, c.z + hs),
+	        Vec3(c.x - hs, c.y + hs, c.z + hs),
+	        Vec3(0.0f, 0.0f, 1.0f), Vec3(1.0f, 0.0f, 0.0f), 1);
+
+	addFace(Vec3(c.x + hs, c.y - hs, c.z - hs),
+	        Vec3(c.x - hs, c.y - hs, c.z - hs),
+	        Vec3(c.x - hs, c.y + hs, c.z - hs),
+	        Vec3(c.x + hs, c.y + hs, c.z - hs),
+	        Vec3(0.0f, 0.0f, -1.0f), Vec3(-1.0f, 0.0f, 0.0f), 1);
+
+	addFace(Vec3(c.x - hs, c.y - hs, c.z - hs),
+	        Vec3(c.x - hs, c.y - hs, c.z + hs),
+	        Vec3(c.x - hs, c.y + hs, c.z + hs),
+	        Vec3(c.x - hs, c.y + hs, c.z - hs),
+	        Vec3(-1.0f, 0.0f, 0.0f), Vec3(0.0f, 0.0f, 1.0f), 1);
+
+	addFace(Vec3(c.x + hs, c.y - hs, c.z + hs),
+	        Vec3(c.x + hs, c.y - hs, c.z - hs),
+	        Vec3(c.x + hs, c.y + hs, c.z - hs),
+	        Vec3(c.x + hs, c.y + hs, c.z + hs),
+	        Vec3(1.0f, 0.0f, 0.0f), Vec3(0.0f, 0.0f, -1.0f), 1);
+
+	addFace(Vec3(c.x - hs, c.y + hs, c.z + hs),
+	        Vec3(c.x + hs, c.y + hs, c.z + hs),
+	        Vec3(c.x + hs, c.y + hs, c.z - hs),
+	        Vec3(c.x - hs, c.y + hs, c.z - hs),
+	        Vec3(0.0f, 1.0f, 0.0f), Vec3(1.0f, 0.0f, 0.0f), 1);
+
+	addFace(Vec3(c.x - hs, c.y - hs, c.z - hs),
+	        Vec3(c.x + hs, c.y - hs, c.z - hs),
+	        Vec3(c.x + hs, c.y - hs, c.z + hs),
+	        Vec3(c.x - hs, c.y - hs, c.z + hs),
+	        Vec3(0.0f, -1.0f, 0.0f), Vec3(1.0f, 0.0f, 0.0f), 1);
+
+	if (!out.vertices.empty())
+	{
+		out.bounds = Box3(out.vertices[0].position, out.vertices[0].position);
+		for (const auto& v : out.vertices)
+		{
+			out.bounds.expand(v.position);
+		}
+	}
 }
 
 }

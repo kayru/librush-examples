@@ -90,20 +90,43 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 		${RUSH_VK_SDK_BIN_PATHS}
 	)
 	find_program(xcrun NAMES xcrun)
-	function(glsl_shader_compile_rule shaderName)
-		set(shaderDeps ${ARGN})
+	function(metal_shader_compile_rule shaderName)
 		add_custom_command(
-			OUTPUT ${CMAKE_CFG_INTDIR}/${shaderName}.bin ${CMAKE_CFG_INTDIR}/${shaderName}.metallib
-			BYPRODUCTS ${CMAKE_CFG_INTDIR}/${shaderName}.metal ${CMAKE_CFG_INTDIR}/${shaderName}.air
+			OUTPUT ${CMAKE_CFG_INTDIR}/${shaderName}.metallib
+			BYPRODUCTS ${CMAKE_CFG_INTDIR}/${shaderName}.air
 			COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CFG_INTDIR}
-			COMMAND ${GLSLC} -O -o ${CMAKE_CFG_INTDIR}/${shaderName}.bin ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
-			COMMAND ${spirv-cross} --msl --msl-version 200000 --msl-argument-buffers --msl-decoration-binding --msl-force-active-argument-buffer-resources ${CMAKE_CFG_INTDIR}/${shaderName}.bin > ${CMAKE_CFG_INTDIR}/${shaderName}.metal
-			COMMAND ${xcrun} -sdk macosx metal -c ${CMAKE_CFG_INTDIR}/${shaderName}.metal -o ${CMAKE_CFG_INTDIR}/${shaderName}.air
+			COMMAND ${xcrun} -sdk macosx metal -std=metal3.0 -c ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName} -o ${CMAKE_CFG_INTDIR}/${shaderName}.air
 			COMMAND ${xcrun} -sdk macosx metallib ${CMAKE_CFG_INTDIR}/${shaderName}.air -o ${CMAKE_CFG_INTDIR}/${shaderName}.metallib
 			MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
-			DEPENDS ${shaderDeps}
 		)
-	endfunction(glsl_shader_compile_rule)
+	endfunction(metal_shader_compile_rule)
+	if(DEFINED RUSH_RENDER_API AND RUSH_RENDER_API STREQUAL "MTL")
+		function(glsl_shader_compile_rule shaderName)
+			set(shaderDeps ${ARGN})
+			add_custom_command(
+				OUTPUT ${CMAKE_CFG_INTDIR}/${shaderName}.bin ${CMAKE_CFG_INTDIR}/${shaderName}.metallib
+				BYPRODUCTS ${CMAKE_CFG_INTDIR}/${shaderName}.metal ${CMAKE_CFG_INTDIR}/${shaderName}.air
+				COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CFG_INTDIR}
+				COMMAND ${GLSLC} -O -o ${CMAKE_CFG_INTDIR}/${shaderName}.bin ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
+				COMMAND ${spirv-cross} --msl --msl-version 230000 --msl-argument-buffers --msl-decoration-binding --msl-force-active-argument-buffer-resources ${CMAKE_CFG_INTDIR}/${shaderName}.bin > ${CMAKE_CFG_INTDIR}/${shaderName}.metal
+				COMMAND ${xcrun} -sdk macosx metal -std=metal3.0 -c ${CMAKE_CFG_INTDIR}/${shaderName}.metal -o ${CMAKE_CFG_INTDIR}/${shaderName}.air
+				COMMAND ${xcrun} -sdk macosx metallib ${CMAKE_CFG_INTDIR}/${shaderName}.air -o ${CMAKE_CFG_INTDIR}/${shaderName}.metallib
+				MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
+				DEPENDS ${shaderDeps}
+			)
+		endfunction(glsl_shader_compile_rule)
+	else()
+		function(glsl_shader_compile_rule shaderName)
+			set(shaderDeps ${ARGN})
+			add_custom_command(
+				OUTPUT ${CMAKE_CFG_INTDIR}/${shaderName}.bin
+				COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CFG_INTDIR}
+				COMMAND ${GLSLC} -O -o ${CMAKE_CFG_INTDIR}/${shaderName}.bin ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
+				MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
+				DEPENDS ${shaderDeps}
+			)
+		endfunction(glsl_shader_compile_rule)
+	endif()
 else()
 	function(glsl_shader_compile_rule shaderName)
 		set(shaderDeps ${ARGN})
@@ -130,8 +153,8 @@ function(hlsl_shader_compile_rule shaderName profile)
 			BYPRODUCTS ${CMAKE_CFG_INTDIR}/${shaderName}.metal ${CMAKE_CFG_INTDIR}/${shaderName}.air
 			COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CFG_INTDIR}
 			COMMAND ${DXC} -spirv -fspv-target-env=vulkan1.2 -T ${profile} -E main -Fo ${CMAKE_CFG_INTDIR}/${shaderName}.spv ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
-			COMMAND ${spirv-cross} --msl --msl-version 200000 --msl-argument-buffers --msl-decoration-binding --msl-force-active-argument-buffer-resources ${CMAKE_CFG_INTDIR}/${shaderName}.spv > ${CMAKE_CFG_INTDIR}/${shaderName}.metal
-			COMMAND ${xcrun} -sdk macosx metal -c ${CMAKE_CFG_INTDIR}/${shaderName}.metal -o ${CMAKE_CFG_INTDIR}/${shaderName}.air
+			COMMAND ${spirv-cross} --msl --msl-version 230000 --msl-argument-buffers --msl-decoration-binding --msl-force-active-argument-buffer-resources ${CMAKE_CFG_INTDIR}/${shaderName}.spv > ${CMAKE_CFG_INTDIR}/${shaderName}.metal
+			COMMAND ${xcrun} -sdk macosx metal -std=metal3.0 -c ${CMAKE_CFG_INTDIR}/${shaderName}.metal -o ${CMAKE_CFG_INTDIR}/${shaderName}.air
 			COMMAND ${xcrun} -sdk macosx metallib ${CMAKE_CFG_INTDIR}/${shaderName}.air -o ${CMAKE_CFG_INTDIR}/${shaderName}.metallib
 			MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
 			DEPENDS ${shaderDeps}

@@ -111,4 +111,36 @@ void interpolateCamera(Camera& camera, const Camera& target, float deltaTime, fl
 
 TexturedQuad2D makeFullScreenQuad();
 
+struct ProceduralSceneVertex
+{
+	Vec3 position;
+	Vec3 normal;
+	Vec2 texcoord;
+	Vec3 tangent;
+	Vec3 bitangent;
+};
+
+struct ProceduralSceneMaterial
+{
+	Vec4 baseColor = Vec4(1.0f);
+};
+
+struct ProceduralSceneSegment
+{
+	u32 material = 0;
+	u32 indexOffset = 0;
+	u32 indexCount = 0;
+};
+
+struct ProceduralSceneData
+{
+	std::vector<ProceduralSceneVertex> vertices;
+	std::vector<u32> indices;
+	std::vector<ProceduralSceneSegment> segments;
+	std::vector<ProceduralSceneMaterial> materials;
+	Box3 bounds = Box3(Vec3(0.0f), Vec3(0.0f));
+};
+
+void buildProceduralScene(ProceduralSceneData& out);
+
 } // namespace Rush

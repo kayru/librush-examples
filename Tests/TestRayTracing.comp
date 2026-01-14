@@ -1,0 +1,36 @@
+#version 460
+
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) uniform sampler samplerNearest;
+layout(set = 0, binding = 1) uniform sampler samplerLinear;
+layout(set = 0, binding = 2) uniform sampler samplerUnused;
+layout(set = 0, binding = 3) uniform texture2D textureDescriptors[2];
+layout(set = 0, binding = 4, std430) buffer OutputBuffer
+{
+	uvec4 results;
+} outputBuffer;
+
+uint packColor(vec4 color)
+{
+	vec4 clamped = clamp(color, 0.0, 1.0) * 255.0 + 0.5;
+	uvec4 rgba = uvec4(clamped);
+	return rgba.r | (rgba.g << 8) | (rgba.b << 16) | (rgba.a << 24);
+}
+
+void main()
+{
+	vec2 uvNearest = vec2(0.25, 0.25);
+	vec2 uvLinear = vec2(0.5, 0.5);
+
+	vec4 nearest0 = texture(sampler2D(textureDescriptors[0], samplerNearest), uvNearest);
+	vec4 nearest1 = texture(sampler2D(textureDescriptors[1], samplerNearest), uvNearest);
+	vec4 linear0 = texture(sampler2D(textureDescriptors[0], samplerLinear), uvLinear);
+	vec4 linear1 = texture(sampler2D(textureDescriptors[1], samplerLinear), uvLinear);
+
+	outputBuffer.results = uvec4(
+		packColor(nearest0),
+		packColor(nearest1),
+		packColor(linear0),
+		packColor(linear1));
+}

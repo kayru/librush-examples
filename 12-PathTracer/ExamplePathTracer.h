@@ -69,6 +69,9 @@ private:
 	GfxOwn<GfxBuffer> m_vertexBuffer;
 	GfxOwn<GfxBuffer> m_sceneConstantBuffer;
 	GfxOwn<GfxBuffer> m_tonemapConstantBuffer;
+	GfxOwn<GfxBuffer> m_materialBuffer;
+	GfxOwn<GfxBuffer> m_materialIndexBuffer;
+	GfxOwn<GfxBuffer> m_rtInstanceBuffer;
 	u32 m_indexCount = 0;
 	u32 m_vertexCount = 0;
 
@@ -97,6 +100,7 @@ private:
 		float focalLength;
 		float focusDistance;
 		float apertureSize;
+		u32 debugVisMode = 0;
 	};
 
 	Mat4 m_worldTransform = Mat4::identity();
@@ -175,6 +179,7 @@ private:
 	u32 m_frameIndex = 0;
 	bool m_showUI = true;
 	std::string m_startupError;
+	bool m_useProceduralScene = false;
 
 	std::mutex m_loadingMutex;
 
@@ -193,6 +198,10 @@ private:
 		bool m_useNeutralBackground = false;
 		bool m_useDepthOfField = false;
 		bool  m_useNormalMapping = true;
+		bool m_debugSimpleShading = true;
+		bool m_debugDisableAccumulation = true;
+		bool m_debugHitMask = false;
+		int m_debugVisMode = 0;
 		float m_gamma = 1.8f;
 		float m_exposureEV100 = 2.0f;
 		Vec2 m_cameraSensorSizeMM = Vec2(36.0f, 24.0f); // 35mm film

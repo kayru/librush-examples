@@ -181,6 +181,7 @@ void ExampleRayTracing::createScene(GfxContext* ctx)
 		geometryDesc.vertexFormat = GfxFormat::GfxFormat_RGB32_Float;
 		geometryDesc.vertexStride = u32(sizeof(Vec3));
 		geometryDesc.vertexCount  = u32(vertices.size());
+		geometryDesc.isOpaque     = true;
 		geometries.push_back(geometryDesc);
 	}
 

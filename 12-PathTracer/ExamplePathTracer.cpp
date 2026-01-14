@@ -19,7 +19,9 @@
 #include <cgltf.h>
 #include <algorithm>
 #include <chrono>
+#include <cstring>
 #include <stdio.h>
+#include <utility>
 
 #include <Common/ImGuiImpl.h>
 #include <Common/Utils.h>
@@ -72,7 +74,7 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 	};
 
 	const GfxCapability& caps = Gfx_GetCapability();
-	const bool rtAvailable = caps.rayTracing;
+	const bool rtAvailable = caps.rayTracingPipeline;
 
 	const u32      whiteTexturePixels[4] = {0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF};
 	GfxTextureDesc textureDesc           = GfxTextureDesc::make2D(2, 2);
@@ -110,6 +112,14 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 	if (rtAvailable && m_startupError.empty())
 	{
 		GfxRayTracingPipelineDesc pipelineDesc;
+#if RUSH_RENDER_API == RUSH_RENDER_API_MTL
+		// TODO: Move Metal path tracing to raygen/miss/chit stages once RT pipeline support matures.
+		pipelineDesc.rayGen = loadShaderFromFile(RUSH_SHADER_NAME("PathTracer.metal"));
+		if (pipelineDesc.rayGen.empty())
+		{
+			setError("Failed to load Metal path tracer shader.");
+		}
+#else
 		pipelineDesc.rayGen = loadShaderFromFile(RUSH_SHADER_NAME("PathTracer.rgen"));
 		pipelineDesc.miss = loadShaderFromFile(RUSH_SHADER_NAME("PathTracer.rmiss"));
 		pipelineDesc.closestHit = loadShaderFromFile(RUSH_SHADER_NAME("PathTracer.rchit"));
@@ -118,12 +128,19 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 		{
 			setError("Failed to load ray tracing shaders.");
 		}
+#endif
 
 		pipelineDesc.bindings.descriptorSets[0].constantBuffers = 1; // scene constants
 		pipelineDesc.bindings.descriptorSets[0].samplers = 1; // default sampler
 		pipelineDesc.bindings.descriptorSets[0].textures = 1; // envmap
 		pipelineDesc.bindings.descriptorSets[0].rwImages = 1; // output image
-		pipelineDesc.bindings.descriptorSets[0].rwBuffers = 3; // IB + VB + envmap distribution
+#if RUSH_RENDER_API == RUSH_RENDER_API_MTL
+	// Metal argument buffer layout is sequential; extra material buffers shift TLAS binding.
+	// set=0 bindings: 0 cb,1 sampler,2 envmap,3 output,4 ib,5 vb,6 envmap dist,7 material,8 material index,9 TLAS.
+	pipelineDesc.bindings.descriptorSets[0].rwBuffers = 5; // IB + VB + envmap distribution + materials + material indices
+#else
+	pipelineDesc.bindings.descriptorSets[0].rwBuffers = 3; // IB + VB + envmap distribution
+#endif
 		pipelineDesc.bindings.descriptorSets[0].accelerationStructures = 1; // TLAS
 		pipelineDesc.bindings.descriptorSets[1] = materialDescriptorSetDesc;
 
@@ -200,7 +217,63 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 	}
 	else
 	{
-		m_statusString = "Usage: ExamplePathTracer <filename.obj>";
+		ProceduralSceneData procedural;
+		buildProceduralScene(procedural);
+
+		m_vertices.clear();
+		m_vertices.reserve(procedural.vertices.size());
+		for (const auto& v : procedural.vertices)
+		{
+			Vertex dst;
+			dst.position = v.position;
+			dst.normal = v.normal;
+			dst.texcoord = v.texcoord;
+			dst.tangent = Vec4(v.tangent, 1.0f);
+			m_vertices.push_back(dst);
+		}
+
+		m_indices = procedural.indices;
+		m_segments.clear();
+		m_segments.reserve(procedural.segments.size());
+		for (const auto& seg : procedural.segments)
+		{
+			MeshSegment outSeg;
+			outSeg.material = seg.material;
+			outSeg.indexOffset = seg.indexOffset;
+			outSeg.indexCount = seg.indexCount;
+			m_segments.push_back(outSeg);
+		}
+
+		m_materials.clear();
+		m_materials.reserve(procedural.materials.size());
+		for (const auto& mat : procedural.materials)
+		{
+			MaterialConstants constants;
+			constants.albedoFactor = mat.baseColor;
+			constants.albedoTextureId = m_defaultWhiteTextureId;
+			constants.specularTextureId = m_defaultWhiteTextureId;
+			constants.normalTextureId = 0;
+			constants.metallicFactor = 0.0f;
+			constants.roughnessFactor = 1.0f;
+			constants.reflectance = 0.08f;
+			constants.materialMode = MaterialMode::MetallicRoughness;
+			m_materials.push_back(constants);
+		}
+
+		m_boundingBox = procedural.bounds;
+		m_vertexCount = u32(m_vertices.size());
+		m_indexCount = u32(m_indices.size());
+		m_haveNormals = true;
+		m_haveTexcoords = true;
+		m_haveTangents = true;
+		m_haveNormalMaps = false;
+		m_valid = true;
+		m_useProceduralScene = true;
+		m_statusString = "Procedural scene (cube + plane)";
+
+		std::string envFilename = std::string(Platform_GetExecutableDirectory()) + "/envmap.hdr";
+		loadEnvmap(envFilename.c_str());
+		createGpuScene();
 	}
 
 	loadCamera();
@@ -251,17 +324,45 @@ void ExamplePathTracer::onUpdate()
 
 
 		ImGui::Begin("Menu");
-		bool renderSettingsChanged = false;
-		renderSettingsChanged |= ImGui::Checkbox("Use envmap", &m_settings.m_useEnvmap);
-		renderSettingsChanged |= ImGui::Checkbox("Neutral background", &m_settings.m_useNeutralBackground);
-		renderSettingsChanged |= ImGui::Checkbox("Depth of Field", &m_settings.m_useDepthOfField);
+	bool renderSettingsChanged = false;
+	renderSettingsChanged |= ImGui::Checkbox("Use envmap", &m_settings.m_useEnvmap);
+	renderSettingsChanged |= ImGui::Checkbox("Neutral background", &m_settings.m_useNeutralBackground);
+	renderSettingsChanged |= ImGui::Checkbox("Depth of Field", &m_settings.m_useDepthOfField);
 		renderSettingsChanged |= ImGui::Checkbox("Normal mapping", &m_settings.m_useNormalMapping);
+		renderSettingsChanged |= ImGui::Checkbox("Debug: Simple shading", &m_settings.m_debugSimpleShading);
+		renderSettingsChanged |= ImGui::Checkbox("Debug: Disable accumulation", &m_settings.m_debugDisableAccumulation);
+		renderSettingsChanged |= ImGui::Checkbox("Debug: Hit mask", &m_settings.m_debugHitMask);
+		{
+			const char* debugVisItems[] = {
+				"None",
+				"Albedo",
+				"Geo normal",
+				"Shading normal",
+				"Normal mapped",
+				"Tangent",
+				"Bitangent",
+				"Metalness",
+				"Roughness",
+				"UV",
+			};
+			int debugVisMode = m_settings.m_debugVisMode;
+			if (ImGui::Combo("Debug: Visualization", &debugVisMode, debugVisItems, (int)RUSH_COUNTOF(debugVisItems)))
+			{
+				m_settings.m_debugVisMode = debugVisMode;
+				renderSettingsChanged = true;
+			}
+		}
 		renderSettingsChanged |= ImGui::SliderFloat("Focal length (mm)", &m_settings.m_focalLengthMM, 1.0f, 250.0f);
 		renderSettingsChanged |= ImGui::SliderFloat("Aperture size (mm)", &m_settings.m_apertureSizeMM, 0.0f, 100000.0, "%.3f", 3.0f);
 		renderSettingsChanged |= ImGui::SliderFloat("Focus distance", &m_settings.m_focusDistance, 0.0f, 1000.0, "%.3f", 3.0f);
 		renderSettingsChanged |= ImGui::SliderFloat("Envmap rotation (deg)", &m_settings.m_envmapRotationDegrees, 0.0f, 360.0f);
 		ImGui::SliderFloat("Exposure EV100", &m_settings.m_exposureEV100, -10.0f, 10.0f);
 		ImGui::SliderFloat("Gamma", &m_settings.m_gamma, 0.25f, 3.0f);
+		if (ImGui::Button("Reset accumulation"))
+		{
+			m_outputImage.reset();
+			m_frameIndex = 0;
+		}
 		Vec3 camPos = m_camera.getPosition();
 		if (ImGui::DragFloat3("Camera position", &camPos.x, m_cameraScale))
 		{
@@ -313,6 +414,16 @@ void ExamplePathTracer::onUpdate()
 				m_settings.m_useNeutralBackground = !m_settings.m_useNeutralBackground;
 				m_frameIndex = 0;
 			}
+			else if (e.code == Key_3)
+			{
+				m_settings.m_debugSimpleShading = !m_settings.m_debugSimpleShading;
+				m_frameIndex = 0;
+			}
+			else if (e.code == Key_4)
+			{
+				m_settings.m_debugDisableAccumulation = !m_settings.m_debugDisableAccumulation;
+				m_frameIndex = 0;
+			}
 			break;
 		case WindowEventType_Scroll:
 			if (e.scroll.y > 0)
@@ -342,6 +453,10 @@ void ExamplePathTracer::onUpdate()
 		m_frameIndex = 0;
 		m_totalGpuRenderTime = 0;
 	}
+	if (m_settings.m_debugDisableAccumulation)
+	{
+		m_frameIndex = 0;
+	}
 
 	m_windowEvents.clear();
 
@@ -358,20 +473,23 @@ void ExamplePathTracer::createRayTracingScene(GfxContext* ctx)
 	tlasDesc.instanceCount = 1;
 	m_tlas = Gfx_CreateAccelerationStructure(tlasDesc);
 
-	GfxOwn<GfxBuffer> instanceBuffer = Gfx_CreateBuffer(GfxBufferFlags::Transient);
+	if (!m_rtInstanceBuffer.valid())
+	{
+		m_rtInstanceBuffer = Gfx_CreateBuffer(GfxBufferFlags::Storage);
+	}
 	{
 		Mat4 transform = m_worldTransform.transposed();
-		auto instanceData = Gfx_BeginUpdateBuffer<GfxRayTracingInstanceDesc>(ctx, instanceBuffer.get(), tlasDesc.instanceCount);
+		auto instanceData = Gfx_BeginUpdateBuffer<GfxRayTracingInstanceDesc>(ctx, m_rtInstanceBuffer.get(), tlasDesc.instanceCount);
 		instanceData[0].init();
 		memcpy(instanceData[0].transform, &transform, sizeof(float) * 12);
 		instanceData[0].accelerationStructureHandle = Gfx_GetAccelerationStructureHandle(m_blas);
-		Gfx_EndUpdateBuffer(ctx, instanceBuffer);
+		Gfx_EndUpdateBuffer(ctx, m_rtInstanceBuffer);
 	}
 
 	Gfx_BuildAccelerationStructure(ctx, m_blas);
 	Gfx_AddFullPipelineBarrier(ctx);
 
-	Gfx_BuildAccelerationStructure(ctx, m_tlas, instanceBuffer);
+	Gfx_BuildAccelerationStructure(ctx, m_tlas, m_rtInstanceBuffer);
 	Gfx_AddFullPipelineBarrier(ctx);
 }
 
@@ -393,6 +511,10 @@ void ExamplePathTracer::render()
 	constants.flags |= m_settings.m_useNeutralBackground ? PT_FLAG_USE_NEUTRAL_BACKGROUND : 0;
 	constants.flags |= m_settings.m_useDepthOfField ? PT_FLAG_USE_DEPTH_OF_FIELD : 0;
 	constants.flags |= m_settings.m_useNormalMapping && m_haveNormals && m_haveTangents && m_haveNormalMaps ? PT_FLAG_USE_NORMAL_MAPPING : 0;
+	constants.flags |= m_settings.m_debugSimpleShading ? PT_FLAG_DEBUG_SIMPLE_SHADING : 0;
+	constants.flags |= m_settings.m_debugDisableAccumulation ? PT_FLAG_DEBUG_DISABLE_ACCUMULATION : 0;
+	constants.flags |= m_settings.m_debugHitMask ? PT_FLAG_DEBUG_HIT_MASK : 0;
+	constants.debugVisMode = (u32)m_settings.m_debugVisMode;
 
 	GfxContext* ctx = Platform_GetGfxContext();
 
@@ -404,6 +526,7 @@ void ExamplePathTracer::render()
 			framebufferSize, GfxFormat_RGBA32_Float, GfxUsageFlags::StorageImage_ShaderResource);
 
 		m_outputImage = Gfx_CreateTexture(outputImageDesc);
+		m_frameIndex = 0;
 	}
 
 	constants.outputSize = outputImageDesc.getSize2D();
@@ -435,6 +558,16 @@ void ExamplePathTracer::render()
 		Gfx_SetStorageBuffer(ctx, 0, m_indexBuffer);
 		Gfx_SetStorageBuffer(ctx, 1, m_vertexBuffer);
 		Gfx_SetStorageBuffer(ctx, 2, m_envmapDistribution);
+#if RUSH_RENDER_API == RUSH_RENDER_API_MTL
+		if (m_materialBuffer.valid())
+		{
+			Gfx_SetStorageBuffer(ctx, 3, m_materialBuffer);
+		}
+		if (m_materialIndexBuffer.valid())
+		{
+			Gfx_SetStorageBuffer(ctx, 4, m_materialIndexBuffer);
+		}
+#endif
 		Gfx_SetDescriptors(ctx, 1, m_materialDescriptorSet);
 		Gfx_SetAccelerationStructure(ctx, 0, m_tlas);
 
@@ -1174,7 +1307,14 @@ void ExamplePathTracer::createGpuScene()
 				}
 
 				u32 descriptorIndex = textureData->descriptorIndex;
-				m_textureDescriptors[descriptorIndex] = Gfx_CreateTexture(textureData->desc, mipData, textureData->desc.mips);
+				auto texture = Gfx_CreateTexture(textureData->desc, mipData, textureData->desc.mips);
+				if (!texture.valid())
+				{
+					RUSH_LOG_ERROR("Failed to create texture '%s' (format %u)",
+					    textureData->filename.c_str(), u32(textureData->desc.format));
+					continue;
+				}
+				m_textureDescriptors[descriptorIndex] = std::move(texture);
 			}
 		}
 	}
@@ -1201,14 +1341,44 @@ void ExamplePathTracer::createGpuScene()
 		);
 	}
 
+	if (!m_materials.empty())
+	{
+		GfxBufferDesc materialDesc(GfxBufferFlags::Storage, GfxFormat_Unknown, u32(m_materials.size()), sizeof(MaterialConstants));
+		m_materialBuffer = Gfx_CreateBuffer(materialDesc, m_materials.data());
+	}
+
+	const u32 triangleCount = m_indexCount / 3;
+	if (triangleCount > 0)
+	{
+		std::vector<u32> materialIndices(triangleCount, 0);
+		for (const auto& segment : m_segments)
+		{
+			const u32 start = segment.indexOffset / 3;
+			const u32 count = segment.indexCount / 3;
+			const u32 end = std::min(start + count, triangleCount);
+			for (u32 tri = start; tri < end; ++tri)
+			{
+				materialIndices[tri] = segment.material;
+			}
+		}
+
+		GfxBufferDesc indexDesc(GfxBufferFlags::Storage, GfxFormat_Unknown, triangleCount, sizeof(u32));
+		m_materialIndexBuffer = Gfx_CreateBuffer(indexDesc, materialIndices.data());
+	}
+
 	const bool rtReady = m_rtPipeline.valid() && m_materialDescriptorSet.valid();
 	if (rtReady)
 	{
 		RUSH_LOG("Creating ray tracing data");
 
 		DynamicArray<GfxRayTracingGeometryDesc> geometries;
+#if RUSH_RENDER_API != RUSH_RENDER_API_MTL
 		geometries.reserve(m_segments.size());
+#else
+		geometries.reserve(1);
+#endif
 
+#if RUSH_RENDER_API != RUSH_RENDER_API_MTL
 		const GfxCapability& caps             = Gfx_GetCapability();
 		const u32            shaderHandleSize = caps.rtShaderHandleSize;
 		const u32 sbtRecordSize = alignCeiling(u32(shaderHandleSize + sizeof(MaterialConstants)), shaderHandleSize);
@@ -1217,7 +1387,22 @@ void ExamplePathTracer::createGpuScene()
 		sbtData.resize(m_segments.size() * sbtRecordSize);
 
 		const u8* hitGroupHandle = Gfx_GetRayTracingShaderHandle(m_rtPipeline, GfxRayTracingShaderType::HitGroup, 0);
+#endif
 
+#if RUSH_RENDER_API == RUSH_RENDER_API_MTL
+		{
+			GfxRayTracingGeometryDesc geometryDesc;
+			geometryDesc.indexBuffer       = m_indexBuffer.get();
+			geometryDesc.indexFormat       = ibDesc.format;
+			geometryDesc.indexCount        = m_indexCount;
+			geometryDesc.indexBufferOffset = 0;
+			geometryDesc.vertexBuffer      = m_vertexBuffer.get();
+			geometryDesc.vertexFormat      = GfxFormat::GfxFormat_RGB32_Float;
+			geometryDesc.vertexStride      = sizeof(Vertex);
+			geometryDesc.vertexCount       = m_vertexCount;
+			geometries.push_back(geometryDesc);
+		}
+#else
 		for (size_t i = 0; i < m_segments.size(); ++i)
 		{
 			const auto& segment = m_segments[i];
@@ -1233,6 +1418,7 @@ void ExamplePathTracer::createGpuScene()
 			geometryDesc.vertexCount       = m_vertexCount;
 			geometries.push_back(geometryDesc);
 
+#if RUSH_RENDER_API != RUSH_RENDER_API_MTL
 			u8* sbtRecord          = &sbtData[i * sbtRecordSize];
 			u8* sbtRecordConstants = sbtRecord + shaderHandleSize;
 
@@ -1241,10 +1427,14 @@ void ExamplePathTracer::createGpuScene()
 
 			memcpy(sbtRecord, hitGroupHandle, sizeof(shaderHandleSize));
 			memcpy(sbtRecordConstants, &materialConstants, sizeof(materialConstants));
+#endif
 		}
+#endif
 
+#if RUSH_RENDER_API != RUSH_RENDER_API_MTL
 		m_sbtBuffer = Gfx_CreateBuffer(
 		    GfxBufferFlags::Storage | GfxBufferFlags::RayTracing, u32(sbtData.size() / sbtRecordSize), sbtRecordSize, sbtData.data());
+#endif
 
 		GfxAccelerationStructureDesc blasDesc;
 		blasDesc.type         = GfxAccelerationStructureType::BottomLevel;
@@ -1275,6 +1465,17 @@ void ExamplePathTracer::saveCamera()
 
 void ExamplePathTracer::loadCamera()
 {
+	if (m_useProceduralScene)
+	{
+		float aspect = m_window->getAspect();
+		float fov = 1.0f;
+		m_camera = Camera(aspect, fov, 0.25f);
+		Vec3 center = m_boundingBox.center();
+		m_camera.lookAt(center + Vec3(2.0f, 2.5f, 2.0f), center);
+		m_frameIndex = 0;
+		return;
+	}
+
 	FileIn f("camera.bin");
 	if (f.valid())
 	{

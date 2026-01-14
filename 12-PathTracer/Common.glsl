@@ -5,6 +5,20 @@
 #define PT_FLAG_USE_NEUTRAL_BACKGROUND  (1 << 1)
 #define PT_FLAG_USE_DEPTH_OF_FIELD      (1 << 2)
 #define PT_FLAG_USE_NORMAL_MAPPING      (1 << 3)
+#define PT_FLAG_DEBUG_SIMPLE_SHADING    (1 << 4)
+#define PT_FLAG_DEBUG_DISABLE_ACCUMULATION (1 << 5)
+#define PT_FLAG_DEBUG_HIT_MASK          (1 << 6)
+
+#define PT_DEBUG_VIS_NONE               0u
+#define PT_DEBUG_VIS_ALBEDO             1u
+#define PT_DEBUG_VIS_GEO_NORMAL         2u
+#define PT_DEBUG_VIS_SHADING_NORMAL     3u
+#define PT_DEBUG_VIS_NORMAL_MAPPED      4u
+#define PT_DEBUG_VIS_TANGENT            5u
+#define PT_DEBUG_VIS_BITANGENT          6u
+#define PT_DEBUG_VIS_METALNESS          7u
+#define PT_DEBUG_VIS_ROUGHNESS          8u
+#define PT_DEBUG_VIS_UV                 9u
 
 #define PT_MATERIAL_MODE_PBR_METALLIC_ROUGHNESS   0
 #define PT_MATERIAL_MODE_PBR_SPECULAR_GLOSSINESS  1
@@ -21,6 +35,18 @@ vec3 safeNormalize(vec3 v)
 }
 
 // global resources
+// Binding layout (set=0):
+//  0 SceneConstants
+//  1 defaultSampler
+//  2 envmapTexture
+//  3 outputImage
+//  4 indexBuffer
+//  5 vertexBuffer
+//  6 envmapDistributionBuffer
+//  7 TLAS (Vulkan)
+// Metal argument buffers follow the same ordering; when Metal-only material buffers
+// are bound, they occupy slots 7/8, and TLAS shifts to 9.
+// Binding layout (set=1): texture array at binding 0.
 
 layout(set=0, binding=0)
 uniform SceneConstants
@@ -42,6 +68,7 @@ uniform SceneConstants
 	float focalLength;
 	float focusDistance;
 	float apertureSize;
+	uint debugVisMode;
 };
 
 layout(set=0, binding=1)

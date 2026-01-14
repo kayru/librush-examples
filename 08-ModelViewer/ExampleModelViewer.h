@@ -33,6 +33,7 @@ private:
 	bool loadModel(const char* filename);
 	bool loadModelObj(const char* filename);
 	bool loadModelNative(const char* filename);
+	bool buildProceduralModel();
 
 	void enqueueLoadTexture(const std::string& filename, u32 materialId);
 
