@@ -28,7 +28,7 @@ public:
 		const char* shaderName = RUSH_SHADER_NAME("TestRayTracing.metal");
 		const bool shaderSupported = caps.shaderTypeSupported(GfxShaderSourceType_MSL_BIN);
 #else
-		const char* shaderName = RUSH_SHADER_NAME("TestRayTracing.comp");
+		const char* shaderName = RUSH_SHADER_NAME("TestRayTracing.hlsl");
 		const bool shaderSupported = caps.shaderTypeSupported(GfxShaderSourceType_SPV);
 #endif
 

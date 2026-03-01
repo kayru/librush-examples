@@ -156,8 +156,8 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 
 	if (m_startupError.empty())
 	{
-		GfxShaderSource vsSource = loadShaderFromFile(RUSH_SHADER_NAME("Blit.vert"));
-		GfxShaderSource psSource = loadShaderFromFile(RUSH_SHADER_NAME("BlitTonemap.frag"));
+		GfxShaderSource vsSource = loadShaderFromFile(RUSH_SHADER_NAME("Blit.hlsl"));
+		GfxShaderSource psSource = loadShaderFromFile(RUSH_SHADER_NAME("BlitTonemap.hlsl"));
 		if (vsSource.empty() || psSource.empty())
 		{
 			setError("Failed to load tonemap shaders.");

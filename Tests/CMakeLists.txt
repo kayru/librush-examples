@@ -8,7 +8,7 @@ set(TEST_SOURCES
 	TestClear.cpp
 	TestArray.cpp
 	TestRayTracing.cpp
-	TestRayTracing.comp
+	TestRayTracing.hlsl
 	TestRayTracing.metal
 	TestRayTracingPipeline.cpp
 	TestRayTracingPipeline.rgen
@@ -31,7 +31,7 @@ if(APPLE AND DEFINED RUSH_RENDER_API AND RUSH_RENDER_API STREQUAL "MTL")
 	metal_shader_compile_rule(TestRayTracingMaterialIndex.metal)
 	metal_shader_compile_rule(TestRayTracingMaterialBinding.metal)
 else()
-	glsl_shader_compile_rule(TestRayTracing.comp)
+	hlsl_shader_compile_rule(TestRayTracing.hlsl cs_6_0)
 	rt_shader_compile_rule(TestRayTracingPipeline.rgen "")
 	rt_shader_compile_rule(TestRayTracingPipeline.rmiss "")
 	rt_shader_compile_rule(TestRayTracingPipeline.rchit "")

@@ -49,7 +49,7 @@ ExampleRayTracing::ExampleRayTracing() : ExampleApp()
 		return;
 	}
 
-	GfxShaderSource shaderSource = loadShaderFromFile(RUSH_SHADER_NAME("RayQuery.comp"));
+	GfxShaderSource shaderSource = loadShaderFromFile(RUSH_SHADER_NAME("RayQuery.hlsl"));
 	if (shaderSource.empty())
 	{
 		m_startupError = "Failed to load RayQuery shader.";

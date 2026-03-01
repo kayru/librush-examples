@@ -1,11 +1,7 @@
 set(app 11-RayTracing)
 
 set(shaders
-	RayQuery.comp
-)
-
-set(shaderDependencies
-	Common.glsl
+	RayQuery.hlsl
 )
 
 add_executable(${app}
@@ -18,5 +14,5 @@ target_link_libraries(${app} Common)
 target_compile_definitions(${app} PRIVATE RUSH_USING_NAMESPACE)
 
 foreach(shader ${shaders})
-	glsl_shader_compile_rule(${shader} "${shaderDependencies}")
+	hlsl_shader_compile_rule(${shader} cs_6_5)
 endforeach()
