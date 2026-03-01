@@ -17,5 +17,6 @@ add_executable(${app}
 target_link_libraries(${app} Common stb tiny_obj_loader)
 target_compile_definitions(${app} PRIVATE RUSH_USING_NAMESPACE)
 
+set_source_files_properties(Common.hlsl PROPERTIES VS_TOOL_OVERRIDE "None")
 hlsl_shader_compile_rule("ModelPS.hlsl" ps_6_0 "Common.hlsl")
 hlsl_shader_compile_rule("ModelVS.hlsl" vs_6_0 "Common.hlsl")

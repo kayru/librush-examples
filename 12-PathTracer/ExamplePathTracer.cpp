@@ -475,7 +475,8 @@ void ExamplePathTracer::createRayTracingScene(GfxContext* ctx)
 
 	if (!m_rtInstanceBuffer.valid())
 	{
-		m_rtInstanceBuffer = Gfx_CreateBuffer(GfxBufferFlags::Storage);
+		m_rtInstanceBuffer = Gfx_CreateBuffer(GfxBufferFlags::Transient | GfxBufferFlags::Storage,
+		    tlasDesc.instanceCount, (u32)sizeof(GfxRayTracingInstanceDesc));
 	}
 	{
 		Mat4 transform = m_worldTransform.transposed();

@@ -77,11 +77,11 @@ set(RUSH_VK_SDK_BIN_PATHS
 	"~/bin"
 )
 
-find_program(GLSLC NAMES glslc PATHS
+find_program(GLSLC NAMES glslc HINTS
 	${RUSH_VK_SDK_BIN_PATHS}
 )
 
-find_program(DXC NAMES dxc PATHS
+find_program(DXC NAMES dxc HINTS
 	${RUSH_VK_SDK_BIN_PATHS}
 )
 
@@ -132,6 +132,7 @@ else()
 		set(shaderDeps ${ARGN})
 		add_custom_command(
 			OUTPUT ${CMAKE_CFG_INTDIR}/${shaderName}.bin
+			COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CFG_INTDIR}
 			COMMAND ${GLSLC} -O -o ${CMAKE_CFG_INTDIR}/${shaderName}.bin ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
 			MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
 			DEPENDS ${shaderDeps}
