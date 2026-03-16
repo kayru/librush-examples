@@ -12,6 +12,13 @@ endif(APPLE)
 # Multithreaded compilation in MSVC
 add_compile_options($<$<CXX_COMPILER_ID:MSVC>:/MP>)
 
+# Default render API: Metal on Apple, Vulkan otherwise
+if(APPLE)
+	set(RUSH_RENDER_API "MTL" CACHE STRING "Select renderer type")
+else()
+	set(RUSH_RENDER_API "VK" CACHE STRING "Select renderer type")
+endif()
+
 # Dependencies
 
 add_subdirectory("External")
