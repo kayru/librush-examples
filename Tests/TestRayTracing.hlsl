@@ -11,7 +11,7 @@ uint packColor(float4 color)
 	return rgba.r | (rgba.g << 8) | (rgba.b << 16) | (rgba.a << 24);
 }
 
-[numthreads(1, 1, 1)]
+[numthreads(2, 2, 1)]
 void main(uint3 id : SV_DispatchThreadID)
 {
 	float2 uvNearest = float2(0.25, 0.25);
