@@ -21,6 +21,40 @@ GfxOwn<GfxRasterizerState> s_rasterState;
 GfxOwn<GfxTexture> s_fontTexture;
 ImGuiContext* s_guiContext = nullptr;
 
+static ImGuiKey rushKeyToImGuiKey(Key key)
+{
+	switch (key)
+	{
+	case Key_Tab:          return ImGuiKey_Tab;
+	case Key_Left:         return ImGuiKey_LeftArrow;
+	case Key_Right:        return ImGuiKey_RightArrow;
+	case Key_Up:           return ImGuiKey_UpArrow;
+	case Key_Down:         return ImGuiKey_DownArrow;
+	case Key_Home:         return ImGuiKey_Home;
+	case Key_End:          return ImGuiKey_End;
+	case Key_Delete:       return ImGuiKey_Delete;
+	case Key_Backspace:    return ImGuiKey_Backspace;
+	case Key_Enter:        return ImGuiKey_Enter;
+	case Key_Escape:       return ImGuiKey_Escape;
+	case Key_Space:        return ImGuiKey_Space;
+	case Key_A:            return ImGuiKey_A;
+	case Key_C:            return ImGuiKey_C;
+	case Key_V:            return ImGuiKey_V;
+	case Key_X:            return ImGuiKey_X;
+	case Key_Y:            return ImGuiKey_Y;
+	case Key_Z:            return ImGuiKey_Z;
+	case Key_LeftControl:  return ImGuiKey_LeftCtrl;
+	case Key_RightControl: return ImGuiKey_RightCtrl;
+	case Key_LeftShift:    return ImGuiKey_LeftShift;
+	case Key_RightShift:   return ImGuiKey_RightShift;
+	case Key_LeftAlt:      return ImGuiKey_LeftAlt;
+	case Key_RightAlt:     return ImGuiKey_RightAlt;
+	case Key_LeftSuper:    return ImGuiKey_LeftSuper;
+	case Key_RightSuper:   return ImGuiKey_RightSuper;
+	default:               return ImGuiKey_None;
+	}
+}
+
 class GuiWMI : public WindowMessageInterceptor
 {
 public:
@@ -33,53 +67,38 @@ public:
 		{
 		case WindowEventType_Char:
 			io.AddInputCharacter(e.character);
-			return ImGui::GetIO().WantCaptureKeyboard;
+			return io.WantCaptureKeyboard;
 		case WindowEventType_KeyDown:
-			io.KeysDown[e.code] = true;
-			if (e.code == Key_LeftControl || e.code == Key_RightControl)
-			{
-				io.KeyCtrl = true;
-			}
-			else if (e.code == Key_LeftShift || e.code == Key_RightShift)
-			{
-				io.KeyShift = true;
-			}
-			return ImGui::GetIO().WantCaptureKeyboard;
-
+		{
+			ImGuiKey key = rushKeyToImGuiKey((Key)e.code);
+			if (key != ImGuiKey_None)
+				io.AddKeyEvent(key, true);
+			return io.WantCaptureKeyboard;
+		}
 		case WindowEventType_KeyUp:
-			io.KeysDown[e.code] = false;
-			if (e.code == Key_LeftControl || e.code == Key_RightControl)
-			{
-				io.KeyCtrl = false;
-			}
-			else if (e.code == Key_LeftShift || e.code == Key_RightShift)
-			{
-				io.KeyShift = false;
-			}
-			return ImGui::GetIO().WantCaptureKeyboard;
-
+		{
+			ImGuiKey key = rushKeyToImGuiKey((Key)e.code);
+			if (key != ImGuiKey_None)
+				io.AddKeyEvent(key, false);
+			return io.WantCaptureKeyboard;
+		}
 		case WindowEventType_MouseDown:
 			if (e.button < 5)
-			{
-				io.MouseDown[e.button] = true;
-			}
-			return ImGui::GetIO().WantCaptureMouse;
+				io.AddMouseButtonEvent(e.button, true);
+			return io.WantCaptureMouse;
 
 		case WindowEventType_MouseUp:
 			if (e.button < 5)
-			{
-				io.MouseDown[e.button] = false;
-			}
-			return ImGui::GetIO().WantCaptureMouse;
+				io.AddMouseButtonEvent(e.button, false);
+			return io.WantCaptureMouse;
 
 		case WindowEventType_MouseMove:
-			io.MousePos.x = e.pos.x;
-			io.MousePos.y = e.pos.y;
-			return ImGui::GetIO().WantCaptureMouse;
+			io.AddMousePosEvent(e.pos.x, e.pos.y);
+			return io.WantCaptureMouse;
 
 		case WindowEventType_Scroll:
-			io.MouseWheel = e.scroll.y;
-			return ImGui::GetIO().WantCaptureMouse;
+			io.AddMouseWheelEvent(0.0f, e.scroll.y);
+			return io.WantCaptureMouse;
 		default:
 			return false;
 		}
@@ -90,7 +109,7 @@ GuiWMI s_messageInterceptor;
 
 }
 
-static void ImGuiImpl_Render(ImDrawData* drawData)
+static void ImGuiImpl_RenderDrawData(ImDrawData* drawData)
 {
 	Gfx_SetBlendState(s_context, s_blendState);
 	Gfx_SetRasterizerState(s_context, s_rasterState);
@@ -108,7 +127,7 @@ static void ImGuiImpl_Render(ImDrawData* drawData)
 	s_prim->setSampler(PrimitiveBatch::SamplerState_Point);
 
 	const ImVec2 clipOffset = drawData->DisplayPos;
-	const ImVec2 clipScale = ImGui::GetIO().DisplayFramebufferScale;
+	const ImVec2 clipScale = drawData->FramebufferScale;
 
 	for (int cmdListIndex = 0; cmdListIndex < drawData->CmdListsCount; ++cmdListIndex)
 	{
@@ -120,7 +139,7 @@ static void ImGuiImpl_Render(ImDrawData* drawData)
 		u32 indexOffset = 0;
 		for (const auto& cmd : cmdList->CmdBuffer)
 		{
-			auto verts = s_prim->drawVertices(GfxPrimitive::TriangleList, cmd.ElemCount); // TODO: implement indexed drawing
+			auto verts = s_prim->drawVertices(GfxPrimitive::TriangleList, cmd.ElemCount);
 			for (u32 i = 0; i < cmd.ElemCount; ++i)
 			{
 				u32 index = ib[i + indexOffset];
@@ -190,26 +209,6 @@ void ImGuiImpl_Startup(Window* window)
 	GfxDepthStencilDesc depthDescr;
 	depthDescr.enable = false;
 	s_depthState = Gfx_CreateDepthStencilState(depthDescr);
-
-	io.KeyMap[ImGuiKey_Tab] = Key_Tab;
-	io.KeyMap[ImGuiKey_LeftArrow] = Key_Left;
-	io.KeyMap[ImGuiKey_RightArrow] = Key_Right;
-	io.KeyMap[ImGuiKey_UpArrow] = Key_Up;
-	io.KeyMap[ImGuiKey_DownArrow] = Key_Down;
-	io.KeyMap[ImGuiKey_Home] = Key_Home;
-	io.KeyMap[ImGuiKey_End] = Key_End;
-	io.KeyMap[ImGuiKey_Delete] = Key_Delete;
-	io.KeyMap[ImGuiKey_Backspace] = Key_Backspace;
-	io.KeyMap[ImGuiKey_Enter] = Key_Enter;
-	io.KeyMap[ImGuiKey_Escape] = Key_Escape;
-	io.KeyMap[ImGuiKey_A] = Key_A;
-	io.KeyMap[ImGuiKey_C] = Key_C;
-	io.KeyMap[ImGuiKey_V] = Key_V;
-	io.KeyMap[ImGuiKey_X] = Key_X;
-	io.KeyMap[ImGuiKey_Y] = Key_Y;
-	io.KeyMap[ImGuiKey_Z] = Key_Z;
-
-	io.RenderDrawListsFn = ImGuiImpl_Render;
 }
 
 void ImGuiImpl_Update(float dt)
@@ -217,11 +216,10 @@ void ImGuiImpl_Update(float dt)
 	ImGuiIO& io = ImGui::GetIO();
 	io.DeltaTime = dt;
 
-	io.MousePos.x = s_window->getMouseState().pos.x;
-	io.MousePos.y = s_window->getMouseState().pos.y;
+	io.AddMousePosEvent(s_window->getMouseState().pos.x, s_window->getMouseState().pos.y);
 
-	io.MouseDown[0] = s_window->getMouseState().buttons[0];
-	io.MouseDown[1] = s_window->getMouseState().buttons[1];
+	io.AddMouseButtonEvent(0, s_window->getMouseState().buttons[0]);
+	io.AddMouseButtonEvent(1, s_window->getMouseState().buttons[1]);
 
 	io.DisplayFramebufferScale.x = s_window->getResolutionScale().x;
 	io.DisplayFramebufferScale.y = s_window->getResolutionScale().y;
@@ -259,6 +257,7 @@ void ImGuiImpl_Render(GfxContext* context, PrimitiveBatch* prim)
 	s_context = context;
 
 	ImGui::Render();
+	ImGuiImpl_RenderDrawData(ImGui::GetDrawData());
 
 	s_prim = nullptr;
 	s_context = nullptr;

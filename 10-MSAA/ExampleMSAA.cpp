@@ -9,6 +9,7 @@
 
 #include <Common/ExampleApp.h>
 #include <Common/ImGuiImpl.h>
+#include <Common/ImGuiExt.h>
 #include <Common/Utils.h>
 #include <imgui.h>
 
@@ -185,11 +186,11 @@ public:
 			{
 				ImGui::Checkbox("Enable Wireframe", &m_enableWireframe);
 				ImGui::Checkbox("Enable Animation", &m_enableAnimation);
-				ImGui::SliderFloat("Animation time", &m_animationTime, 0.0f, 1.0f);
+				ImGuiExt::SliderFloat("Animation time", &m_animationTime, 0.0f, 1.0f);
 				char msaaText[3] = {};
 				snprintf(msaaText, sizeof(msaaText), "%d", m_msaaModes[m_msaaQuality]);
-				ImGui::SliderInt("Sample count", &m_msaaQuality, 0, u32(m_msaaModes.size())-1, msaaText);
-				ImGui::SliderInt("Zoom", &m_zoom, 0, bitScanForward(m_maxResolution));
+				ImGuiExt::SliderInt("Sample count", &m_msaaQuality, 0, u32(m_msaaModes.size())-1, ImGuiExt::LabelMode::Above, msaaText);
+				ImGuiExt::SliderInt("Zoom", &m_zoom, 0, bitScanForward(m_maxResolution));
 				
 			}
 			ImGui::End();

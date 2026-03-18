@@ -24,6 +24,7 @@
 #include <utility>
 
 #include <Common/ImGuiImpl.h>
+#include <Common/ImGuiExt.h>
 #include <Common/Utils.h>
 #include <imgui.h>
 
@@ -329,45 +330,48 @@ void ExamplePathTracer::onUpdate()
 	renderSettingsChanged |= ImGui::Checkbox("Neutral background", &m_settings.m_useNeutralBackground);
 	renderSettingsChanged |= ImGui::Checkbox("Depth of Field", &m_settings.m_useDepthOfField);
 		renderSettingsChanged |= ImGui::Checkbox("Normal mapping", &m_settings.m_useNormalMapping);
-		renderSettingsChanged |= ImGui::Checkbox("Debug: Simple shading", &m_settings.m_debugSimpleShading);
-		renderSettingsChanged |= ImGui::Checkbox("Debug: Disable accumulation", &m_settings.m_debugDisableAccumulation);
-		renderSettingsChanged |= ImGui::Checkbox("Debug: Hit mask", &m_settings.m_debugHitMask);
-		{
-			const char* debugVisItems[] = {
-				"None",
-				"Albedo",
-				"Geo normal",
-				"Shading normal",
-				"Normal mapped",
-				"Tangent",
-				"Bitangent",
-				"Metalness",
-				"Roughness",
-				"UV",
-			};
-			int debugVisMode = m_settings.m_debugVisMode;
-			if (ImGui::Combo("Debug: Visualization", &debugVisMode, debugVisItems, (int)RUSH_COUNTOF(debugVisItems)))
-			{
-				m_settings.m_debugVisMode = debugVisMode;
-				renderSettingsChanged = true;
-			}
-		}
-		renderSettingsChanged |= ImGui::SliderFloat("Focal length (mm)", &m_settings.m_focalLengthMM, 1.0f, 250.0f);
-		renderSettingsChanged |= ImGui::SliderFloat("Aperture size (mm)", &m_settings.m_apertureSizeMM, 0.0f, 100000.0, "%.3f", 3.0f);
-		renderSettingsChanged |= ImGui::SliderFloat("Focus distance", &m_settings.m_focusDistance, 0.0f, 1000.0, "%.3f", 3.0f);
-		renderSettingsChanged |= ImGui::SliderFloat("Envmap rotation (deg)", &m_settings.m_envmapRotationDegrees, 0.0f, 360.0f);
-		ImGui::SliderFloat("Exposure EV100", &m_settings.m_exposureEV100, -10.0f, 10.0f);
-		ImGui::SliderFloat("Gamma", &m_settings.m_gamma, 0.25f, 3.0f);
-		if (ImGui::Button("Reset accumulation"))
-		{
-			m_outputImage.reset();
-			m_frameIndex = 0;
-		}
+		renderSettingsChanged |= ImGuiExt::SliderFloat("Focal length (mm)", &m_settings.m_focalLengthMM, 1.0f, 250.0f);
+		renderSettingsChanged |= ImGuiExt::SliderFloat("Aperture size (mm)", &m_settings.m_apertureSizeMM, 0.0f, 100000.0f, ImGuiExt::LabelMode::Above, "%.3f", ImGuiSliderFlags_Logarithmic);
+		renderSettingsChanged |= ImGuiExt::SliderFloat("Focus distance", &m_settings.m_focusDistance, 0.0f, 1000.0f, ImGuiExt::LabelMode::Above, "%.3f", ImGuiSliderFlags_Logarithmic);
+		renderSettingsChanged |= ImGuiExt::SliderFloat("Envmap rotation (deg)", &m_settings.m_envmapRotationDegrees, 0.0f, 360.0f);
+		ImGuiExt::SliderFloat("Exposure EV100", &m_settings.m_exposureEV100, -10.0f, 10.0f);
+		ImGuiExt::SliderFloat("Gamma", &m_settings.m_gamma, 0.25f, 3.0f);
 		Vec3 camPos = m_camera.getPosition();
-		if (ImGui::DragFloat3("Camera position", &camPos.x, m_cameraScale))
+		if (ImGuiExt::DragFloat3("Camera position", &camPos.x, m_cameraScale))
 		{
 			m_camera.lookAt(camPos, camPos + m_camera.getForward());
 			renderSettingsChanged = true;
+		}
+		if (ImGui::CollapsingHeader("Debug"))
+		{
+			renderSettingsChanged |= ImGui::Checkbox("Simple shading", &m_settings.m_debugSimpleShading);
+			renderSettingsChanged |= ImGui::Checkbox("Disable accumulation", &m_settings.m_debugDisableAccumulation);
+			renderSettingsChanged |= ImGui::Checkbox("Hit mask", &m_settings.m_debugHitMask);
+			{
+				const char* debugVisItems[] = {
+					"None",
+					"Albedo",
+					"Geo normal",
+					"Shading normal",
+					"Normal mapped",
+					"Tangent",
+					"Bitangent",
+					"Metalness",
+					"Roughness",
+					"UV",
+				};
+				int debugVisMode = m_settings.m_debugVisMode;
+				if (ImGuiExt::Combo("Visualization", &debugVisMode, debugVisItems, (int)RUSH_COUNTOF(debugVisItems)))
+				{
+					m_settings.m_debugVisMode = debugVisMode;
+					renderSettingsChanged = true;
+				}
+			}
+			if (ImGui::Button("Reset accumulation"))
+			{
+				m_outputImage.reset();
+				m_frameIndex = 0;
+			}
 		}
 		ImGui::End();
 

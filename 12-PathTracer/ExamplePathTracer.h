@@ -198,12 +198,12 @@ private:
 		bool m_useNeutralBackground = false;
 		bool m_useDepthOfField = false;
 		bool  m_useNormalMapping = true;
-		bool m_debugSimpleShading = true;
-		bool m_debugDisableAccumulation = true;
+		bool m_debugSimpleShading = false;
+		bool m_debugDisableAccumulation = false;
 		bool m_debugHitMask = false;
 		int m_debugVisMode = 0;
 		float m_gamma = 1.8f;
-		float m_exposureEV100 = 2.0f;
+		float m_exposureEV100 = 0.0f;
 		Vec2 m_cameraSensorSizeMM = Vec2(36.0f, 24.0f); // 35mm film
 		float m_focalLengthMM = 50.0;
 		float m_apertureSizeMM = 0.0;

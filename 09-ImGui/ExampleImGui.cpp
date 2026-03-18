@@ -38,7 +38,7 @@ public:
 		Gfx_SetViewport(ctx, GfxViewport(window->getFramebufferSize()));
 		Gfx_SetScissorRect(ctx, window->getFramebufferSize());
 
-		ImGui::ShowTestWindow();
+		ImGui::ShowDemoWindow();
 		ImGuiImpl_Render(ctx, m_prim);
 
 		Gfx_EndPass(ctx);
