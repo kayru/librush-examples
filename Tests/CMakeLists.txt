@@ -6,6 +6,7 @@ set(TEST_SOURCES
 	TestMain.cpp
 	TestBuffer.cpp
 	TestClear.cpp
+	TestCopyTextureToBuffer.cpp
 	TestArray.cpp
 	TestRayTracing.cpp
 	TestRayTracing.hlsl
