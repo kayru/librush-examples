@@ -17,10 +17,10 @@ void main(uint3 id : SV_DispatchThreadID)
 	float2 uvNearest = float2(0.25, 0.25);
 	float2 uvLinear  = float2(0.5, 0.5);
 
-	float4 nearest0 = textureDescriptors[0].Sample(samplerNearest, uvNearest);
-	float4 nearest1 = textureDescriptors[1].Sample(samplerNearest, uvNearest);
-	float4 linear0  = textureDescriptors[0].Sample(samplerLinear, uvLinear);
-	float4 linear1  = textureDescriptors[1].Sample(samplerLinear, uvLinear);
+	float4 nearest0 = textureDescriptors[0].SampleLevel(samplerNearest, uvNearest, 0);
+	float4 nearest1 = textureDescriptors[1].SampleLevel(samplerNearest, uvNearest, 0);
+	float4 linear0  = textureDescriptors[0].SampleLevel(samplerLinear, uvLinear, 0);
+	float4 linear1  = textureDescriptors[1].SampleLevel(samplerLinear, uvLinear, 0);
 
 	outputBuffer[0] = uint4(
 		packColor(nearest0),
