@@ -20,6 +20,8 @@ set(TEST_SOURCES
 	TestRayTracingMaterialIndex.metal
 	TestRayTracingMaterialBinding.cpp
 	TestRayTracingMaterialBinding.metal
+	TestTypedBuffer.cpp
+	TestTypedBuffer.hlsl
 )
 
 add_executable(${app} ${TEST_SOURCES})
@@ -37,3 +39,5 @@ else()
 	rt_shader_compile_rule(TestRayTracingPipeline.rmiss "")
 	rt_shader_compile_rule(TestRayTracingPipeline.rchit "")
 endif()
+
+hlsl_shader_compile_rule(TestTypedBuffer.hlsl cs_6_0)
