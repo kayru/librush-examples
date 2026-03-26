@@ -22,6 +22,9 @@ set(TEST_SOURCES
 	TestRayTracingMaterialBinding.metal
 	TestTypedBuffer.cpp
 	TestTypedBuffer.hlsl
+	TestIndexBufferOffset.cpp
+	TestIndexBufferOffsetVS.hlsl
+	TestIndexBufferOffsetPS.hlsl
 )
 
 add_executable(${app} ${TEST_SOURCES})
@@ -41,3 +44,5 @@ else()
 endif()
 
 hlsl_shader_compile_rule(TestTypedBuffer.hlsl cs_6_0)
+hlsl_shader_compile_rule(TestIndexBufferOffsetVS.hlsl vs_6_0)
+hlsl_shader_compile_rule(TestIndexBufferOffsetPS.hlsl ps_6_0)
