@@ -34,7 +34,7 @@ private:
 	GfxOwn<GfxBuffer> m_constantBuffer;
 
 	GfxOwn<GfxComputeShader>         m_computeShader;
-	GfxOwn<GfxTechnique>             m_technique;
+	GfxOwn<GfxComputePipeline>       m_pipeline;
 	GfxOwn<GfxAccelerationStructure> m_blas;
 	GfxOwn<GfxAccelerationStructure> m_tlas;
 

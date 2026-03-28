@@ -70,24 +70,38 @@ ExampleModelViewer::ExampleModelViewer() : ExampleApp(), m_boundingBox(Vec3(0.0f
 		m_ps = Gfx_CreatePixelShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelPS.hlsl")));
 	}
 
-	GfxVertexFormatDesc vfDesc;
-	vfDesc.add(0, GfxVertexFormatDesc::DataType::Float3, GfxVertexFormatDesc::Semantic::Position, 0);
-	vfDesc.add(0, GfxVertexFormatDesc::DataType::Float3, GfxVertexFormatDesc::Semantic::Normal, 0);
-	vfDesc.add(0, GfxVertexFormatDesc::DataType::Float2, GfxVertexFormatDesc::Semantic::Texcoord, 0);
-
-	m_vf = Gfx_CreateVertexFormat(vfDesc);
+	{
+		u32 sampleCountMask = (caps.colorSampleCounts & caps.depthSampleCounts);
+		if (sampleCountMask == 0)
+		{
+			sampleCountMask = 1;
+		}
+		m_msaaQuality = 1u << (31 - bitScanReverse(sampleCountMask));
+	}
 
 	m_materialDescriptorSetDesc.constantBuffers = 1; // material constants
 	m_materialDescriptorSetDesc.samplers = 1; // material sampler
 	m_materialDescriptorSetDesc.textures = 1; // albedo texture
 	m_materialDescriptorSetDesc.stageFlags = GfxStageFlags::VertexPixel;
 
-	GfxShaderBindingDesc bindings;
-	bindings.descriptorSets[0].constantBuffers = 1; // scene constants
-	// Metal argument buffers expect sampler+texture to share a set for reliable pairing.
-	bindings.descriptorSets[1] = m_materialDescriptorSetDesc;
-
-	m_technique = Gfx_CreateTechnique(GfxTechniqueDesc(m_ps, m_vs, m_vf, bindings));
+	{
+		GfxRenderPipelineDesc pipelineDesc;
+		pipelineDesc.vs = m_vs.get();
+		pipelineDesc.ps = m_ps.get();
+		pipelineDesc.vertexFormat.add(0, GfxVertexFormatDesc::DataType::Float3, GfxVertexFormatDesc::Semantic::Position, 0);
+		pipelineDesc.vertexFormat.add(0, GfxVertexFormatDesc::DataType::Float3, GfxVertexFormatDesc::Semantic::Normal, 0);
+		pipelineDesc.vertexFormat.add(0, GfxVertexFormatDesc::DataType::Float2, GfxVertexFormatDesc::Semantic::Texcoord, 0);
+		pipelineDesc.bindings.descriptorSets[0].constantBuffers = 1; // scene constants
+		// Metal argument buffers expect sampler+texture to share a set for reliable pairing.
+		pipelineDesc.bindings.descriptorSets[1] = m_materialDescriptorSetDesc;
+		pipelineDesc.depthStencil = GfxDepthStencilDesc::makeWriteTest(GfxCompareFunc::GreaterEqual);
+		pipelineDesc.rasterizer.cullMode = GfxCullMode::CW;
+		pipelineDesc.setBlendState(GfxBlendStateDesc::makeOpaque());
+		pipelineDesc.renderTarget.colorFormats[0] = GfxFormat_RGBA8_Unorm;
+		pipelineDesc.renderTarget.depthFormat = GfxFormat_D32_Float;
+		pipelineDesc.renderTarget.sampleCount = m_msaaQuality;
+		m_pipeline = Gfx_CreateRenderPipeline(pipelineDesc);
+	}
 
 	GfxBufferDesc cbDesc(GfxBufferFlags::TransientConstant, GfxFormat_Unknown, 1, sizeof(Constants));
 	m_constantBuffer = Gfx_CreateBuffer(cbDesc);
@@ -135,14 +149,6 @@ ExampleModelViewer::ExampleModelViewer() : ExampleApp(), m_boundingBox(Vec3(0.0f
 	{
 		m_loadingThreads.push_back(std::thread([this]() { this->loadingThreadFunction(); }));
 	}
-
-
-	u32 sampleCountMask = (caps.colorSampleCounts & caps.depthSampleCounts);
-	if (sampleCountMask == 0)
-	{
-		sampleCountMask = 1;
-	}
-	m_msaaQuality = 1u << (31 - bitScanReverse(sampleCountMask));
 }
 
 ExampleModelViewer::~ExampleModelViewer()
@@ -306,22 +312,13 @@ void ExampleModelViewer::render()
 		Gfx_SetViewport(ctx, GfxViewport(m_window->getFramebufferSize()));
 		Gfx_SetScissorRect(ctx, m_window->getFramebufferSize());
 
-		Gfx_SetDepthStencilState(ctx,
-			m_reverseZ
-			? m_depthStencilStates.writeGreaterEqual 
-			: m_depthStencilStates.writeLessEqual);
-
-		Gfx_SetRasterizerState(ctx, m_rasterizerStates.solidCullCW);
-
 		if (m_valid)
 		{
 			GfxMarkerScope markerFrame(ctx, "Model");
 
 			TimingScope timingScope(m_stats.cpuModel);
 
-			Gfx_SetBlendState(ctx, m_blendStates.opaque);
-
-			Gfx_SetTechnique(ctx, m_technique);
+			Gfx_SetRenderPipeline(ctx, m_pipeline);
 			Gfx_SetVertexStream(ctx, 0, m_vertexBuffer);
 			Gfx_SetIndexStream(ctx, m_indexBuffer);
 			Gfx_SetConstantBuffer(ctx, 0, m_constantBuffer); // scene constants
@@ -356,9 +353,6 @@ void ExampleModelViewer::render()
 		TimingScope timingScope(m_stats.cpuUI);
 
 		{
-			Gfx_SetBlendState(ctx, m_blendStates.opaque);
-			Gfx_SetDepthStencilState(ctx, m_depthStencilStates.disable);
-
 			const Tuple2i framebufferSize = m_window->getFramebufferSize();
 			m_prim->begin2D(framebufferSize);
 			TexturedQuad2D q;
@@ -374,9 +368,6 @@ void ExampleModelViewer::render()
 			m_prim->drawTexturedQuad(&q);
 			m_prim->end2D();
 		}
-
-		Gfx_SetBlendState(ctx, m_blendStates.lerp);
-		Gfx_SetDepthStencilState(ctx, m_depthStencilStates.disable);
 
 		m_prim->begin2D(m_window->getSize());
 

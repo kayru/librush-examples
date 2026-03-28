@@ -188,7 +188,7 @@ private:
 	GfxOwn<GfxAccelerationStructure> m_tlas;
 	GfxOwn<GfxBuffer>                m_sbtBuffer;
 	GfxOwn<GfxTexture>               m_outputImage;
-	GfxOwn<GfxTechnique>             m_blitTonemap;
+	GfxOwn<GfxRenderPipeline>        m_blitTonemap;
 	GfxOwn<GfxTexture>               m_envmap;
 	GfxOwn<GfxBuffer>                m_envmapDistribution;
 

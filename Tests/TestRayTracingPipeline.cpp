@@ -209,7 +209,7 @@ private:
 
 		GfxAccelerationStructureDesc blasDesc;
 		blasDesc.type         = GfxAccelerationStructureType::BottomLevel;
-		blasDesc.geometyCount = u32(geometries.size());
+		blasDesc.geometryCount = u32(geometries.size());
 		blasDesc.geometries   = geometries.data();
 		m_blas = Gfx_CreateAccelerationStructure(blasDesc);
 

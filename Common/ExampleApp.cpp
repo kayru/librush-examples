@@ -90,69 +90,6 @@ ExampleApp::ExampleApp() : m_window(Platform_GetWindow())
 	m_screenshotAppName = sanitizeFilename(g_runSettings.appName, "Screenshot");
 	m_maxScreenshotDim = g_runSettings.maxScreenshotDim;
 
-	// Depth stencil states
-
-	{
-		GfxDepthStencilDesc desc;
-		desc.enable      = false;
-		desc.writeEnable = false;
-		desc.compareFunc = GfxCompareFunc::Always;
-		m_depthStencilStates.disable = Gfx_CreateDepthStencilState(desc);
-	}
-
-	{
-		GfxDepthStencilDesc desc;
-		desc.enable      = true;
-		desc.writeEnable = true;
-		desc.compareFunc = GfxCompareFunc::LessEqual;
-		m_depthStencilStates.writeLessEqual = Gfx_CreateDepthStencilState(desc);
-	}
-
-	{
-		GfxDepthStencilDesc desc;
-		desc.enable      = true;
-		desc.writeEnable = true;
-		desc.compareFunc = GfxCompareFunc::GreaterEqual;
-		m_depthStencilStates.writeGreaterEqual = Gfx_CreateDepthStencilState(desc);
-	}
-
-	// Rasterizer states
-
-	{
-		GfxRasterizerDesc desc;
-		desc.cullMode = GfxCullMode::CW;
-		m_rasterizerStates.solidCullCW = Gfx_CreateRasterizerState(desc);
-	}
-
-	{
-		GfxRasterizerDesc desc;
-		desc.cullMode = GfxCullMode::CCW;
-		m_rasterizerStates.solidCullCCW = Gfx_CreateRasterizerState(desc);
-	}
-
-	{
-		GfxRasterizerDesc desc;
-		desc.cullMode = GfxCullMode::None;
-		m_rasterizerStates.solidNoCull = Gfx_CreateRasterizerState(desc);
-	}
-
-	// Blend states
-
-	{
-		GfxBlendStateDesc desc = GfxBlendStateDesc::makeOpaque();
-		m_blendStates.opaque = Gfx_CreateBlendState(desc);
-	}
-
-	{
-		GfxBlendStateDesc desc = GfxBlendStateDesc::makeLerp();
-		m_blendStates.lerp = Gfx_CreateBlendState(desc);
-	}
-
-	{
-		GfxBlendStateDesc desc = GfxBlendStateDesc::makeAdditive();
-		m_blendStates.additive = Gfx_CreateBlendState(desc);
-	}
-
 	// Sampler states
 
 	{
@@ -270,9 +207,6 @@ void ExampleApp::renderMessage(const char* message, const ColorRGBA8& color, flo
 	passDesc.flags = GfxPassFlags::ClearAll;
 	passDesc.clearColors[0] = ColorRGBA8(11, 22, 33);
 	Gfx_BeginPass(ctx, passDesc);
-
-	Gfx_SetBlendState(ctx, m_blendStates.lerp);
-	Gfx_SetDepthStencilState(ctx, m_depthStencilStates.disable);
 
 	m_prim->begin2D(m_window->getSize());
 	m_font->setScale(scale);

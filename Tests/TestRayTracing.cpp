@@ -77,15 +77,17 @@ public:
 		outputDesc.debugName = "TestRayTracingOutput";
 		m_outputBuffer = Gfx_CreateBuffer(outputDesc);
 
-		GfxShaderBindingDesc bindings;
-		bindings.descriptorSets[0].samplers = 3;
-		bindings.descriptorSets[0].textures = 2;
-		bindings.descriptorSets[0].rwBuffers = 1;
-		bindings.descriptorSets[0].flags = GfxDescriptorSetFlags::TextureArray;
-		bindings.descriptorSets[0].stageFlags = GfxStageFlags::Compute;
+		GfxComputePipelineDesc pipelineDesc;
+		pipelineDesc.cs = m_computeShader.get();
+		pipelineDesc.bindings.descriptorSets[0].samplers = 3;
+		pipelineDesc.bindings.descriptorSets[0].textures = 2;
+		pipelineDesc.bindings.descriptorSets[0].rwBuffers = 1;
+		pipelineDesc.bindings.descriptorSets[0].flags = GfxDescriptorSetFlags::TextureArray;
+		pipelineDesc.bindings.descriptorSets[0].stageFlags = GfxStageFlags::Compute;
+		pipelineDesc.workGroupSize = {1, 1, 1};
 
-		m_technique = Gfx_CreateTechnique(GfxTechniqueDesc(m_computeShader, bindings, {1, 1, 1}));
-		if (!m_technique.valid())
+		m_pipeline = Gfx_CreateComputePipeline(pipelineDesc);
+		if (!m_pipeline.valid())
 		{
 			m_skipReason = "Failed to create compute technique.";
 			return;
@@ -115,7 +117,7 @@ public:
 			return;
 		}
 
-		Gfx_SetTechnique(ctx, m_technique);
+		Gfx_SetComputePipeline(ctx, m_pipeline);
 		Gfx_SetSampler(ctx, 0, m_samplerNearest);
 		Gfx_SetSampler(ctx, 1, m_samplerLinear);
 		Gfx_SetSampler(ctx, 2, m_samplerNearest);
@@ -172,7 +174,7 @@ private:
 	GfxOwn<GfxSampler>       m_samplerLinear;
 	GfxOwn<GfxTexture>       m_textures[2];
 	GfxOwn<GfxBuffer>        m_outputBuffer;
-	GfxOwn<GfxTechnique>     m_technique;
+	GfxOwn<GfxComputePipeline> m_pipeline;
 
 	u32 m_expected[4] = {};
 };

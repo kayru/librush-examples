@@ -52,12 +52,6 @@ public:
 		GfxVertexFormatDesc vfDesc;
 		vfDesc.add(0, GfxVertexFormatDesc::DataType::Float3, GfxVertexFormatDesc::Semantic::Position, 0);
 		vfDesc.add(0, GfxVertexFormatDesc::DataType::Color, GfxVertexFormatDesc::Semantic::Color, 0);
-		m_vertexFormat = Gfx_CreateVertexFormat(vfDesc);
-
-		GfxVertexFormatDesc vfDescInstanceId;
-		vfDescInstanceId.add(0, GfxVertexFormatDesc::DataType::Float3, GfxVertexFormatDesc::Semantic::Position, 0);
-		vfDescInstanceId.add(0, GfxVertexFormatDesc::DataType::Color, GfxVertexFormatDesc::Semantic::Color, 0);
-		m_vertexFormatInstanceId = Gfx_CreateVertexFormat(vfDescInstanceId);
 
 		{
 			auto vs = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelVS.hlsl")));
@@ -70,15 +64,25 @@ public:
 
 			GfxSpecializationConstant specializationConstants[] = {{0, 0, sizeof(int)}};
 
+			auto makeBaseDesc = [&](GfxVertexShaderArg vsShader, const GfxShaderBindingDesc& bindings) {
+				GfxRenderPipelineDesc desc;
+				desc.vs = vsShader;
+				desc.ps = ps.get();
+				desc.vertexFormat = vfDesc;
+				desc.bindings = bindings;
+				desc.depthStencil = GfxDepthStencilDesc::makeWriteTest(GfxCompareFunc::LessEqual);
+				desc.renderTarget = caps.backBufferDesc;
+				desc.specializationConstants     = specializationConstants;
+				desc.specializationConstantCount = RUSH_COUNTOF(specializationConstants);
+				desc.specializationData          = &specializationData;
+				desc.specializationDataSize      = sizeof(specializationData);
+				return desc;
+			};
+
 			{
 				GfxShaderBindingDesc bindings;
 				bindings.descriptorSets[0].constantBuffers = 2; // Global, Instance
-				GfxTechniqueDesc techDesc(ps, vs, m_vertexFormat, bindings);
-				techDesc.specializationConstants     = specializationConstants;
-				techDesc.specializationConstantCount = RUSH_COUNTOF(specializationConstants);
-				techDesc.specializationData          = &specializationData;
-				techDesc.specializationDataSize      = sizeof(specializationData);
-				m_technique = Gfx_CreateTechnique(techDesc);
+				m_technique = Gfx_CreateRenderPipeline(makeBaseDesc(vs, bindings));
 			}
 
 			if (caps.pushConstants)
@@ -88,12 +92,7 @@ public:
 				bindings.pushConstantSize       = u8(sizeof(Mat4));
 				bindings.pushConstantStageFlags = GfxStageFlags::Vertex;
 				bindings.descriptorSets[0].constantBuffers = 1; // Global
-				GfxTechniqueDesc techDesc(ps, vsPush, m_vertexFormat, bindings);
-				techDesc.specializationConstants     = specializationConstants;
-				techDesc.specializationConstantCount = RUSH_COUNTOF(specializationConstants);
-				techDesc.specializationData          = &specializationData;
-				techDesc.specializationDataSize      = sizeof(specializationData);
-				m_techniquePush = Gfx_CreateTechnique(techDesc);
+				m_techniquePush = Gfx_CreateRenderPipeline(makeBaseDesc(vsPush, bindings));
 			}
 
 			if (caps.pushConstants)
@@ -103,12 +102,7 @@ public:
 				bindings.pushConstantSize       = u8(sizeof(u32));
 				bindings.pushConstantStageFlags = GfxStageFlags::Vertex;
 				bindings.descriptorSets[0].constantBuffers = 2; // Global, Instance
-				GfxTechniqueDesc techDesc(ps, vsPushOffset, m_vertexFormat, bindings);
-				techDesc.specializationConstants     = specializationConstants;
-				techDesc.specializationConstantCount = RUSH_COUNTOF(specializationConstants);
-				techDesc.specializationData          = &specializationData;
-				techDesc.specializationDataSize      = sizeof(specializationData);
-				m_techniquePushOffset = Gfx_CreateTechnique(techDesc);
+				m_techniquePushOffset = Gfx_CreateRenderPipeline(makeBaseDesc(vsPushOffset, bindings));
 			}
 
 			if (caps.instancing)
@@ -116,12 +110,7 @@ public:
 				auto vsInstanced = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelInstanced.hlsl")));
 				GfxShaderBindingDesc bindings;
 				bindings.descriptorSets[0].constantBuffers = 2; // Global, Instance
-				GfxTechniqueDesc techDesc(ps, vsInstanced, m_vertexFormat, bindings);
-				techDesc.specializationConstants     = specializationConstants;
-				techDesc.specializationConstantCount = RUSH_COUNTOF(specializationConstants);
-				techDesc.specializationData          = &specializationData;
-				techDesc.specializationDataSize      = sizeof(specializationData);
-				m_techniqueInstanced = Gfx_CreateTechnique(techDesc);
+				m_techniqueInstanced = Gfx_CreateRenderPipeline(makeBaseDesc(vsInstanced, bindings));
 			}
 
 			if (caps.instancing)
@@ -129,12 +118,8 @@ public:
 				auto vsInstanceId = Gfx_CreateVertexShader(loadShaderFromFile(RUSH_SHADER_NAME("ModelInstanced.hlsl")));
 				GfxShaderBindingDesc bindings;
 				bindings.descriptorSets[0].constantBuffers = 2; // Global, Instance
-				GfxTechniqueDesc techDesc(ps, vsInstanceId, m_vertexFormatInstanceId, bindings);
-				techDesc.specializationConstants     = specializationConstants;
-				techDesc.specializationConstantCount = RUSH_COUNTOF(specializationConstants);
-				techDesc.specializationData          = &specializationData;
-				techDesc.specializationDataSize      = sizeof(specializationData);
-				m_techniqueInstanceId = Gfx_CreateTechnique(techDesc);
+				auto desc = makeBaseDesc(vsInstanceId, bindings);
+				m_techniqueInstanceId = Gfx_CreateRenderPipeline(desc);
 			}
 		}
 
@@ -365,8 +350,6 @@ public:
 		passDesc.flags          = GfxPassFlags::ClearAll;
 		Gfx_BeginPass(ctx, passDesc);
 
-		Gfx_SetDepthStencilState(ctx, m_depthStencilStates.writeLessEqual);
-		Gfx_SetPrimitive(ctx, GfxPrimitive::TriangleList);
 		Gfx_SetIndexStream(ctx, m_indexBuffer);
 		Gfx_SetVertexStream(ctx, 0, m_vertexBuffer);
 		Gfx_SetConstantBuffer(ctx, 0, m_globalConstantBuffer);
@@ -411,7 +394,7 @@ public:
 
 		if (m_method == Method::ConstantBufferOffset)
 		{
-			Gfx_SetTechnique(ctx, m_technique);
+			Gfx_SetRenderPipeline(ctx, m_technique);
 
 			buildTime -= m_timer.time();
 			for (u32 i = 0; i < (u32)m_instanceCount; ++i)
@@ -435,7 +418,7 @@ public:
 		}
 		else if (m_method == Method::DynamicConstantBuffer)
 		{
-			Gfx_SetTechnique(ctx, m_technique);
+			Gfx_SetRenderPipeline(ctx, m_technique);
 
 			for (u32 i = 0; i < (u32)m_instanceCount; ++i)
 			{
@@ -456,7 +439,7 @@ public:
 		}
 		else if (m_method == Method::PushConstants && caps.pushConstants)
 		{
-			Gfx_SetTechnique(ctx, m_techniquePush);
+			Gfx_SetRenderPipeline(ctx, m_techniquePush);
 
 			for (u32 i = 0; i < (u32)m_instanceCount; ++i)
 			{
@@ -475,7 +458,7 @@ public:
 		}
 		else if (m_method == Method::ConstantBufferPushOffset && caps.pushConstants)
 		{
-			Gfx_SetTechnique(ctx, m_techniquePushOffset);
+			Gfx_SetRenderPipeline(ctx, m_techniquePushOffset);
 
 			const u32 batchSize  = MaxBatchSize;
 			const u32 batchCount = divUp(m_instanceCount, batchSize);
@@ -510,7 +493,7 @@ public:
 		else if (m_method == Method::Instancing && caps.instancing)
 		{
 			// TODO: Investigate Metal rendering artifacts in instancing path.
-			Gfx_SetTechnique(ctx, m_techniqueInstanced);
+			Gfx_SetRenderPipeline(ctx, m_techniqueInstanced);
 
 			const u32 batchSize  = MaxBatchSize;
 			const u32 batchCount = divUp(m_instanceCount, batchSize);
@@ -541,7 +524,7 @@ public:
 		else if (m_method == Method::InstanceId && caps.instancing)
 		{
 			Gfx_SetVertexStream(ctx, 1, m_instanceIdBuffer);
-			Gfx_SetTechnique(ctx, m_techniqueInstanceId);
+			Gfx_SetRenderPipeline(ctx, m_techniqueInstanceId);
 
 			const u32 batchSize  = MaxBatchSize;
 			const u32 batchCount = divUp(m_instanceCount, batchSize);
@@ -576,7 +559,7 @@ public:
 		else if (m_method == Method::DrawIndirect && caps.drawIndirect)
 		{
 			Gfx_SetVertexStream(ctx, 1, m_instanceIdBuffer);
-			Gfx_SetTechnique(ctx, m_techniqueInstanceId);
+			Gfx_SetRenderPipeline(ctx, m_techniqueInstanceId);
 
 			const u32 batchSize  = MaxBatchSize;
 			const u32 batchCount = divUp(m_instanceCount, batchSize);
@@ -737,13 +720,11 @@ private:
 		Mat4 padding[3];
 	};
 
-	GfxOwn<GfxTechnique>    m_technique;
-	GfxOwn<GfxTechnique>    m_techniquePush;
-	GfxOwn<GfxTechnique>    m_techniquePushOffset;
-	GfxOwn<GfxTechnique>    m_techniqueInstanced;
-	GfxOwn<GfxTechnique>    m_techniqueInstanceId;
-	GfxOwn<GfxVertexFormat> m_vertexFormat;
-	GfxOwn<GfxVertexFormat> m_vertexFormatInstanceId;
+	GfxOwn<GfxRenderPipeline> m_technique;
+	GfxOwn<GfxRenderPipeline> m_techniquePush;
+	GfxOwn<GfxRenderPipeline> m_techniquePushOffset;
+	GfxOwn<GfxRenderPipeline> m_techniqueInstanced;
+	GfxOwn<GfxRenderPipeline> m_techniqueInstanceId;
 
 	GfxOwn<GfxBuffer> m_vertexBuffer;
 	GfxOwn<GfxBuffer> m_instanceIdBuffer;

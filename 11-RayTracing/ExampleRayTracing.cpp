@@ -63,13 +63,15 @@ ExampleRayTracing::ExampleRayTracing() : ExampleApp()
 		return;
 	}
 
-	GfxShaderBindingDesc bindings;
-	bindings.descriptorSets[0].constantBuffers        = 1;
-	bindings.descriptorSets[0].rwImages               = 1;
-	bindings.descriptorSets[0].accelerationStructures = 1;
+	GfxComputePipelineDesc pipelineDesc;
+	pipelineDesc.cs = m_computeShader.get();
+	pipelineDesc.bindings.descriptorSets[0].constantBuffers        = 1;
+	pipelineDesc.bindings.descriptorSets[0].rwImages               = 1;
+	pipelineDesc.bindings.descriptorSets[0].accelerationStructures = 1;
+	pipelineDesc.workGroupSize = {8, 8, 1};
 
-	m_technique = Gfx_CreateTechnique(GfxTechniqueDesc(m_computeShader, bindings, {8, 8, 1}));
-	if (!m_technique.valid())
+	m_pipeline = Gfx_CreateComputePipeline(pipelineDesc);
+	if (!m_pipeline.valid())
 	{
 		m_startupError = "Failed to create RayQuery pipeline.";
 		return;
@@ -119,7 +121,7 @@ void ExampleRayTracing::onUpdate()
 	}
 
 	GfxMarkerScope markerRT(ctx, "Ray Query");
-	Gfx_SetTechnique(ctx, m_technique);
+	Gfx_SetComputePipeline(ctx, m_pipeline);
 	Gfx_SetStorageImage(ctx, 0, m_outputImage);
 	Gfx_SetConstantBuffer(ctx, 0, m_constantBuffer);
 	Gfx_SetAccelerationStructure(ctx, 0, m_tlas);
@@ -139,9 +141,6 @@ void ExampleRayTracing::onUpdate()
 		Gfx_BeginPass(ctx, passDesc);
 
 		GfxMarkerScope markerUI(ctx, "UI");
-
-		Gfx_SetBlendState(ctx, m_blendStates.lerp);
-		Gfx_SetDepthStencilState(ctx, m_depthStencilStates.disable);
 
 		m_prim->begin2D(m_window->getSize());
 
@@ -187,7 +186,7 @@ void ExampleRayTracing::createScene(GfxContext* ctx)
 
 	GfxAccelerationStructureDesc blasDesc;
 	blasDesc.type         = GfxAccelerationStructureType::BottomLevel;
-	blasDesc.geometyCount = u32(geometries.size());
+	blasDesc.geometryCount = u32(geometries.size());
 	blasDesc.geometries   = geometries.data();
 	m_blas                = Gfx_CreateAccelerationStructure(blasDesc);
 

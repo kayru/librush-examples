@@ -15,9 +15,6 @@ namespace
 PrimitiveBatch* s_prim = nullptr;
 GfxContext* s_context = nullptr;
 Window* s_window = nullptr;
-GfxOwn<GfxBlendState> s_blendState;
-GfxOwn<GfxDepthStencilState> s_depthState;
-GfxOwn<GfxRasterizerState> s_rasterState;
 GfxOwn<GfxTexture> s_fontTexture;
 ImGuiContext* s_guiContext = nullptr;
 
@@ -111,10 +108,6 @@ GuiWMI s_messageInterceptor;
 
 static void ImGuiImpl_RenderDrawData(ImDrawData* drawData)
 {
-	Gfx_SetBlendState(s_context, s_blendState);
-	Gfx_SetRasterizerState(s_context, s_rasterState);
-	Gfx_SetDepthStencilState(s_context, s_depthState);
-
 	ImVec2 displaySize = drawData->DisplaySize;
 	if (displaySize.x <= 0.0f || displaySize.y <= 0.0f)
 	{
@@ -198,17 +191,6 @@ void ImGuiImpl_Startup(Window* window)
 	int texWidth, texHeight;
 	io.Fonts->GetTexDataAsRGBA32(&texData, &texWidth, &texHeight);
 	s_fontTexture = Gfx_CreateTexture(GfxTextureDesc::make2D(texWidth, texHeight, GfxFormat_RGBA8_Unorm), texData);
-
-	GfxBlendStateDesc blendDesc = GfxBlendStateDesc::makeLerp();
-	s_blendState = Gfx_CreateBlendState(blendDesc);
-
-	GfxRasterizerDesc rasterDescr;
-	rasterDescr.cullMode = GfxCullMode::None;
-	s_rasterState = Gfx_CreateRasterizerState(rasterDescr);
-
-	GfxDepthStencilDesc depthDescr;
-	depthDescr.enable = false;
-	s_depthState = Gfx_CreateDepthStencilState(depthDescr);
 }
 
 void ImGuiImpl_Update(float dt)
@@ -244,9 +226,6 @@ void ImGuiImpl_Shutdown()
 	s_prim = nullptr;
 
 	s_fontTexture.reset();
-	s_depthState.reset();
-	s_rasterState.reset();
-	s_blendState.reset();
 
 	s_window = nullptr;
 }

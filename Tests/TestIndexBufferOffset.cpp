@@ -47,11 +47,6 @@ public:
 		m_vs = Gfx_CreateVertexShader(vsSource);
 		m_ps = Gfx_CreatePixelShader(psSource);
 
-		// Vertex format: float2 position
-		GfxVertexFormatDesc vfDesc;
-		vfDesc.add(0, GfxVertexFormatDesc::DataType::Float2, GfxVertexFormatDesc::Semantic::Position, 0);
-		m_vf = Gfx_CreateVertexFormat(vfDesc);
-
 		// Full-screen triangle
 		const float vertices[] = {
 			-1.0f, -1.0f,
@@ -68,11 +63,15 @@ public:
 		m_ib = Gfx_CreateBuffer(GfxBufferFlags::Index, GfxFormat_R16_Uint, 6, sizeof(u16), indices);
 		m_ibOffset = 3 * sizeof(u16); // 6 bytes
 
-		GfxShaderBindingDesc bindings;
-		bindings.descriptorSets[0].stageFlags = GfxStageFlags::Vertex | GfxStageFlags::Pixel;
+		GfxRenderPipelineDesc pipelineDesc;
+		pipelineDesc.ps = m_ps.get();
+		pipelineDesc.vs = m_vs.get();
+		pipelineDesc.vertexFormat.add(0, GfxVertexFormatDesc::DataType::Float2, GfxVertexFormatDesc::Semantic::Position, 0);
+		pipelineDesc.bindings.descriptorSets[0].stageFlags = GfxStageFlags::Vertex | GfxStageFlags::Pixel;
+		pipelineDesc.renderTarget = caps.backBufferDesc;
 
-		m_technique = Gfx_CreateTechnique(GfxTechniqueDesc(m_ps, m_vs, m_vf, bindings));
-		if (!m_technique.valid())
+		m_pipeline = Gfx_CreateRenderPipeline(pipelineDesc);
+		if (!m_pipeline.valid())
 		{
 			m_skipReason = "Failed to create technique.";
 			return;
@@ -98,7 +97,7 @@ public:
 		passDesc.clearColors[0] = ColorRGBA8(0, 0, 0, 255);
 
 		Gfx_BeginPass(ctx, passDesc);
-		Gfx_SetTechnique(ctx, m_technique);
+		Gfx_SetRenderPipeline(ctx, m_pipeline);
 		Gfx_SetVertexStream(ctx, 0, m_vb);
 		Gfx_SetIndexStream(ctx, m_ibOffset, GfxFormat_R16_Uint, m_ib);
 		Gfx_DrawIndexed(ctx, 3, 0, 0, 3);
@@ -142,10 +141,9 @@ private:
 
 	GfxOwn<GfxVertexShader> m_vs;
 	GfxOwn<GfxPixelShader> m_ps;
-	GfxOwn<GfxVertexFormat> m_vf;
 	GfxOwn<GfxBuffer> m_vb;
 	GfxOwn<GfxBuffer> m_ib;
-	GfxOwn<GfxTechnique> m_technique;
+	GfxOwn<GfxRenderPipeline> m_pipeline;
 	u32 m_ibOffset = 0;
 };
 

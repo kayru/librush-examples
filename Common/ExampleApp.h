@@ -30,20 +30,6 @@ protected:
 	virtual void onUpdate() = 0;
 	void renderMessage(const char* message);
 	void renderMessage(const char* message, const ColorRGBA8& color, float scale);
-	struct DepthStencilStates
-	{
-		GfxOwn<GfxDepthStencilState> writeLessEqual;
-		GfxOwn<GfxDepthStencilState> writeGreaterEqual;
-		GfxOwn<GfxDepthStencilState> disable;
-	} m_depthStencilStates;
-
-	struct RasterizerStates
-	{
-		GfxOwn<GfxRasterizerState> solidCullCW;
-		GfxOwn<GfxRasterizerState> solidCullCCW;
-		GfxOwn<GfxRasterizerState> solidNoCull;
-	} m_rasterizerStates;
-
 	struct SamplerStates
 	{
 		GfxOwn<GfxSampler> pointClamp;
@@ -51,13 +37,6 @@ protected:
 		GfxOwn<GfxSampler> linearWrap;
 		GfxOwn<GfxSampler> anisotropicWrap;
 	} m_samplerStates;
-
-	struct BlendStates
-	{
-		GfxOwn<GfxBlendState> lerp;
-		GfxOwn<GfxBlendState> opaque;
-		GfxOwn<GfxBlendState> additive;
-	} m_blendStates;
 
 	Window*             m_window;
 	PrimitiveBatch*     m_prim = nullptr;

@@ -55,8 +55,7 @@ private:
 
 	GfxOwn<GfxVertexShader> m_vs;
 	GfxOwn<GfxPixelShader> m_ps;
-	GfxOwn<GfxVertexFormat> m_vf;
-	GfxOwn<GfxTechnique> m_technique;
+	GfxOwn<GfxRenderPipeline> m_pipeline;
 	GfxOwn<GfxTexture> m_defaultWhiteTexture;
 
 	GfxOwn<GfxBuffer> m_vertexBuffer;

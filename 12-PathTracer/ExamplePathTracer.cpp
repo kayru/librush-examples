@@ -167,18 +167,18 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 		{
 			auto vs = Gfx_CreateVertexShader(vsSource);
 			auto ps = Gfx_CreatePixelShader(psSource);
-			auto vf = Gfx_CreateVertexFormat({});
 
 			if (vs.valid() && ps.valid())
 			{
-				GfxTechniqueDesc desc;
+				GfxRenderPipelineDesc desc;
 				desc.vs = vs.get();
 				desc.ps = ps.get();
-				desc.vf = vf.get();
 				desc.bindings.descriptorSets[0].constantBuffers = 1;
 				desc.bindings.descriptorSets[0].samplers = 1; // linear sampler
 				desc.bindings.descriptorSets[0].textures = 1; // input texture
-				m_blitTonemap = Gfx_CreateTechnique(desc);
+				desc.setBlendState(GfxBlendStateDesc::makeOpaque());
+				desc.renderTarget = Gfx_GetCapability().backBufferDesc;
+				m_blitTonemap = Gfx_CreateRenderPipeline(desc);
 			}
 
 			if (!m_blitTonemap.valid())
@@ -589,9 +589,6 @@ void ExamplePathTracer::render()
 	Gfx_SetViewport(ctx, GfxViewport(m_window->getFramebufferSize()));
 	Gfx_SetScissorRect(ctx, m_window->getFramebufferSize());
 
-	Gfx_SetDepthStencilState(ctx, m_depthStencilStates.writeLessEqual);
-	Gfx_SetRasterizerState(ctx, m_rasterizerStates.solidCullCW);
-
 	{
 		GfxMarkerScope markerFrame(ctx, "Tonemap");
 
@@ -600,12 +597,9 @@ void ExamplePathTracer::render()
 		constants.gamma = m_settings.m_gamma;
 		Gfx_UpdateBuffer(ctx, m_tonemapConstantBuffer, &constants, sizeof(constants));
 
-		Gfx_SetDepthStencilState(ctx, m_depthStencilStates.disable);
-		Gfx_SetRasterizerState(ctx, m_rasterizerStates.solidNoCull);
-		Gfx_SetBlendState(ctx, m_blendStates.opaque);
 		if (m_blitTonemap.valid())
 		{
-			Gfx_SetTechnique(ctx, m_blitTonemap);
+			Gfx_SetRenderPipeline(ctx, m_blitTonemap);
 			Gfx_SetConstantBuffer(ctx, 0, m_tonemapConstantBuffer);
 			Gfx_SetSampler(ctx, 0, m_samplerStates.linearClamp);
 			Gfx_SetTexture(ctx, 0, m_outputImage);
@@ -616,9 +610,6 @@ void ExamplePathTracer::render()
 	if (m_showUI)
 	{
 		GfxMarkerScope markerFrame(ctx, "UI");
-
-		Gfx_SetBlendState(ctx, m_blendStates.lerp);
-		Gfx_SetDepthStencilState(ctx, m_depthStencilStates.disable);
 
 		m_prim->begin2D(m_window->getSize());
 
@@ -1443,7 +1434,7 @@ void ExamplePathTracer::createGpuScene()
 
 		GfxAccelerationStructureDesc blasDesc;
 		blasDesc.type         = GfxAccelerationStructureType::BottomLevel;
-		blasDesc.geometyCount = u32(geometries.size());
+		blasDesc.geometryCount = u32(geometries.size());
 		blasDesc.geometries   = geometries.data();
 		m_blas                = Gfx_CreateAccelerationStructure(blasDesc);
 	}

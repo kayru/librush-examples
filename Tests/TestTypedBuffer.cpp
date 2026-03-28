@@ -90,13 +90,15 @@ public:
 			Gfx_UnmapBuffer(mapped);
 		}
 
-		GfxShaderBindingDesc bindings;
-		bindings.descriptorSets[0].rwBuffers = 1;
-		bindings.descriptorSets[0].rwTypedBuffers = 1;
-		bindings.descriptorSets[0].stageFlags = GfxStageFlags::Compute;
+		GfxComputePipelineDesc pipelineDesc;
+		pipelineDesc.cs = m_computeShader.get();
+		pipelineDesc.bindings.descriptorSets[0].rwBuffers = 1;
+		pipelineDesc.bindings.descriptorSets[0].rwTypedBuffers = 1;
+		pipelineDesc.bindings.descriptorSets[0].stageFlags = GfxStageFlags::Compute;
+		pipelineDesc.workGroupSize = {1, 1, 1};
 
-		m_technique = Gfx_CreateTechnique(GfxTechniqueDesc(m_computeShader, bindings, {1, 1, 1}));
-		if (!m_technique.valid())
+		m_pipeline = Gfx_CreateComputePipeline(pipelineDesc);
+		if (!m_pipeline.valid())
 		{
 			m_skipReason = "Failed to create compute technique.";
 			return;
@@ -117,7 +119,7 @@ public:
 			return;
 		}
 
-		Gfx_SetTechnique(ctx, m_technique);
+		Gfx_SetComputePipeline(ctx, m_pipeline);
 		Gfx_SetStorageBuffer(ctx, 0, m_bufferA);
 		Gfx_SetStorageBuffer(ctx, 1, m_bufferB);
 		Gfx_Dispatch(ctx, 1, 1, 1);
@@ -175,7 +177,7 @@ private:
 	GfxOwn<GfxComputeShader> m_computeShader;
 	GfxOwn<GfxBuffer> m_bufferA;
 	GfxOwn<GfxBuffer> m_bufferB;
-	GfxOwn<GfxTechnique> m_technique;
+	GfxOwn<GfxComputePipeline> m_pipeline;
 };
 
 RUSH_REGISTER_TEST(TypedBufferBindingTest, "gfx",

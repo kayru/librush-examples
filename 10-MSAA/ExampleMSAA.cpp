@@ -20,9 +20,6 @@ public:
 	{
 		ImGuiImpl_Startup(m_window);
 
-		m_blendPremult = Gfx_CreateBlendState(GfxBlendStateDesc::makeLerp());
-		m_blendOpaque = Gfx_CreateBlendState(GfxBlendStateDesc::makeOpaque());
-
 		{
 			const GfxCapability& caps = Gfx_GetCapability();
 			u32 mask = caps.colorSampleCounts;
@@ -123,7 +120,6 @@ public:
 			passDesc.clearColors[0] = ColorRGBA8(11, 22, 33);
 			passDesc.color[0] = useMSAA ? m_msaaTarget.get() : m_resolveTarget.get();
 			Gfx_BeginPass(ctx, passDesc);
-			Gfx_SetBlendState(ctx, m_blendPremult);
 			m_prim->begin2D(Vec2(1.0f), Vec2(0.0f));
 
 			u32 vertIdx = 0;
@@ -155,7 +151,6 @@ public:
 			passDesc.flags = GfxPassFlags::ClearAll;
 			passDesc.clearColors[0] = ColorRGBA8(0, 0, 0);
 			Gfx_BeginPass(ctx, passDesc);
-			Gfx_SetBlendState(ctx, m_blendOpaque);
 
 			Gfx_SetViewport(ctx, GfxViewport(window->getFramebufferSize()));
 			Gfx_SetScissorRect(ctx, window->getFramebufferSize());
@@ -212,8 +207,6 @@ private:
 
 	float m_animationTime = 0.0f;
 
-	GfxOwn<GfxBlendState> m_blendPremult;
-	GfxOwn<GfxBlendState> m_blendOpaque;
 	GfxOwn<GfxTexture> m_resolveTarget;
 	GfxOwn<GfxTexture> m_msaaTarget;
 	u32 m_currentSampleCount = 0;

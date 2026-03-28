@@ -21,11 +21,14 @@ public:
 
 		GfxVertexFormatDesc fmtDesc;
 		fmtDesc.add(0, GfxVertexFormatDesc::DataType::Float2, GfxVertexFormatDesc::Semantic::Position, 0);
-		auto vf = Gfx_CreateVertexFormat(fmtDesc);
 
-		GfxShaderBindingDesc bindings;
-		bindings.descriptorSets[0].constantBuffers = 1;
-		m_tech = Gfx_CreateTechnique(GfxTechniqueDesc(ps, vs, vf, bindings));
+		GfxRenderPipelineDesc pipelineDesc;
+		pipelineDesc.vs = vs.get();
+		pipelineDesc.ps = ps.get();
+		pipelineDesc.vertexFormat = fmtDesc;
+		pipelineDesc.bindings.descriptorSets[0].constantBuffers = 1;
+		pipelineDesc.renderTarget = Gfx_GetCapability().backBufferDesc;
+		m_pipeline = Gfx_CreateRenderPipeline(pipelineDesc);
 
 		GfxBufferDesc cbDesc(GfxBufferFlags::TransientConstant, GfxFormat_Unknown, 1, sizeof(m_constants));
 		m_cb = Gfx_CreateBuffer(cbDesc);
@@ -67,9 +70,8 @@ public:
 		Gfx_SetViewport(ctx, window->getFramebufferSize());
 		Gfx_SetScissorRect(ctx, window->getFramebufferSize());
 
-		Gfx_SetTechnique(ctx, m_tech);
+		Gfx_SetRenderPipeline(ctx, m_pipeline);
 		Gfx_SetVertexStream(ctx, 0, m_vb);
-		Gfx_SetPrimitive(ctx, GfxPrimitive::TriangleList);
 
 		Gfx_SetConstantBuffer(ctx, 0, m_cb);
 
@@ -82,7 +84,7 @@ public:
 
 private:
 	GfxOwn<GfxBuffer>    m_vb;
-	GfxOwn<GfxTechnique> m_tech;
+	GfxOwn<GfxRenderPipeline> m_pipeline;
 	GfxOwn<GfxBuffer>    m_cb;
 
 	struct Constants

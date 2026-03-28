@@ -21,11 +21,12 @@ public:
 		GfxBufferDesc cbDesc(GfxBufferFlags::TransientConstant, GfxFormat_Unknown, 1, sizeof(m_constants));
 		m_constantBuffer = Gfx_CreateBuffer(cbDesc);
 
-		GfxShaderBindingDesc bindings;
-		bindings.descriptorSets[0].constantBuffers = 1;
-		bindings.descriptorSets[0].rwImages        = 1;
-
-		m_technique = Gfx_CreateTechnique(GfxTechniqueDesc(m_computeShader, bindings, {8,8,1}));
+		GfxComputePipelineDesc pipelineDesc;
+		pipelineDesc.cs = m_computeShader.get();
+		pipelineDesc.bindings.descriptorSets[0].constantBuffers = 1;
+		pipelineDesc.bindings.descriptorSets[0].rwImages        = 1;
+		pipelineDesc.workGroupSize = {8, 8, 1};
+		m_pipeline = Gfx_CreateComputePipeline(pipelineDesc);
 
 		GfxTextureDesc textureDesc = GfxTextureDesc::make2D(m_imageSize.x, m_imageSize.y, GfxFormat_RGBA8_Unorm,
 		    GfxUsageFlags::ShaderResource | GfxUsageFlags::StorageImage);
@@ -45,7 +46,7 @@ public:
 
 		Gfx_UpdateBuffer(ctx, m_constantBuffer, &m_constants, sizeof(m_constants));
 
-		Gfx_SetTechnique(ctx, m_technique);
+		Gfx_SetComputePipeline(ctx, m_pipeline);
 		Gfx_SetStorageImage(ctx, 0, m_texture);
 		Gfx_SetConstantBuffer(ctx, 0, m_constantBuffer);
 		Gfx_Dispatch(ctx, m_imageSize.x / 8, m_imageSize.y / 8, 1);
@@ -71,7 +72,7 @@ public:
 private:
 	GfxOwn<GfxBuffer>        m_constantBuffer;
 	GfxOwn<GfxComputeShader> m_computeShader;
-	GfxOwn<GfxTechnique>     m_technique;
+	GfxOwn<GfxComputePipeline> m_pipeline;
 	GfxOwn<GfxTexture>       m_texture;
 	Tuple2u          m_imageSize = {640, 480};
 	Timer            m_timer;
