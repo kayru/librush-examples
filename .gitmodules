@@ -1,3 +1,6 @@
 [submodule "External/librush"]
 	path = External/librush
 	url = https://github.com/kayru/librush.git
+[submodule "External/imgui"]
+	path = External/imgui
+	url = https://github.com/ocornut/imgui.git

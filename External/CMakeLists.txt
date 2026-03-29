@@ -1,5 +1,19 @@
 add_subdirectory("librush")
 add_subdirectory("stb")
 add_subdirectory("tiny_obj_loader")
-add_subdirectory("imgui") # 528b0b4af6b9a8703a5a09c77a9eb35435e84ef4
+set(IMGUI_DIR "${CMAKE_CURRENT_SOURCE_DIR}/imgui")
+add_library(imgui
+	${IMGUI_DIR}/imgui.cpp
+	${IMGUI_DIR}/imgui_demo.cpp
+	${IMGUI_DIR}/imgui_draw.cpp
+	${IMGUI_DIR}/imgui_tables.cpp
+	${IMGUI_DIR}/imgui_widgets.cpp
+)
+target_include_directories(imgui INTERFACE ${IMGUI_DIR})
+target_include_directories(imgui PRIVATE ${IMGUI_DIR})
+if (MSVC)
+	target_compile_options(imgui PRIVATE -W0 -wd4996)
+else()
+	target_compile_options(imgui PRIVATE -w)
+endif()
 add_subdirectory("cgltf") # 89904c0dfb16246abe05be2c572466a2ba317f47
