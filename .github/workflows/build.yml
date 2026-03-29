@@ -7,7 +7,7 @@ on:
     branches: [master]
 
 env:
-  VULKAN_SDK_VERSION: "1.4.304.1"
+  VULKAN_SDK_VERSION: "1.4.328.1"
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
