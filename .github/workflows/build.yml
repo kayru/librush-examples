@@ -1,0 +1,109 @@
+name: Build
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+env:
+  VULKAN_SDK_VERSION: "1.4.341.1"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            configure-preset: ninja-debug-vk
+            build-preset: ninja-debug-vk
+          - os: ubuntu-24.04
+            configure-preset: ninja-release-vk
+            build-preset: ninja-release-vk
+          - os: macos-14
+            configure-preset: ninja-debug-metal
+            build-preset: ninja-debug-metal
+          - os: macos-14
+            configure-preset: ninja-release-metal
+            build-preset: ninja-release-metal
+          - os: windows-latest
+            configure-preset: vs2022-vk
+            build-preset: vs2022-debug-vk
+          - os: windows-latest
+            configure-preset: vs2022-vk
+            build-preset: vs2022-release-vk
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      # --- Vulkan SDK (Linux) ---
+
+      - name: Install Vulkan SDK and dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          wget -qO- https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo tee /etc/apt/trusted.gpg.d/lunarg.asc
+          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-noble.list https://packages.lunarg.com/vulkan/lunarg-vulkan-noble.list
+          sudo apt-get update
+          sudo apt-get install -y vulkan-sdk libxcb1-dev libxcb-keysyms1-dev
+
+      # --- Vulkan SDK (macOS) ---
+
+      - name: Cache Vulkan SDK (macOS)
+        if: runner.os == 'macOS'
+        id: cache-vulkan-mac
+        uses: actions/cache@v5
+        with:
+          path: ~/VulkanSDK/${{ env.VULKAN_SDK_VERSION }}
+          key: vulkan-sdk-macos-${{ env.VULKAN_SDK_VERSION }}
+
+      - name: Install Vulkan SDK (macOS)
+        if: runner.os == 'macOS' && steps.cache-vulkan-mac.outputs.cache-hit != 'true'
+        run: |
+          curl -fsSL -o vulkan_sdk.zip "https://sdk.lunarg.com/sdk/download/$VULKAN_SDK_VERSION/mac/vulkan_sdk.zip"
+          unzip -q vulkan_sdk.zip
+          installer=$(find . -maxdepth 1 -name "*.app" -print -quit)
+          "$installer/Contents/MacOS/$(basename "$installer" .app)" \
+            --root ~/VulkanSDK/$VULKAN_SDK_VERSION \
+            --accept-licenses --default-answer --confirm-command install \
+            copy_only=1
+
+      - name: Set Vulkan SDK environment (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          echo "VULKAN_SDK=$HOME/VulkanSDK/$VULKAN_SDK_VERSION/macOS" >> $GITHUB_ENV
+          echo "$HOME/VulkanSDK/$VULKAN_SDK_VERSION/macOS/bin" >> $GITHUB_PATH
+
+      # --- Vulkan SDK (Windows) ---
+
+      - name: Cache Vulkan SDK (Windows)
+        if: runner.os == 'Windows'
+        id: cache-vulkan-win
+        uses: actions/cache@v5
+        with:
+          path: C:\VulkanSDK\${{ env.VULKAN_SDK_VERSION }}
+          key: vulkan-sdk-windows-${{ env.VULKAN_SDK_VERSION }}
+
+      - name: Install Vulkan SDK (Windows)
+        if: runner.os == 'Windows' && steps.cache-vulkan-win.outputs.cache-hit != 'true'
+        run: |
+          curl -fsSL -o vulkan_sdk.exe "https://sdk.lunarg.com/sdk/download/$env:VULKAN_SDK_VERSION/windows/vulkan_sdk.exe"
+          Start-Process -FilePath .\vulkan_sdk.exe -ArgumentList "--root C:\VulkanSDK\$env:VULKAN_SDK_VERSION --accept-licenses --default-answer --confirm-command install" -Wait
+
+      - name: Set Vulkan SDK environment (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          echo "VULKAN_SDK=C:\VulkanSDK\${{ env.VULKAN_SDK_VERSION }}" >> $env:GITHUB_ENV
+          echo "C:\VulkanSDK\${{ env.VULKAN_SDK_VERSION }}\Bin" >> $env:GITHUB_PATH
+
+      # --- Build ---
+
+      - name: Configure
+        run: cmake --preset ${{ matrix.configure-preset }}
+
+      - name: Build
+        run: cmake --build --preset ${{ matrix.build-preset }}

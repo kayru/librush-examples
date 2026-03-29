@@ -11,6 +11,8 @@ add_library(imgui
 )
 target_include_directories(imgui INTERFACE ${IMGUI_DIR})
 target_include_directories(imgui PRIVATE ${IMGUI_DIR})
+set_property(TARGET imgui PROPERTY CXX_STANDARD 20)
+set_property(TARGET imgui PROPERTY CXX_STANDARD_REQUIRED ON)
 if (MSVC)
 	target_compile_options(imgui PRIVATE -W0 -wd4996)
 else()
