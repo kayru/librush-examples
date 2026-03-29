@@ -8,6 +8,7 @@ on:
 
 env:
   VULKAN_SDK_VERSION: "1.4.304.1"
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build:
@@ -56,7 +57,7 @@ jobs:
       - name: Cache Vulkan SDK (macOS)
         if: runner.os == 'macOS'
         id: cache-vulkan-mac
-        uses: actions/cache@v6
+        uses: actions/cache@v5
         with:
           path: ~/VulkanSDK/${{ env.VULKAN_SDK_VERSION }}
           key: vulkan-sdk-macos-${{ env.VULKAN_SDK_VERSION }}
@@ -82,7 +83,7 @@ jobs:
       - name: Cache Vulkan SDK (Windows)
         if: runner.os == 'Windows'
         id: cache-vulkan-win
-        uses: actions/cache@v6
+        uses: actions/cache@v5
         with:
           path: C:\VulkanSDK\${{ env.VULKAN_SDK_VERSION }}
           key: vulkan-sdk-windows-${{ env.VULKAN_SDK_VERSION }}
