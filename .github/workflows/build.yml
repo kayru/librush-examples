@@ -65,10 +65,11 @@ jobs:
         if: runner.os == 'macOS' && steps.cache-vulkan-mac.outputs.cache-hit != 'true'
         run: |
           curl -fsSL -o vulkan_sdk.zip "https://sdk.lunarg.com/sdk/download/$VULKAN_SDK_VERSION/mac/vulkan_sdk.zip"
-          unzip -q vulkan_sdk.zip -d vulkan_sdk_extract
-          ./vulkan_sdk_extract/InstallVulkan.app/Contents/MacOS/InstallVulkan \
+          unzip -q vulkan_sdk.zip
+          sudo ./vulkansdk-macOS-$VULKAN_SDK_VERSION.app/Contents/MacOS/vulkansdk-macOS-$VULKAN_SDK_VERSION \
             --root ~/VulkanSDK/$VULKAN_SDK_VERSION \
-            --accept-licenses --default-answer --confirm-command install
+            --accept-licenses --default-answer --confirm-command install \
+            copy_only=1
 
       - name: Set Vulkan SDK environment (macOS)
         if: runner.os == 'macOS'
