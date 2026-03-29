@@ -91,8 +91,8 @@ jobs:
       - name: Install Vulkan SDK (Windows)
         if: runner.os == 'Windows' && steps.cache-vulkan-win.outputs.cache-hit != 'true'
         run: |
-          curl -fsSL -o VulkanSDK-Installer.exe "https://sdk.lunarg.com/sdk/download/$env:VULKAN_SDK_VERSION/windows/VulkanSDK-$env:VULKAN_SDK_VERSION-Installer.exe"
-          Start-Process -FilePath .\VulkanSDK-Installer.exe -ArgumentList "--root C:\VulkanSDK\$env:VULKAN_SDK_VERSION --accept-licenses --default-answer --confirm-command install" -Wait
+          curl -fsSL -o vulkan_sdk.exe "https://sdk.lunarg.com/sdk/download/$env:VULKAN_SDK_VERSION/windows/vulkan_sdk.exe"
+          Start-Process -FilePath .\vulkan_sdk.exe -ArgumentList "--root C:\VulkanSDK\$env:VULKAN_SDK_VERSION --accept-licenses --default-answer --confirm-command install" -Wait
 
       - name: Set Vulkan SDK environment (Windows)
         if: runner.os == 'Windows'
