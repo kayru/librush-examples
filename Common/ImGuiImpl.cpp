@@ -15,8 +15,60 @@ namespace
 PrimitiveBatch* s_prim = nullptr;
 GfxContext* s_context = nullptr;
 Window* s_window = nullptr;
-GfxOwn<GfxTexture> s_fontTexture;
 ImGuiContext* s_guiContext = nullptr;
+
+static GfxTexture imTextureIdToGfxTexture(ImTextureID id)
+{
+	return GfxTexture(UntypedResourceHandle((u16)(uintptr_t)id));
+}
+
+static ImTextureID gfxTextureToImTextureId(GfxTexture tex)
+{
+	return (ImTextureID)(uintptr_t)tex.index();
+}
+
+static void ImGuiImpl_UpdateTexture(ImTextureData* tex)
+{
+	if (tex->Status == ImTextureStatus_WantCreate)
+	{
+		RUSH_ASSERT(tex->TexID == ImTextureID_Invalid);
+		RUSH_ASSERT(tex->Format == ImTextureFormat_RGBA32);
+
+		const void* pixels = tex->GetPixels();
+		GfxOwn<GfxTexture> gfxTex = Gfx_CreateTexture(
+			GfxTextureDesc::make2D(tex->Width, tex->Height, GfxFormat_RGBA8_Unorm), pixels);
+
+		tex->SetTexID(gfxTextureToImTextureId(gfxTex.detach()));
+		tex->SetStatus(ImTextureStatus_OK);
+	}
+	else if (tex->Status == ImTextureStatus_WantUpdates)
+	{
+		// Rush doesn't support partial texture updates via PrimitiveBatch,
+		// so recreate the texture from scratch.
+		GfxTexture old = imTextureIdToGfxTexture(tex->TexID);
+		if (old.valid())
+		{
+			Gfx_Release(old);
+		}
+
+		const void* pixels = tex->GetPixels();
+		GfxOwn<GfxTexture> gfxTex = Gfx_CreateTexture(
+			GfxTextureDesc::make2D(tex->Width, tex->Height, GfxFormat_RGBA8_Unorm), pixels);
+
+		tex->SetTexID(gfxTextureToImTextureId(gfxTex.detach()));
+		tex->SetStatus(ImTextureStatus_OK);
+	}
+	else if (tex->Status == ImTextureStatus_WantDestroy)
+	{
+		GfxTexture gfxTex = imTextureIdToGfxTexture(tex->TexID);
+		if (gfxTex.valid())
+		{
+			Gfx_Release(gfxTex);
+		}
+		tex->SetTexID(ImTextureID_Invalid);
+		tex->SetStatus(ImTextureStatus_Destroyed);
+	}
+}
 
 static ImGuiKey rushKeyToImGuiKey(Key key)
 {
@@ -108,6 +160,14 @@ GuiWMI s_messageInterceptor;
 
 static void ImGuiImpl_RenderDrawData(ImDrawData* drawData)
 {
+	if (drawData->Textures != nullptr)
+	{
+		for (ImTextureData* tex : *drawData->Textures)
+		{
+			ImGuiImpl_UpdateTexture(tex);
+		}
+	}
+
 	ImVec2 displaySize = drawData->DisplaySize;
 	if (displaySize.x <= 0.0f || displaySize.y <= 0.0f)
 	{
@@ -116,26 +176,26 @@ static void ImGuiImpl_RenderDrawData(ImDrawData* drawData)
 	}
 
 	s_prim->begin2D(displaySize.x, displaySize.y);
-	s_prim->setTexture(s_fontTexture);
 	s_prim->setSampler(PrimitiveBatch::SamplerState_Point);
 
 	const ImVec2 clipOffset = drawData->DisplayPos;
 	const ImVec2 clipScale = drawData->FramebufferScale;
 
-	for (int cmdListIndex = 0; cmdListIndex < drawData->CmdListsCount; ++cmdListIndex)
+	for (const ImDrawList* cmdList : drawData->CmdLists)
 	{
-		ImDrawList* cmdList = drawData->CmdLists[cmdListIndex];
-
 		const auto& ib = cmdList->IdxBuffer;
 		const auto& vb = cmdList->VtxBuffer;
 
 		u32 indexOffset = 0;
 		for (const auto& cmd : cmdList->CmdBuffer)
 		{
+			const GfxTexture tex = imTextureIdToGfxTexture(cmd.GetTexID());
+			s_prim->setTexture(tex);
+
 			auto verts = s_prim->drawVertices(GfxPrimitive::TriangleList, cmd.ElemCount);
 			for (u32 i = 0; i < cmd.ElemCount; ++i)
 			{
-				u32 index = ib[i + indexOffset];
+				const u32 index = ib[i + indexOffset];
 				const auto& v = vb[index];
 
 				verts[i].pos.x = v.pos.x;
@@ -148,13 +208,12 @@ static void ImGuiImpl_RenderDrawData(ImDrawData* drawData)
 				verts[i].col = ColorRGBA8(v.col);
 			}
 
-			GfxRect scissor;
-
 			const float clipMinX = (cmd.ClipRect.x - clipOffset.x) * clipScale.x;
 			const float clipMinY = (cmd.ClipRect.y - clipOffset.y) * clipScale.y;
 			const float clipMaxX = (cmd.ClipRect.z - clipOffset.x) * clipScale.x;
 			const float clipMaxY = (cmd.ClipRect.w - clipOffset.y) * clipScale.y;
 
+			GfxRect scissor;
 			scissor.top = (int)clipMinY;
 			scissor.bottom = (int)clipMaxY;
 			scissor.left = (int)clipMinX;
@@ -184,13 +243,10 @@ void ImGuiImpl_Startup(Window* window)
 	snprintf(imguiConfigPath, sizeof(imguiConfigPath), "%s/imgui.ini", exeDir);
 	io.IniFilename = imguiConfigPath;
 
+	io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+
 	s_window = window;
 	s_window->setMessageInterceptor(&s_messageInterceptor);
-
-	unsigned char* texData;
-	int texWidth, texHeight;
-	io.Fonts->GetTexDataAsRGBA32(&texData, &texWidth, &texHeight);
-	s_fontTexture = Gfx_CreateTexture(GfxTextureDesc::make2D(texWidth, texHeight, GfxFormat_RGBA8_Unorm), texData);
 }
 
 void ImGuiImpl_Update(float dt)
@@ -220,12 +276,19 @@ void ImGuiImpl_Update(float dt)
 
 void ImGuiImpl_Shutdown()
 {
+	for (ImTextureData* tex : ImGui::GetPlatformIO().Textures)
+	{
+		if (tex->RefCount == 1)
+		{
+			tex->SetStatus(ImTextureStatus_WantDestroy);
+			ImGuiImpl_UpdateTexture(tex);
+		}
+	}
+
 	ImGui::DestroyContext(s_guiContext);
 
 	delete s_prim;
 	s_prim = nullptr;
-
-	s_fontTexture.reset();
 
 	s_window = nullptr;
 }
