@@ -10,6 +10,7 @@
 
 #include <Common/ExampleApp.h>
 #include <Common/Utils.h>
+#include <Common/VirtualGamepad.h>
 
 #include <memory>
 #include <mutex>
@@ -144,4 +145,7 @@ private:
 	void               createRenderTargets();
 
 	void loadingThreadFunction();
+
+	VirtualGamepad m_virtualGamepad;
+	int m_btnVertical = -1;
 };

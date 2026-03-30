@@ -108,6 +108,22 @@
       }
     },
     {
+      "name": "xcode-ios-metal",
+      "displayName": "Xcode iOS (Metal)",
+      "generator": "Xcode",
+      "binaryDir": "Build/${presetName}",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      },
+      "cacheVariables": {
+        "CMAKE_SYSTEM_NAME": "iOS",
+        "CMAKE_OSX_DEPLOYMENT_TARGET": "16.0",
+        "RUSH_RENDER_API": "MTL"
+      }
+    },
+    {
       "name": "vs2026-vk",
       "displayName": "Visual Studio 2026 (Vulkan)",
       "generator": "Visual Studio 18 2026",
@@ -159,6 +175,16 @@
     {
       "name": "xcode-release-metal",
       "configurePreset": "xcode-metal",
+      "configuration": "Release"
+    },
+    {
+      "name": "xcode-debug-ios-metal",
+      "configurePreset": "xcode-ios-metal",
+      "configuration": "Debug"
+    },
+    {
+      "name": "xcode-release-ios-metal",
+      "configurePreset": "xcode-ios-metal",
       "configuration": "Release"
     },
     {

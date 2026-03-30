@@ -20,6 +20,9 @@ public:
 	~ExampleApp();
 	void update() final;
 	static void SetupScreenshot(const AppConfig& cfg, int argc, char** argv);
+
+	bool isDesktop() const;
+
 	template <typename T> static inline int Main(AppConfig cfg, int argc, char** argv)
 	{
 		SetupScreenshot(cfg, argc, argv);

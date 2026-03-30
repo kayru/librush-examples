@@ -54,7 +54,7 @@ public:
 		m_font->draw(m_prim, Vec2(posX - 50.0f, window->getSizeFloat().y * 0.5f), str);
 
 		snprintf(str, sizeof(str), "CPU frame time: %.2f ms", deltaTime * 1000.0);
-		m_font->draw(m_prim, Vec2(10.0f), str);
+		m_font->draw(m_prim, m_window->getSafeArea().m_min + Vec2(10.0f), str);
 
 		m_prim->end2D();
 

@@ -624,9 +624,10 @@ public:
 			m_cpuBuildTime.get() * 1000.0f,
 			m_cpuDrawTime.get() * 1000.0f, m_gpuDrawTime.get() * 1000.0f);
 
-		m_font->draw(m_prim, Vec2(10.0f), statusString);
+		const Box2 safeArea = m_window->getSafeArea();
+		m_font->draw(m_prim, safeArea.m_min + Vec2(10.0f), statusString);
 
-		snprintf(statusString, 1024, 
+		snprintf(statusString, 1024,
 			"Key bindings\n"
 			"  1..7:        Change draw method\n"
 			"  Up/Down:     Increase/decrease number of draws by 1/frame\n"
@@ -636,7 +637,7 @@ public:
 		);
 
 		Vec2 stringSize = m_font->measure(statusString);
-		m_font->draw(m_prim, Vec2(10.0f, m_window->getSizeFloat().y - stringSize.y), statusString);
+		m_font->draw(m_prim, Vec2(safeArea.m_min.x + 10.0f, safeArea.m_max.y - stringSize.y - 10.0f), statusString);
 
 		m_prim->end2D();
 

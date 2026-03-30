@@ -1,4 +1,1 @@
-set(app 03-Primitives)
-add_executable(${app} Primitives.cpp)
-target_link_libraries(${app} Common)
-target_compile_definitions(${app} PRIVATE RUSH_USING_NAMESPACE)
+rush_add_app(03-Primitives SOURCES Primitives.cpp)

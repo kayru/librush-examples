@@ -199,12 +199,45 @@ void ExampleModelViewer::onUpdate()
 		}
 	}
 
+	if (!isDesktop())
+	{
+		// Lazy-init gamepad buttons (need window size)
+		if (m_btnVertical < 0)
+		{
+			const Box2 safe = m_window->getSafeArea();
+			const float sliderX = safe.m_min.x + 170.0f;
+			const float sliderY = safe.m_max.y - 100.0f;
+			m_btnVertical = m_virtualGamepad.addVerticalSlider(Vec2(sliderX, sliderY), 40.0f, 120.0f);
+		}
+
+		m_virtualGamepad.update(m_window);
+	}
+
 	float clipNear = 0.25f * m_cameraScale;
 	m_camera.setClip(clipNear, m_camera.getFarPlane());
 	m_camera.setAspect(m_window->getAspect());
 	m_cameraMan->setMoveSpeed(20.0f * m_cameraScale);
 
 	m_cameraMan->update(&m_camera, dt, m_window->getKeyboardState(), m_window->getMouseState());
+
+	if (!isDesktop())
+	{
+		const Vec2 leftStick = m_virtualGamepad.getLeftStick();
+		const float verticalMove = m_virtualGamepad.getButtonValue(m_btnVertical);
+		if (leftStick.length() > 0.0f || verticalMove != 0.0f)
+		{
+			const Vec3 move(leftStick.x, verticalMove, -leftStick.y);
+			m_camera.move(move * dt * m_cameraMan->getMoveSpeed());
+		}
+
+		const Vec2 rightStick = m_virtualGamepad.getRightStick();
+		if (rightStick.length() > 0.0f)
+		{
+			const float turnSpeed = 2.0f;
+			m_camera.rotateOnAxis(rightStick.x * dt * turnSpeed, Vec3(0.0f, 1.0f, 0.0f));
+			m_camera.rotateOnAxis(rightStick.y * dt * turnSpeed, m_camera.getRight());
+		}
+	}
 
 	interpolateCamera(m_interpolatedCamera, m_camera, dt);
 
@@ -371,8 +404,10 @@ void ExampleModelViewer::render()
 
 		m_prim->begin2D(m_window->getSize());
 
+		const Vec2 safeOrigin = m_window->getSafeArea().m_min;
+
 		m_font->setScale(2.0f);
-		m_font->draw(m_prim, Vec2(10.0f), m_statusString.c_str());
+		m_font->draw(m_prim, safeOrigin + Vec2(10.0f), m_statusString.c_str());
 
 		m_font->setScale(1.0f);
 		char            timingString[1024];
@@ -392,7 +427,12 @@ void ExampleModelViewer::render()
 		    m_stats.cpuUpdateConstantBuffer.get() * 1000.0f,
 		    m_stats.cpuModel.get() * 1000.0f,
 		    m_stats.cpuUI.get() * 1000.0f);
-		m_font->draw(m_prim, Vec2(10.0f, 30.0f), timingString);
+		m_font->draw(m_prim, safeOrigin + Vec2(10.0f, 30.0f), timingString);
+
+		if (!isDesktop())
+		{
+			m_virtualGamepad.draw(m_prim, m_font, m_window->getSizeFloat());
+		}
 
 		m_prim->end2D();
 

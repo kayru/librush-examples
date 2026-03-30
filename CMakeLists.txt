@@ -3,11 +3,16 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 project(RushExamples)
 
-set(CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "NO" CACHE STRING "Disable code signing for Xcode builds")
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+	set(CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "YES" CACHE STRING "Enable code signing for iOS builds")
+	set(CMAKE_XCODE_ATTRIBUTE_CODE_SIGN_STYLE "Automatic" CACHE STRING "Use automatic code signing")
+else()
+	set(CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "NO" CACHE STRING "Disable code signing for Xcode builds")
+endif()
 
-if(APPLE)
-    set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64" CACHE STRING "Build architectures for Mac OS X" FORCE)
-endif(APPLE)
+if(APPLE AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
+	set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64" CACHE STRING "Build architectures for Mac OS X" FORCE)
+endif()
 
 # Multithreaded compilation in MSVC
 add_compile_options($<$<CXX_COMPILER_ID:MSVC>:/MP>)
@@ -71,122 +76,8 @@ if(APPLE AND DEFINED RUSH_RENDER_API AND RUSH_RENDER_API STREQUAL "VK")
 	endif()
 endif()
 
-# Custom build rules
-
-set(RUSH_VK_SDK_BIN_PATHS
-	$ENV{VULKAN_SDK}/Bin
-	$ENV{VULKAN_SDK}/bin
-	$ENV{VULKAN_SDK}/macOS/bin
-	$ENV{VK_SDK_PATH}/Bin
-	$ENV{VK_SDK_PATH}/bin
-	$ENV{VK_SDK_PATH}/macOS/bin
-	$ENV{PATH}
-	"~/bin"
-)
-
-find_program(GLSLC NAMES glslc HINTS
-	${RUSH_VK_SDK_BIN_PATHS}
-)
-
-find_program(DXC NAMES dxc HINTS
-	${RUSH_VK_SDK_BIN_PATHS}
-)
-
-if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-	find_program(spirv-cross NAMES spirv-cross PATHS
-		${RUSH_VK_SDK_BIN_PATHS}
-	)
-	find_program(xcrun NAMES xcrun)
-	function(metal_shader_compile_rule shaderName)
-		add_custom_command(
-			OUTPUT ${CMAKE_CFG_INTDIR}/${shaderName}.metallib
-			BYPRODUCTS ${CMAKE_CFG_INTDIR}/${shaderName}.air
-			COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CFG_INTDIR}
-			COMMAND ${xcrun} -sdk macosx metal -std=metal3.0 -c ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName} -o ${CMAKE_CFG_INTDIR}/${shaderName}.air
-			COMMAND ${xcrun} -sdk macosx metallib ${CMAKE_CFG_INTDIR}/${shaderName}.air -o ${CMAKE_CFG_INTDIR}/${shaderName}.metallib
-			MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
-		)
-	endfunction(metal_shader_compile_rule)
-	if(DEFINED RUSH_RENDER_API AND RUSH_RENDER_API STREQUAL "MTL")
-		function(glsl_shader_compile_rule shaderName)
-			set(shaderDeps ${ARGN})
-			add_custom_command(
-				OUTPUT ${CMAKE_CFG_INTDIR}/${shaderName}.bin ${CMAKE_CFG_INTDIR}/${shaderName}.metallib
-				BYPRODUCTS ${CMAKE_CFG_INTDIR}/${shaderName}.metal ${CMAKE_CFG_INTDIR}/${shaderName}.air
-				COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CFG_INTDIR}
-				COMMAND ${GLSLC} -O -o ${CMAKE_CFG_INTDIR}/${shaderName}.bin ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
-				COMMAND ${spirv-cross} --msl --msl-version 230000 --msl-argument-buffers --msl-decoration-binding --msl-force-active-argument-buffer-resources ${CMAKE_CFG_INTDIR}/${shaderName}.bin > ${CMAKE_CFG_INTDIR}/${shaderName}.metal
-				COMMAND ${xcrun} -sdk macosx metal -std=metal3.0 -c ${CMAKE_CFG_INTDIR}/${shaderName}.metal -o ${CMAKE_CFG_INTDIR}/${shaderName}.air
-				COMMAND ${xcrun} -sdk macosx metallib ${CMAKE_CFG_INTDIR}/${shaderName}.air -o ${CMAKE_CFG_INTDIR}/${shaderName}.metallib
-				MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
-				DEPENDS ${shaderDeps}
-			)
-		endfunction(glsl_shader_compile_rule)
-	else()
-		function(glsl_shader_compile_rule shaderName)
-			set(shaderDeps ${ARGN})
-			add_custom_command(
-				OUTPUT ${CMAKE_CFG_INTDIR}/${shaderName}.bin
-				COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CFG_INTDIR}
-				COMMAND ${GLSLC} -O -o ${CMAKE_CFG_INTDIR}/${shaderName}.bin ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
-				MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
-				DEPENDS ${shaderDeps}
-			)
-		endfunction(glsl_shader_compile_rule)
-	endif()
-else()
-	function(glsl_shader_compile_rule shaderName)
-		set(shaderDeps ${ARGN})
-		add_custom_command(
-			OUTPUT ${CMAKE_CFG_INTDIR}/${shaderName}.bin
-			COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CFG_INTDIR}
-			COMMAND ${GLSLC} -O -o ${CMAKE_CFG_INTDIR}/${shaderName}.bin ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
-			MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
-			DEPENDS ${shaderDeps}
-		)
-	endfunction(glsl_shader_compile_rule)
-endif()
-
-function(hlsl_shader_compile_rule shaderName profile)
-	set(shaderDeps ${ARGN})
-	if(NOT DXC)
-		message(FATAL_ERROR "DXC was not found. Set VULKAN_SDK or VK_SDK_PATH so dxc is available.")
-	endif()
-	if(APPLE AND DEFINED RUSH_RENDER_API AND RUSH_RENDER_API STREQUAL "MTL")
-		if(NOT spirv-cross OR NOT xcrun)
-			message(FATAL_ERROR "spirv-cross or xcrun was not found. Ensure spirv-cross is available in PATH for Metal shader compilation.")
-		endif()
-		add_custom_command(
-			OUTPUT ${CMAKE_CFG_INTDIR}/${shaderName}.spv ${CMAKE_CFG_INTDIR}/${shaderName}.metallib
-			BYPRODUCTS ${CMAKE_CFG_INTDIR}/${shaderName}.metal ${CMAKE_CFG_INTDIR}/${shaderName}.air
-			COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CFG_INTDIR}
-			COMMAND ${DXC} -spirv -fspv-target-env=vulkan1.2 -T ${profile} -E main -Fo ${CMAKE_CFG_INTDIR}/${shaderName}.spv ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
-			COMMAND ${spirv-cross} --msl --msl-version 230000 --msl-argument-buffers --msl-decoration-binding --msl-force-active-argument-buffer-resources ${CMAKE_CFG_INTDIR}/${shaderName}.spv > ${CMAKE_CFG_INTDIR}/${shaderName}.metal
-			COMMAND ${xcrun} -sdk macosx metal -std=metal3.0 -c ${CMAKE_CFG_INTDIR}/${shaderName}.metal -o ${CMAKE_CFG_INTDIR}/${shaderName}.air
-			COMMAND ${xcrun} -sdk macosx metallib ${CMAKE_CFG_INTDIR}/${shaderName}.air -o ${CMAKE_CFG_INTDIR}/${shaderName}.metallib
-			MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
-			DEPENDS ${shaderDeps}
-		)
-	else()
-		add_custom_command(
-			OUTPUT ${CMAKE_CFG_INTDIR}/${shaderName}.bin
-			COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CFG_INTDIR}
-			COMMAND ${DXC} -spirv -fspv-target-env=vulkan1.2 -T ${profile} -E main -Fo ${CMAKE_CFG_INTDIR}/${shaderName}.bin ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
-			MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
-			DEPENDS ${shaderDeps}
-		)
-	endif()
-endfunction()
-
-function(rt_shader_compile_rule shaderName dependencies)
-	add_custom_command(
-		OUTPUT ${CMAKE_CFG_INTDIR}/${shaderName}.bin
-		COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CFG_INTDIR}
-		COMMAND ${GLSLC} --target-env=vulkan1.2 -o ${CMAKE_CFG_INTDIR}/${shaderName}.bin ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
-		MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${shaderName}
-		DEPENDS ${dependencies}
-	)
-endfunction()
+# Project-wide defaults for rush_add_app
+set(RUSH_DEFAULT_BUNDLE_ID "com.librush.example.app" CACHE STRING "Bundle ID for iOS apps")
 
 # Common code
 

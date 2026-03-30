@@ -1,22 +1,16 @@
-set(app 08-ModelViewer)
-
-set(shaders
-	Common.hlsl
-	ModelPS.hlsl
-	ModelVS.hlsl
+rush_add_app(08-ModelViewer
+	SOURCES
+		ExampleModelViewer.h
+		ExampleModelViewer.cpp
+		Model.h
+		Model.cpp
+		Common.hlsl
+		ModelPS.hlsl
+		ModelVS.hlsl
+	LIBS
+		stb
+		tiny_obj_loader
 )
 
-add_executable(${app}
-	${shaders}
-	ExampleModelViewer.h
-	ExampleModelViewer.cpp
-	Model.h
-	Model.cpp
-)
-
-target_link_libraries(${app} Common stb tiny_obj_loader)
-target_compile_definitions(${app} PRIVATE RUSH_USING_NAMESPACE)
-
-set_source_files_properties(Common.hlsl PROPERTIES VS_TOOL_OVERRIDE "None")
-hlsl_shader_compile_rule("ModelPS.hlsl" ps_6_0 "Common.hlsl")
-hlsl_shader_compile_rule("ModelVS.hlsl" vs_6_0 "Common.hlsl")
+rush_shader_hlsl(ModelPS.hlsl ps_6_0 DEPENDS Common.hlsl)
+rush_shader_hlsl(ModelVS.hlsl vs_6_0 DEPENDS Common.hlsl)

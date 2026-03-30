@@ -3,6 +3,7 @@
 #include <Rush/Window.h>
 #include <Rush/GfxDevice.h>
 #include <Rush/GfxPrimitiveBatch.h>
+#include <Rush/MathCommon.h>
 
 #include <imgui.h>
 #include <stdio.h>
@@ -261,6 +262,12 @@ void ImGuiImpl_Update(float dt)
 
 	io.DisplayFramebufferScale.x = s_window->getResolutionScale().x;
 	io.DisplayFramebufferScale.y = s_window->getResolutionScale().y;
+
+	const Box2 safeArea = s_window->getSafeArea();
+	const Vec2 windowSize = s_window->getSizeFloat();
+	const float safeX = max(safeArea.m_min.x, windowSize.x - safeArea.m_max.x);
+	const float safeY = max(safeArea.m_min.y, windowSize.y - safeArea.m_max.y);
+	ImGui::GetStyle().DisplaySafeAreaPadding = ImVec2(safeX, safeY);
 
 	const Tuple2i framebufferSize = s_window->getFramebufferSize();
 	const float scaleX = (io.DisplayFramebufferScale.x > 0.0f) ? io.DisplayFramebufferScale.x : 1.0f;

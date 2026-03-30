@@ -56,7 +56,7 @@ public:
 		{
 			m_prim->begin2D(window->getFramebufferSize());
 
-			Vec2 pos = Vec2(10, 10);
+			Vec2 pos = m_window->getSafeArea().m_min + Vec2(10, 10);
 
 			pos = m_font->draw(m_prim, pos, "Hello world!\n", ColorRGBA8::Red());
 			pos = m_font->draw(m_prim, pos, "This is line 2.\n", ColorRGBA8::Green());

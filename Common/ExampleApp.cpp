@@ -76,6 +76,15 @@ namespace
 	}
 }
 
+bool ExampleApp::isDesktop() const
+{
+#if defined(RUSH_PLATFORM_WINDOWS) || defined(RUSH_PLATFORM_LINUX) || defined(RUSH_PLATFORM_MAC)
+	return true;
+#else
+	return false;
+#endif
+}
+
 ExampleApp::ExampleApp() : m_window(Platform_GetWindow())
 {
 	m_window->retain();

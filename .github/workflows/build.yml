@@ -33,6 +33,10 @@ jobs:
           - os: windows-latest
             configure-preset: vs2022-vk
             build-preset: vs2022-release-vk
+          - os: macos-14
+            configure-preset: xcode-ios-metal
+            build-preset: xcode-debug-ios-metal
+            build-extra-args: "-- -sdk iphonesimulator -allowProvisioningUpdates"
 
     runs-on: ${{ matrix.os }}
 
@@ -106,4 +110,4 @@ jobs:
         run: cmake --preset ${{ matrix.configure-preset }}
 
       - name: Build
-        run: cmake --build --preset ${{ matrix.build-preset }}
+        run: cmake --build --preset ${{ matrix.build-preset }} ${{ matrix.build-extra-args }}

@@ -1,18 +1,8 @@
-set(app 11-RayTracing)
-
-set(shaders
-	RayQuery.hlsl
+rush_add_app(11-RayTracing
+	SOURCES
+		ExampleRayTracing.h
+		ExampleRayTracing.cpp
+		RayQuery.hlsl
 )
 
-add_executable(${app}
-	${shaders}
-	ExampleRayTracing.h
-	ExampleRayTracing.cpp
-)
-
-target_link_libraries(${app} Common)
-target_compile_definitions(${app} PRIVATE RUSH_USING_NAMESPACE)
-
-foreach(shader ${shaders})
-	hlsl_shader_compile_rule(${shader} cs_6_5)
-endforeach()
+rush_shader_hlsl(RayQuery.hlsl cs_6_5)

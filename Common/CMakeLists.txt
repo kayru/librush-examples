@@ -5,6 +5,8 @@ set(COMMON_SRC
 	ExampleApp.cpp
 	ImGuiImpl.h
 	ImGuiImpl.cpp
+	VirtualGamepad.h
+	VirtualGamepad.cpp
 )
 
 add_library(Common STATIC ${COMMON_SRC})
