@@ -68,7 +68,7 @@ public:
 		pipelineDesc.vs = m_vs.get();
 		pipelineDesc.vertexFormat.add(0, GfxVertexFormatDesc::DataType::Float2, GfxVertexFormatDesc::Semantic::Position, 0);
 		pipelineDesc.bindings.descriptorSets[0].stageFlags = GfxStageFlags::Vertex | GfxStageFlags::Pixel;
-		pipelineDesc.renderTarget = caps.backBufferDesc;
+		pipelineDesc.renderTarget.colorFormats[0] = kTestRenderFormat;
 
 		m_pipeline = Gfx_CreateRenderPipeline(pipelineDesc);
 		if (!m_pipeline.valid())
@@ -80,7 +80,7 @@ public:
 		m_ready = true;
 	}
 
-	void render(GfxContext* ctx) override
+	void render(GfxContext* ctx, GfxTexture renderTarget) override
 	{
 		if (!m_ready)
 		{
@@ -89,6 +89,7 @@ public:
 		}
 
 		GfxPassDesc passDesc;
+		passDesc.color[0] = renderTarget;
 		passDesc.flags = GfxPassFlags::ClearAll;
 		passDesc.clearColors[0] = ColorRGBA8(0, 0, 0, 255);
 

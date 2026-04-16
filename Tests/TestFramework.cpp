@@ -241,6 +241,27 @@ static bool matchesPattern(const char* pattern, const char* value)
 TestRunner::TestRunner(GfxContext* ctx, int argc, char** argv)
 {
 	m_initContext = ctx;
+
+	if (ctx)
+	{
+		GfxTextureDesc texDesc = GfxTextureDesc::make2D(
+		    kTestRenderWidth, kTestRenderHeight, kTestRenderFormat,
+		    GfxUsageFlags::RenderTarget | GfxUsageFlags::TransferSrc);
+		texDesc.debugName = "TestOffscreenTarget";
+		m_offscreenTarget = Gfx_CreateTexture(texDesc);
+
+		m_stagingCopyInfo = Gfx_GetImageCopyInfo(kTestRenderFormat,
+		    {kTestRenderWidth, kTestRenderHeight, 1});
+
+		GfxBufferDesc bufDesc;
+		bufDesc.flags       = GfxBufferFlags::Storage;
+		bufDesc.stride      = 1;
+		bufDesc.count       = m_stagingCopyInfo.bytesPerRow * m_stagingCopyInfo.rowCount;
+		bufDesc.hostVisible = true;
+		bufDesc.debugName   = "TestStagingBuffer";
+		m_stagingBuffer = Gfx_CreateBuffer(bufDesc);
+	}
+
 	configureFromArgs(argc, argv);
 	m_runStart = Clock::now();
 }
@@ -263,7 +284,6 @@ int TestRunner::runCpuOnly()
 void TestRunner::updateInternal(GfxContext* ctx)
 {
 	const bool canRender = ctx != nullptr;
-	bool rendered = false;
 
 	if (m_state == State::Done)
 	{
@@ -283,24 +303,12 @@ void TestRunner::updateInternal(GfxContext* ctx)
 		if (m_currentConfig.requiresGraphics)
 		{
 			renderCurrent(ctx);
-			rendered = true;
-			m_state = m_currentConfig.captureScreenshot ? State::AwaitScreenshot : State::Validate;
+			if (m_currentConfig.captureScreenshot)
+			{
+				readbackOffscreenTarget(ctx);
+			}
 		}
-		else
-		{
-			m_state = State::Validate;
-		}
-		break;
-	case State::AwaitScreenshot:
-		if (m_screenshotReady)
-		{
-			m_state = State::Validate;
-		}
-		else
-		{
-			renderCurrent(ctx);
-			rendered = true;
-		}
+		m_state = State::Validate;
 		break;
 	case State::Validate:
 		finishCurrent(ctx);
@@ -310,15 +318,12 @@ void TestRunner::updateInternal(GfxContext* ctx)
 		break;
 	}
 
-	if (!rendered && m_state != State::Done)
+	if (m_state != State::Done && canRender)
 	{
-		if (canRender)
-		{
-			GfxPassDesc passDesc;
-			passDesc.flags = GfxPassFlags::None;
-			Gfx_BeginPass(ctx, passDesc);
-			Gfx_EndPass(ctx);
-		}
+		GfxPassDesc passDesc;
+		passDesc.flags = GfxPassFlags::None;
+		Gfx_BeginPass(ctx, passDesc);
+		Gfx_EndPass(ctx);
 	}
 }
 
@@ -328,9 +333,8 @@ void TestRunner::beginNextTest(GfxContext* ctx)
 	while (m_testIndex < m_selectedTests.size())
 	{
 		m_current.reset(m_selectedTests[m_testIndex++].factory(ctx));
-		m_currentConfig   = m_current->config();
-		m_screenshotReady = false;
-		m_screenshot      = TestImage{};
+		m_currentConfig = m_current->config();
+		m_screenshot    = TestImage{};
 
 		if ((m_forceNoGraphics || !canRender) && m_currentConfig.requiresGraphics)
 		{
@@ -351,29 +355,12 @@ void TestRunner::beginNextTest(GfxContext* ctx)
 
 void TestRunner::renderCurrent(GfxContext* ctx)
 {
-	const bool canRender = ctx != nullptr;
 	if (!m_currentConfig.requiresGraphics)
 	{
 		return;
 	}
 
-	m_current->render(ctx);
-
-	if (!m_currentConfig.captureScreenshot)
-	{
-		if (canRender)
-		{
-			GfxPassDesc passDesc;
-			passDesc.flags = GfxPassFlags::None;
-			Gfx_BeginPass(ctx, passDesc);
-			Gfx_EndPass(ctx);
-		}
-	}
-
-	if (m_currentConfig.captureScreenshot && canRender)
-	{
-		requestScreenshot();
-	}
+	m_current->render(ctx, m_offscreenTarget.get());
 }
 
 void TestRunner::finishCurrent(GfxContext* ctx)
@@ -398,27 +385,28 @@ void TestRunner::finishCurrent(GfxContext* ctx)
 	m_state = State::Init;
 }
 
-void TestRunner::requestScreenshot()
+void TestRunner::readbackOffscreenTarget(GfxContext* ctx)
 {
-	Gfx_RequestScreenshot(&TestRunner::screenshotCallback, this);
-}
+	Gfx_AddImageBarrier(ctx, m_offscreenTarget, GfxResourceState_TransferSrc);
+	GfxImageRegion region;
+	m_stagingCopyInfo = Gfx_CopyTextureToBuffer(ctx, m_offscreenTarget, region, m_stagingBuffer);
+	Gfx_Finish();
 
-void TestRunner::screenshotCallback(const ColorRGBA8* pixels, Tuple2u size, void* userData)
-{
-	auto* runner = reinterpret_cast<TestRunner*>(userData);
-	if (!runner)
+	GfxMappedBuffer mapped = Gfx_MapBuffer(m_stagingBuffer);
+
+	m_screenshot.size = {kTestRenderWidth, kTestRenderHeight};
+	const u32 pixelCount = kTestRenderWidth * kTestRenderHeight;
+	m_screenshot.pixels.resize(pixelCount);
+
+	const u8* src = reinterpret_cast<const u8*>(mapped.data);
+	for (u32 y = 0; y < kTestRenderHeight; ++y)
 	{
-		return;
+		std::memcpy(&m_screenshot.pixels[y * kTestRenderWidth],
+		    src + y * m_stagingCopyInfo.bytesPerRow,
+		    kTestRenderWidth * sizeof(ColorRGBA8));
 	}
 
-	runner->m_screenshot.size = size;
-	const size_t pixelCount = static_cast<size_t>(size.x) * size.y;
-	runner->m_screenshot.pixels.resize(pixelCount);
-	if (pixelCount)
-	{
-		std::memcpy(runner->m_screenshot.pixels.data(), pixels, pixelCount * sizeof(ColorRGBA8));
-	}
-	runner->m_screenshotReady = true;
+	Gfx_UnmapBuffer(mapped);
 }
 
 void TestRunner::printSummaryAndExit()

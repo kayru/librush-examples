@@ -2,9 +2,7 @@
 
 #include <Rush/GfxDevice.h>
 #include <Rush/GfxPrimitiveBatch.h>
-#include <Rush/Platform.h>
 #include <Rush/UtilLog.h>
-#include <Rush/Window.h>
 
 using namespace Test;
 using namespace Rush;
@@ -99,7 +97,7 @@ public:
 		m_ready = true;
 	}
 
-	void render(GfxContext* ctx) override
+	void render(GfxContext* ctx, GfxTexture renderTarget) override
 	{
 		if (!m_ready)
 		{
@@ -107,14 +105,14 @@ public:
 		}
 
 		GfxPassDesc passDesc;
+		passDesc.color[0] = renderTarget;
 		passDesc.flags = GfxPassFlags::ClearAll;
 		passDesc.clearColors[0] = ColorRGBA8(0, 0, 0, 255);
 
 		Gfx_BeginPass(ctx, passDesc);
 
-		const Tuple2i fbSize = Platform_GetWindow()->getFramebufferSize();
-		const float fullW = static_cast<float>(fbSize.x);
-		const float fullH = static_cast<float>(fbSize.y);
+		const float fullW = static_cast<float>(kTestRenderWidth);
+		const float fullH = static_cast<float>(kTestRenderHeight);
 		const float halfW = fullW / 2.0f;
 		const float halfH = fullH / 2.0f;
 
@@ -240,16 +238,15 @@ public:
 		m_ready = true;
 	}
 
-	void render(GfxContext* ctx) override
+	void render(GfxContext* ctx, GfxTexture renderTarget) override
 	{
 		if (!m_ready)
 		{
 			return;
 		}
 
-		const Tuple2i fbSize = Platform_GetWindow()->getFramebufferSize();
-		const float fullW = static_cast<float>(fbSize.x);
-		const float fullH = static_cast<float>(fbSize.y);
+		const float fullW = static_cast<float>(kTestRenderWidth);
+		const float fullH = static_cast<float>(kTestRenderHeight);
 
 		// Viewport inset by 1/4 on each side
 		const float insetX = fullW / 4.0f;
@@ -258,6 +255,7 @@ public:
 		const float vpH = fullH - 2.0f * insetY;
 
 		GfxPassDesc passDesc;
+		passDesc.color[0] = renderTarget;
 		passDesc.flags = GfxPassFlags::ClearAll;
 		passDesc.clearColors[0] = ColorRGBA8(0, 0, 0, 255);
 
@@ -350,29 +348,31 @@ public:
 		m_ready = true;
 	}
 
-	void render(GfxContext* ctx) override
+	void render(GfxContext* ctx, GfxTexture renderTarget) override
 	{
 		if (!m_ready)
 		{
 			return;
 		}
 
-		const Tuple2i fbSize = Platform_GetWindow()->getFramebufferSize();
-		const float fullW = static_cast<float>(fbSize.x);
-		const float fullH = static_cast<float>(fbSize.y);
+		const float fullW = static_cast<float>(kTestRenderWidth);
+		const float fullH = static_cast<float>(kTestRenderHeight);
 
 		// Scissor inset by 1/4 on each side
-		const int insetX = fbSize.x / 4;
-		const int insetY = fbSize.y / 4;
+		const int insetX = static_cast<int>(kTestRenderWidth) / 4;
+		const int insetY = static_cast<int>(kTestRenderHeight) / 4;
 
 		GfxPassDesc passDesc;
+		passDesc.color[0] = renderTarget;
 		passDesc.flags = GfxPassFlags::ClearAll;
 		passDesc.clearColors[0] = ColorRGBA8(0, 0, 0, 255);
 
 		Gfx_BeginPass(ctx, passDesc);
 
 		Gfx_SetViewport(ctx, GfxViewport(0.0f, 0.0f, fullW, fullH));
-		Gfx_SetScissorRect(ctx, GfxRect{insetX, insetY, fbSize.x - insetX, fbSize.y - insetY});
+		Gfx_SetScissorRect(ctx, GfxRect{insetX, insetY,
+		    static_cast<int>(kTestRenderWidth) - insetX,
+		    static_cast<int>(kTestRenderHeight) - insetY});
 		drawViewportTriangle(*m_prim, fullW, fullH, ColorRGBA8(0, 255, 0));
 
 		Gfx_EndPass(ctx);

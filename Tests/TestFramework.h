@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Rush/GfxCommon.h>
+#include <Rush/GfxDevice.h>
 #include <Rush/MathCommon.h>
 #include <Rush/UtilArray.h>
 #include <Rush/UtilColor.h>
@@ -19,6 +20,10 @@ class GfxContext;
 
 namespace Test
 {
+
+static constexpr u32 kTestRenderWidth  = 256;
+static constexpr u32 kTestRenderHeight = 256;
+static constexpr GfxFormat kTestRenderFormat = GfxFormat_RGBA8_Unorm;
 
 struct TestImage
 {
@@ -57,7 +62,7 @@ public:
 	virtual const char* name() const { return m_name.length() ? m_name.c_str() : "UnnamedTest"; }
 	virtual const char* description() const { return m_description.length() ? m_description.c_str() : ""; }
 	virtual TestConfig  config() const { return {}; }
-	virtual void        render(GfxContext*) {}
+	virtual void        render(GfxContext*, GfxTexture renderTarget) {}
 	virtual TestResult  validate(GfxContext*, const TestImage* image) = 0;
 
 	void setMetadata(const char* name, const char* description)
@@ -237,7 +242,6 @@ private:
 	{
 		Init,
 		Render,
-		AwaitScreenshot,
 		Validate,
 		Done,
 	};
@@ -245,7 +249,7 @@ private:
 	void beginNextTest(GfxContext* ctx);
 	void renderCurrent(GfxContext* ctx);
 	void finishCurrent(GfxContext* ctx);
-	void requestScreenshot();
+	void readbackOffscreenTarget(GfxContext* ctx);
 	void updateInternal(GfxContext* ctx);
 	void configureFromArgs(int argc, char** argv);
 	void listTests() const;
@@ -253,8 +257,6 @@ private:
 	bool shouldRunTest(const TestEntry& entry, const char* testName) const;
 	void printSummaryAndExit();
 	static double elapsedMs(TimePoint start, TimePoint end);
-
-	static void screenshotCallback(const ColorRGBA8* pixels, Tuple2u size, void* userData);
 
 	State                     m_state = State::Init;
 	bool                      m_anyFailed = false;
@@ -264,7 +266,6 @@ private:
 	std::unique_ptr<TestCase> m_current;
 	TestConfig                m_currentConfig;
 	TestImage                 m_screenshot;
-	bool                      m_screenshotReady = false;
 	DynamicArray<TestEntry>   m_selectedTests;
 	DynamicArray<String>      m_testPatterns;
 	DynamicArray<String>      m_categoryPatterns;
@@ -273,6 +274,9 @@ private:
 	TimePoint                 m_runStart;
 	TimePoint                 m_testStart;
 	int                       m_exitCode = 0;
+	GfxOwn<GfxTexture>        m_offscreenTarget;
+	GfxOwn<GfxBuffer>         m_stagingBuffer;
+	GfxImageCopyInfo          m_stagingCopyInfo = {};
 };
 
 } // namespace Test

@@ -9,9 +9,10 @@ using namespace Test;
 class ClearColorTest final : public GfxScreenshotTestCase
 {
 public:
-	void render(GfxContext* ctx) override
+	void render(GfxContext* ctx, GfxTexture renderTarget) override
 	{
 		GfxPassDesc passDesc;
+		passDesc.color[0]       = renderTarget;
 		passDesc.flags          = GfxPassFlags::ClearAll;
 		passDesc.clearColors[0] = ColorRGBA8(11, 22, 33);
 		Gfx_BeginPass(ctx, passDesc);

@@ -118,7 +118,7 @@ public:
 		m_ready = true;
 	}
 
-	void render(GfxContext* ctx) override
+	void render(GfxContext* ctx, GfxTexture) override
 	{
 		if (!m_ready)
 		{

@@ -89,7 +89,7 @@ public:
 		m_height = height;
 	}
 
-	void render(GfxContext* ctx) override
+	void render(GfxContext* ctx, GfxTexture) override
 	{
 		if (!m_texture.valid() || !m_buffer.valid())
 		{
@@ -199,7 +199,7 @@ public:
 		}
 	}
 
-	void render(GfxContext* ctx) override
+	void render(GfxContext* ctx, GfxTexture) override
 	{
 		if (!m_texture.valid() || !m_buffer.valid())
 		{
@@ -298,7 +298,7 @@ public:
 		m_height = height;
 	}
 
-	void render(GfxContext* ctx) override
+	void render(GfxContext* ctx, GfxTexture) override
 	{
 		if (!m_texture.valid() || !m_buffer.valid())
 		{
