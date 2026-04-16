@@ -6,6 +6,38 @@
 
 using namespace Test;
 
+namespace
+{
+
+TestResult validateTextureReadback(
+    const u8* mappedData, u32 width, u32 height,
+    u32 bytesPerRow, const ColorRGBA8* expected)
+{
+	for (u32 y = 0; y < height; ++y)
+	{
+		const ColorRGBA8* row = reinterpret_cast<const ColorRGBA8*>(
+		    mappedData + y * bytesPerRow);
+		for (u32 x = 0; x < width; ++x)
+		{
+			const u32 idx = y * width + x;
+			const ColorRGBA8& exp = expected[idx];
+			const ColorRGBA8& actual = row[x];
+			if (actual.r != exp.r || actual.g != exp.g ||
+			    actual.b != exp.b || actual.a != exp.a)
+			{
+				return TestResult::fail(
+				    "Pixel (%u,%u): got (%u,%u,%u,%u) expected (%u,%u,%u,%u)",
+				    x, y,
+				    actual.r, actual.g, actual.b, actual.a,
+				    exp.r, exp.g, exp.b, exp.a);
+			}
+		}
+	}
+	return TestResult::pass();
+}
+
+} // namespace
+
 class CopyTextureToBufferBasicTest final : public GfxTestCase
 {
 public:
@@ -90,31 +122,10 @@ public:
 		}
 
 		const u8* src = reinterpret_cast<const u8*>(mapped.data);
-
-		for (u32 y = 0; y < m_height; ++y)
-		{
-			const ColorRGBA8* row = reinterpret_cast<const ColorRGBA8*>(
-			    src + y * m_copyInfo.bytesPerRow);
-			for (u32 x = 0; x < m_width; ++x)
-			{
-				const u32 idx = y * m_width + x;
-				const ColorRGBA8& expected = m_expected[idx];
-				const ColorRGBA8& actual   = row[x];
-				if (actual.r != expected.r || actual.g != expected.g ||
-				    actual.b != expected.b || actual.a != expected.a)
-				{
-					Gfx_UnmapBuffer(mapped);
-					return TestResult::fail(
-					    "Pixel (%u,%u): got (%u,%u,%u,%u) expected (%u,%u,%u,%u)",
-					    x, y,
-					    actual.r, actual.g, actual.b, actual.a,
-					    expected.r, expected.g, expected.b, expected.a);
-				}
-			}
-		}
-
+		const TestResult result = validateTextureReadback(
+		    src, m_width, m_height, m_copyInfo.bytesPerRow, m_expected.data());
 		Gfx_UnmapBuffer(mapped);
-		return TestResult::pass();
+		return result;
 	}
 
 private:
@@ -223,31 +234,10 @@ public:
 		}
 
 		const u8* src = reinterpret_cast<const u8*>(mapped.data);
-
-		for (u32 y = 0; y < m_regionSize.y; ++y)
-		{
-			const ColorRGBA8* row = reinterpret_cast<const ColorRGBA8*>(
-			    src + y * m_copyInfo.bytesPerRow);
-			for (u32 x = 0; x < m_regionSize.x; ++x)
-			{
-				const u32 idx = y * m_regionSize.x + x;
-				const ColorRGBA8& expected = m_expected[idx];
-				const ColorRGBA8& actual   = row[x];
-				if (actual.r != expected.r || actual.g != expected.g ||
-				    actual.b != expected.b || actual.a != expected.a)
-				{
-					Gfx_UnmapBuffer(mapped);
-					return TestResult::fail(
-					    "Pixel (%u,%u): got (%u,%u,%u,%u) expected (%u,%u,%u,%u)",
-					    x, y,
-					    actual.r, actual.g, actual.b, actual.a,
-					    expected.r, expected.g, expected.b, expected.a);
-				}
-			}
-		}
-
+		const TestResult result = validateTextureReadback(
+		    src, m_regionSize.x, m_regionSize.y, m_copyInfo.bytesPerRow, m_expected.data());
 		Gfx_UnmapBuffer(mapped);
-		return TestResult::pass();
+		return result;
 	}
 
 private:
@@ -341,31 +331,10 @@ public:
 		}
 
 		const u8* base = reinterpret_cast<const u8*>(mapped.data) + m_dstOffset;
-
-		for (u32 y = 0; y < m_height; ++y)
-		{
-			const ColorRGBA8* row = reinterpret_cast<const ColorRGBA8*>(
-			    base + y * m_copyInfo.bytesPerRow);
-			for (u32 x = 0; x < m_width; ++x)
-			{
-				const u32 idx = y * m_width + x;
-				const ColorRGBA8& expected = m_expected[idx];
-				const ColorRGBA8& actual   = row[x];
-				if (actual.r != expected.r || actual.g != expected.g ||
-				    actual.b != expected.b || actual.a != expected.a)
-				{
-					Gfx_UnmapBuffer(mapped);
-					return TestResult::fail(
-					    "Pixel (%u,%u): got (%u,%u,%u,%u) expected (%u,%u,%u,%u)",
-					    x, y,
-					    actual.r, actual.g, actual.b, actual.a,
-					    expected.r, expected.g, expected.b, expected.a);
-				}
-			}
-		}
-
+		const TestResult result = validateTextureReadback(
+		    base, m_width, m_height, m_copyInfo.bytesPerRow, m_expected.data());
 		Gfx_UnmapBuffer(mapped);
-		return TestResult::pass();
+		return result;
 	}
 
 private:

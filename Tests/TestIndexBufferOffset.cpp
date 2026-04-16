@@ -84,11 +84,7 @@ public:
 	{
 		if (!m_ready)
 		{
-			if (!m_loggedSkip && !m_skipReason.empty())
-			{
-				RUSH_LOG("[Test] SKIP: %s", m_skipReason.c_str());
-				m_loggedSkip = true;
-			}
+			logSkipOnce();
 			return;
 		}
 
@@ -111,14 +107,10 @@ public:
 			return TestResult::pass();
 		}
 
-		if (!image || image->pixels.empty())
+		const TestResult screenshotCheck = validateScreenshot(image);
+		if (!screenshotCheck.passed)
 		{
-			return TestResult::fail("Missing screenshot data");
-		}
-
-		if (image->size.x == 0 || image->size.y == 0)
-		{
-			return TestResult::fail("Invalid screenshot size");
+			return screenshotCheck;
 		}
 
 		// The full-screen triangle should have painted the center pixel green.
@@ -135,10 +127,6 @@ public:
 	}
 
 private:
-	bool m_ready = false;
-	bool m_loggedSkip = false;
-	String m_skipReason;
-
 	GfxOwn<GfxVertexShader> m_vs;
 	GfxOwn<GfxPixelShader> m_ps;
 	GfxOwn<GfxBuffer> m_vb;

@@ -1,12 +1,14 @@
 #pragma once
 
 #include <Rush/GfxCommon.h>
+#include <Rush/MathCommon.h>
 #include <Rush/UtilArray.h>
 #include <Rush/UtilColor.h>
 #include <Rush/UtilString.h>
 #include <Rush/UtilTuple.h>
 
 #include <chrono>
+#include <cstring>
 #include <memory>
 #include <type_traits>
 
@@ -70,6 +72,8 @@ private:
 };
 
 // GPU test with no screenshot capture by default.
+// Provides optional skip infrastructure: set m_skipReason in the constructor
+// to mark the test as skipped. The base render() logs the skip message once.
 class GfxTestCase : public TestCase
 {
 public:
@@ -80,9 +84,21 @@ public:
 		cfg.captureScreenshot = false;
 		return cfg;
 	}
+
+protected:
+	bool m_ready = false;
+	String m_skipReason;
+
+	void skip(const char* reason) { m_skipReason = reason; }
+	bool isReady() const { return m_ready; }
+	void logSkipOnce();
+
+private:
+	bool m_loggedSkip = false;
 };
 
 // GPU test that explicitly requires screenshot capture.
+// Same skip infrastructure as GfxTestCase.
 class GfxScreenshotTestCase : public TestCase
 {
 public:
@@ -93,6 +109,17 @@ public:
 		cfg.captureScreenshot = true;
 		return cfg;
 	}
+
+protected:
+	bool m_ready = false;
+	String m_skipReason;
+
+	void skip(const char* reason) { m_skipReason = reason; }
+	bool isReady() const { return m_ready; }
+	void logSkipOnce();
+
+private:
+	bool m_loggedSkip = false;
 };
 
 // CPU-only test that never renders and skips screenshots.
@@ -107,6 +134,36 @@ public:
 		return cfg;
 	}
 };
+
+// Validate that a screenshot image is present and has non-zero dimensions.
+// Returns a passing result on success, or a descriptive failure.
+TestResult validateScreenshot(const TestImage* image);
+
+// Map a buffer, compare its contents against expected u32 values, unmap, and return
+// a pass/fail result. The format string controls how mismatched values are printed
+// (e.g. "0x%08X" for hex, "%u" for decimal).
+TestResult validateBufferU32(GfxBufferArg buf, const u32* expected, size_t count, const char* valueFmt = "0x%08X");
+
+// Pack a ColorRGBA8 into a u32 using the same layout as static_cast<u32>(color).
+inline u32 packColor(const ColorRGBA8& color)
+{
+	return static_cast<u32>(color);
+}
+
+// Simple triangle scene for ray tracing tests.
+struct SimpleRTScene
+{
+	GfxOwn<GfxBuffer>                vertexBuffer;
+	GfxOwn<GfxBuffer>                indexBuffer;
+	GfxOwn<GfxAccelerationStructure> blas;
+	GfxOwn<GfxAccelerationStructure> tlas;
+};
+
+// Create a single-triangle BLAS+TLAS scene. extraBufferFlags is OR'd into the
+// vertex/index buffer flags (e.g. GfxBufferFlags::Storage when GPU reads are needed).
+// On failure, outError is set and false is returned.
+bool createSimpleTriangleScene(GfxContext* ctx, SimpleRTScene& scene,
+    GfxBufferFlags extraBufferFlags, String& outError);
 
 using TestFactory = TestCase* (*)(GfxContext*);
 

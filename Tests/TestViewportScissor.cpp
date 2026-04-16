@@ -131,17 +131,14 @@ public:
 			return TestResult::pass();
 		}
 
-		if (!image || image->pixels.empty())
+		const TestResult screenshotCheck = validateScreenshot(image);
+		if (!screenshotCheck.passed)
 		{
-			return TestResult::fail("Missing screenshot data");
+			return screenshotCheck;
 		}
 
 		const u32 w = image->size.x;
 		const u32 h = image->size.y;
-		if (w == 0 || h == 0)
-		{
-			return TestResult::fail("Invalid screenshot size");
-		}
 
 		const u32 halfW = w / 2;
 		const u32 halfH = h / 2;
@@ -198,7 +195,6 @@ public:
 	}
 
 private:
-	bool m_ready = false;
 	std::unique_ptr<PrimitiveBatch> m_prim;
 };
 
@@ -262,17 +258,14 @@ public:
 			return TestResult::pass();
 		}
 
-		if (!image || image->pixels.empty())
+		const TestResult screenshotCheck = validateScreenshot(image);
+		if (!screenshotCheck.passed)
 		{
-			return TestResult::fail("Missing screenshot data");
+			return screenshotCheck;
 		}
 
 		const u32 w = image->size.x;
 		const u32 h = image->size.y;
-		if (w == 0 || h == 0)
-		{
-			return TestResult::fail("Invalid screenshot size");
-		}
 
 		const u32 insetX = w / 4;
 		const u32 insetY = h / 4;
@@ -328,7 +321,6 @@ public:
 	}
 
 private:
-	bool m_ready = false;
 	std::unique_ptr<PrimitiveBatch> m_prim;
 };
 

@@ -111,11 +111,7 @@ public:
 	{
 		if (!m_ready)
 		{
-			if (!m_loggedSkip && !m_skipReason.empty())
-			{
-				RUSH_LOG("[Test] SKIP: %s", m_skipReason.c_str());
-				m_loggedSkip = true;
-			}
+			logSkipOnce();
 			return;
 		}
 
@@ -170,10 +166,6 @@ public:
 	}
 
 private:
-	bool m_ready = false;
-	bool m_loggedSkip = false;
-	String m_skipReason;
-
 	GfxOwn<GfxComputeShader> m_computeShader;
 	GfxOwn<GfxBuffer> m_bufferA;
 	GfxOwn<GfxBuffer> m_bufferB;

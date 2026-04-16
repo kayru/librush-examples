@@ -46,35 +46,12 @@ public:
 
 	TestResult validate(GfxContext*, const TestImage*) override
 	{
-		// Ensure the buffer was created successfully.
 		if (!m_buffer.valid())
 		{
 			return TestResult::fail("Failed to create buffer");
 		}
 
-		// Map the buffer for CPU readback.
-		GfxMappedBuffer mapped = Gfx_MapBuffer(m_buffer);
-		if (!mapped.data || mapped.size < m_expected.size() * sizeof(u32))
-		{
-			Gfx_UnmapBuffer(mapped);
-			return TestResult::fail("Failed to map buffer for readback");
-		}
-
-		// Compare each element against the expected pattern.
-		const u32* data = reinterpret_cast<const u32*>(mapped.data);
-		for (size_t i = 0; i < m_expected.size(); ++i)
-		{
-			if (data[i] != m_expected[i])
-			{
-				Gfx_UnmapBuffer(mapped);
-				return TestResult::fail("Buffer mismatch at %zu: got 0x%08X expected 0x%08X",
-				    i, data[i], m_expected[i]);
-			}
-		}
-
-		// Unmap and return success.
-		Gfx_UnmapBuffer(mapped);
-		return TestResult::pass();
+		return validateBufferU32(m_buffer, m_expected.data(), m_expected.size());
 	}
 
 private:

@@ -15,6 +15,131 @@
 namespace Test
 {
 
+void GfxTestCase::logSkipOnce()
+{
+	if (!m_loggedSkip && !m_skipReason.empty())
+	{
+		RUSH_LOG("[Test] SKIP: %s", m_skipReason.c_str());
+		m_loggedSkip = true;
+	}
+}
+
+void GfxScreenshotTestCase::logSkipOnce()
+{
+	if (!m_loggedSkip && !m_skipReason.empty())
+	{
+		RUSH_LOG("[Test] SKIP: %s", m_skipReason.c_str());
+		m_loggedSkip = true;
+	}
+}
+
+TestResult validateScreenshot(const TestImage* image)
+{
+	if (!image || image->pixels.empty())
+	{
+		return TestResult::fail("Missing screenshot data");
+	}
+	if (image->size.x == 0 || image->size.y == 0)
+	{
+		return TestResult::fail("Invalid screenshot size");
+	}
+	return TestResult::pass();
+}
+
+TestResult validateBufferU32(GfxBufferArg buf, const u32* expected, size_t count, const char* valueFmt)
+{
+	Gfx_Finish();
+
+	const size_t expectedBytes = count * sizeof(u32);
+	GfxMappedBuffer mapped = Gfx_MapBuffer(buf);
+	if (!mapped.data || mapped.size < expectedBytes)
+	{
+		Gfx_UnmapBuffer(mapped);
+		return TestResult::fail("Failed to map buffer for readback");
+	}
+
+	const u32* data = reinterpret_cast<const u32*>(mapped.data);
+	for (size_t i = 0; i < count; ++i)
+	{
+		if (data[i] != expected[i])
+		{
+			// Build format string: "Mismatch at %zu: got <fmt> expected <fmt>"
+			char fmt[128];
+			std::snprintf(fmt, sizeof(fmt), "Mismatch at %%zu: got %s expected %s", valueFmt, valueFmt);
+			Gfx_UnmapBuffer(mapped);
+			return TestResult::fail(fmt, i, data[i], expected[i]);
+		}
+	}
+
+	Gfx_UnmapBuffer(mapped);
+	return TestResult::pass();
+}
+
+bool createSimpleTriangleScene(GfxContext* ctx, SimpleRTScene& scene,
+    GfxBufferFlags extraBufferFlags, String& outError)
+{
+	const Vec3 vertices[] = {
+		Vec3(-0.5f, -0.5f, 0.0f),
+		Vec3( 0.5f, -0.5f, 0.0f),
+		Vec3( 0.0f,  0.5f, 0.0f),
+	};
+	const u32 indices[] = { 0, 1, 2 };
+
+	const GfxBufferFlags bufferFlags = GfxBufferFlags::RayTracing | extraBufferFlags;
+
+	scene.vertexBuffer = Gfx_CreateBuffer(bufferFlags, GfxFormat::GfxFormat_RGB32_Float,
+		3, u32(sizeof(Vec3)), vertices);
+	scene.indexBuffer = Gfx_CreateBuffer(bufferFlags, GfxFormat::GfxFormat_R32_Uint,
+		3, 4, indices);
+
+	if (!scene.vertexBuffer.valid() || !scene.indexBuffer.valid())
+	{
+		outError = "Failed to create geometry buffers.";
+		return false;
+	}
+
+	GfxRayTracingGeometryDesc geometryDesc;
+	geometryDesc.indexBuffer  = scene.indexBuffer.get();
+	geometryDesc.indexFormat  = GfxFormat::GfxFormat_R32_Uint;
+	geometryDesc.indexCount   = 3;
+	geometryDesc.vertexBuffer = scene.vertexBuffer.get();
+	geometryDesc.vertexFormat = GfxFormat::GfxFormat_RGB32_Float;
+	geometryDesc.vertexStride = u32(sizeof(Vec3));
+	geometryDesc.vertexCount  = 3;
+	geometryDesc.isOpaque     = true;
+
+	GfxAccelerationStructureDesc blasDesc;
+	blasDesc.type          = GfxAccelerationStructureType::BottomLevel;
+	blasDesc.geometryCount = 1;
+	blasDesc.geometries    = &geometryDesc;
+	scene.blas = Gfx_CreateAccelerationStructure(blasDesc);
+
+	GfxAccelerationStructureDesc tlasDesc;
+	tlasDesc.type          = GfxAccelerationStructureType::TopLevel;
+	tlasDesc.instanceCount = 1;
+	scene.tlas = Gfx_CreateAccelerationStructure(tlasDesc);
+
+	if (!scene.blas.valid() || !scene.tlas.valid())
+	{
+		outError = "Failed to create acceleration structures.";
+		return false;
+	}
+
+	GfxOwn<GfxBuffer> instanceBuffer = Gfx_CreateBuffer(GfxBufferFlags::Transient | GfxBufferFlags::RayTracing);
+	auto instanceData = Gfx_BeginUpdateBuffer<GfxRayTracingInstanceDesc>(ctx, instanceBuffer.get(), 1);
+	instanceData[0].init();
+	instanceData[0].accelerationStructureHandle = Gfx_GetAccelerationStructureHandle(scene.blas);
+	Gfx_EndUpdateBuffer(ctx, instanceBuffer);
+
+	Gfx_BuildAccelerationStructure(ctx, scene.blas);
+	Gfx_AddFullPipelineBarrier(ctx);
+
+	Gfx_BuildAccelerationStructure(ctx, scene.tlas, instanceBuffer);
+	Gfx_AddFullPipelineBarrier(ctx);
+
+	return true;
+}
+
 String deriveTestName(const char* typeName)
 {
 	// Strip common suffixes like "Test" or "TestCase" from a C++ type name.

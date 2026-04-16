@@ -20,19 +20,12 @@ public:
 
 	TestResult validate(GfxContext*, const TestImage* image) override
 	{
-		// Ensure a screenshot was captured.
-		if (!image || image->pixels.empty())
+		const TestResult screenshotCheck = validateScreenshot(image);
+		if (!screenshotCheck.passed)
 		{
-			return TestResult::fail("Missing screenshot data");
+			return screenshotCheck;
 		}
 
-		// Validate dimensions for a usable center pixel.
-		if (image->size.x == 0 || image->size.y == 0)
-		{
-			return TestResult::fail("Invalid screenshot size");
-		}
-
-		// Sample the center pixel.
 		const u32 centerX = image->size.x / 2;
 		const u32 centerY = image->size.y / 2;
 		const u32 index   = centerY * image->size.x + centerX;

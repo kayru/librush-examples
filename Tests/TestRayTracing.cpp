@@ -105,15 +105,7 @@ public:
 	{
 		if (!m_ready)
 		{
-			if (m_loggedSkip && !m_skipReason.empty())
-			{
-				return;
-			}
-			if (!m_skipReason.empty())
-			{
-				RUSH_LOG("[Test] SKIP: %s", m_skipReason.c_str());
-				m_loggedSkip = true;
-			}
+			logSkipOnce();
 			return;
 		}
 
@@ -134,40 +126,10 @@ public:
 			return TestResult::pass();
 		}
 
-		Gfx_Finish();
-
-		GfxMappedBuffer mapped = Gfx_MapBuffer(m_outputBuffer);
-		if (!mapped.data || mapped.size < sizeof(m_expected))
-		{
-			Gfx_UnmapBuffer(mapped);
-			return TestResult::fail("Failed to map output buffer for readback");
-		}
-
-		const u32* data = reinterpret_cast<const u32*>(mapped.data);
-		const size_t expectedCount = sizeof(m_expected) / sizeof(m_expected[0]);
-		for (size_t i = 0; i < expectedCount; ++i)
-		{
-			if (data[i] != m_expected[i])
-			{
-				Gfx_UnmapBuffer(mapped);
-				return TestResult::fail("Output mismatch at %zu: got 0x%08X expected 0x%08X",
-				    i, data[i], m_expected[i]);
-			}
-		}
-
-		Gfx_UnmapBuffer(mapped);
-		return TestResult::pass();
+		return validateBufferU32(m_outputBuffer, m_expected, 4);
 	}
 
 private:
-	static u32 packColor(const ColorRGBA8& color)
-	{
-		return static_cast<u32>(color);
-	}
-
-	bool m_ready = false;
-	bool m_loggedSkip = false;
-	String m_skipReason;
 
 	GfxOwn<GfxComputeShader> m_computeShader;
 	GfxOwn<GfxSampler>       m_samplerNearest;
