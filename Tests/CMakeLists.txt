@@ -9,7 +9,6 @@ rush_add_app(Tests
 		TestArray.cpp
 		TestRayTracing.cpp
 		TestRayTracing.hlsl
-		TestRayTracing.metal
 		TestRayTracingPipeline.cpp
 		TestRayTracingPipeline.rgen
 		TestRayTracingPipeline.rmiss
@@ -27,13 +26,13 @@ rush_add_app(Tests
 		TestViewportScissor.cpp
 )
 
+rush_shader_hlsl(TestRayTracing.hlsl cs_6_5)
+
 if(APPLE AND DEFINED RUSH_RENDER_API AND RUSH_RENDER_API STREQUAL "MTL")
-	rush_shader_metal(TestRayTracing.metal)
 	rush_shader_metal(TestRayTracingPipeline.metal)
 	rush_shader_metal(TestRayTracingMaterialIndex.metal)
 	rush_shader_metal(TestRayTracingMaterialBinding.metal)
 else()
-	rush_shader_hlsl(TestRayTracing.hlsl cs_6_0)
 	rush_shader_rt(TestRayTracingPipeline.rgen)
 	rush_shader_rt(TestRayTracingPipeline.rmiss)
 	rush_shader_rt(TestRayTracingPipeline.rchit)
