@@ -24,6 +24,7 @@ rush_add_app(Tests
 		TestIndexBufferOffset.cpp
 		TestIndexBufferOffsetVS.hlsl
 		TestIndexBufferOffsetPS.hlsl
+		TestViewportScissor.cpp
 )
 
 if(APPLE AND DEFINED RUSH_RENDER_API AND RUSH_RENDER_API STREQUAL "MTL")
