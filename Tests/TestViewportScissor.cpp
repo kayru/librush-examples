@@ -29,20 +29,62 @@ TestResult checkPixel(const TestImage* image, u32 x, u32 y, ColorRGBA8 expected,
 
 	if (!rOk || !gOk || !bOk)
 	{
-		return TestResult::fail("%s: got (%u,%u,%u) expected (%u,%u,%u)",
-		    name, actual.r, actual.g, actual.b,
+		return TestResult::fail("%s at (%u,%u): got (%u,%u,%u) expected (%u,%u,%u)",
+		    name, x, y, actual.r, actual.g, actual.b,
 		    expected.r, expected.g, expected.b);
 	}
 
 	return TestResult::pass();
 }
 
+// Draw an isoceles triangle that fills the viewport:
+// base spans the full bottom edge, apex touches the top center.
+void drawViewportTriangle(PrimitiveBatch& prim, float w, float h, ColorRGBA8 color)
+{
+	prim.begin2D(w, h);
+	prim.drawTriangle(
+	    Vec2(w * 0.5f, 0.0f), // top center
+	    Vec2(0.0f, h),         // bottom-left
+	    Vec2(w, h),            // bottom-right
+	    color);
+	prim.end2D();
+}
+
+struct PixelCheck
+{
+	u32 x;
+	u32 y;
+	ColorRGBA8 expected;
+	const char* name;
+};
+
+TestResult runPixelChecks(const TestImage* image, const PixelCheck* checks, size_t count)
+{
+	const u32 w = image->size.x;
+	const u32 h = image->size.y;
+
+	for (size_t i = 0; i < count; ++i)
+	{
+		const auto& check = checks[i];
+		if (check.x >= w || check.y >= h)
+		{
+			continue;
+		}
+		const TestResult result = checkPixel(image, check.x, check.y, check.expected, check.name);
+		if (!result.passed)
+		{
+			return result;
+		}
+	}
+	return TestResult::pass();
+}
+
 } // namespace
 
-// Validates that Gfx_SetViewport correctly constrains rendering to
-// non-trivial sub-regions of the backbuffer. Draws a full-screen rect
-// into four different viewports (one per quadrant) with distinct colors
-// using PrimitiveBatch, then verifies pixel colors inside and outside each region.
+// Draws a triangle into four quadrant viewports with distinct colors,
+// then verifies pixel colors inside and outside each region.
+// The triangle shape (vs a flat rect) tests that the viewport transform
+// is applied correctly to non-trivial geometry.
 class ViewportTest final : public GfxScreenshotTestCase
 {
 public:
@@ -114,11 +156,7 @@ public:
 		{
 			Gfx_SetViewport(ctx, draw.viewport);
 			Gfx_SetScissorRect(ctx, draw.scissor);
-
-			// begin2D with the viewport dimensions so the rect fills the entire viewport
-			m_prim->begin2D(draw.viewport.w, draw.viewport.h);
-			m_prim->drawRect(Box2(0.0f, 0.0f, draw.viewport.w, draw.viewport.h), draw.color);
-			m_prim->end2D();
+			drawViewportTriangle(*m_prim, draw.viewport.w, draw.viewport.h, draw.color);
 		}
 
 		Gfx_EndPass(ctx);
@@ -139,59 +177,43 @@ public:
 
 		const u32 w = image->size.x;
 		const u32 h = image->size.y;
-
 		const u32 halfW = w / 2;
 		const u32 halfH = h / 2;
-
-		struct QuadrantCheck
-		{
-			u32 x;
-			u32 y;
-			ColorRGBA8 expected;
-			const char* name;
-		};
-
-		// Sample center of each quadrant
-		const QuadrantCheck checks[] = {
-			{ halfW / 2,          halfH / 2,          ColorRGBA8(255, 0,   0),   "top-left (red)"       },
-			{ halfW + halfW / 2,  halfH / 2,          ColorRGBA8(0,   255, 0),   "top-right (green)"    },
-			{ halfW / 2,          halfH + halfH / 2,  ColorRGBA8(0,   0,   255), "bottom-left (blue)"   },
-			{ halfW + halfW / 2,  halfH + halfH / 2,  ColorRGBA8(255, 255, 0),   "bottom-right (yellow)"},
-		};
-
-		for (const auto& check : checks)
-		{
-			const TestResult result = checkPixel(image, check.x, check.y, check.expected, check.name);
-			if (!result.passed)
-			{
-				return result;
-			}
-		}
-
-		// Verify boundary: pixels just inside each quadrant edge to confirm viewports don't bleed
 		const u32 margin = 4;
-		const QuadrantCheck boundaryChecks[] = {
-			{ halfW - margin,     halfH - margin,     ColorRGBA8(255, 0,   0),   "top-left inner edge"      },
-			{ halfW + margin,     halfH - margin,     ColorRGBA8(0,   255, 0),   "top-right inner edge"     },
-			{ halfW - margin,     halfH + margin,     ColorRGBA8(0,   0,   255), "bottom-left inner edge"   },
-			{ halfW + margin,     halfH + margin,     ColorRGBA8(255, 255, 0),   "bottom-right inner edge"  },
+
+		const ColorRGBA8 red(255, 0, 0);
+		const ColorRGBA8 green(0, 255, 0);
+		const ColorRGBA8 blue(0, 0, 255);
+		const ColorRGBA8 yellow(255, 255, 0);
+		const ColorRGBA8 black(0, 0, 0);
+
+		const PixelCheck checks[] = {
+			// Triangle apex: top-center of each quadrant viewport
+			{ halfW / 2,         margin,              red,    "TL apex"         },
+			{ halfW + halfW / 2, margin,              green,  "TR apex"         },
+			{ halfW / 2,         halfH + margin,      blue,   "BL apex"         },
+			{ halfW + halfW / 2, halfH + margin,      yellow, "BR apex"         },
+
+			// Triangle base: bottom-center of each quadrant viewport
+			{ halfW / 2,         halfH - margin,      red,    "TL base center"  },
+			{ halfW + halfW / 2, halfH - margin,      green,  "TR base center"  },
+			{ halfW / 2,         h - margin,           blue,   "BL base center"  },
+			{ halfW + halfW / 2, h - margin,           yellow, "BR base center"  },
+
+			// Bottom corners of each quadrant: should be colored (triangle base spans full width)
+			{ margin,            halfH - margin,      red,    "TL bottom-left"  },
+			{ halfW - margin,    halfH - margin,      red,    "TL bottom-right" },
+			{ halfW + margin,    halfH - margin,      green,  "TR bottom-left"  },
+			{ w - margin,        halfH - margin,      green,  "TR bottom-right" },
+
+			// Top corners of each quadrant: should be clear (outside triangle)
+			{ margin,            margin,              black,  "TL top-left corner"  },
+			{ halfW - margin,    margin,              black,  "TL top-right corner" },
+			{ halfW + margin,    margin,              black,  "TR top-left corner"  },
+			{ w - margin,        margin,              black,  "TR top-right corner" },
 		};
 
-		for (const auto& check : boundaryChecks)
-		{
-			if (check.x >= w || check.y >= h)
-			{
-				continue;
-			}
-
-			const TestResult result = checkPixel(image, check.x, check.y, check.expected, check.name);
-			if (!result.passed)
-			{
-				return result;
-			}
-		}
-
-		return TestResult::pass();
+		return runPixelChecks(image, checks, sizeof(checks) / sizeof(checks[0]));
 	}
 
 private:
@@ -199,12 +221,121 @@ private:
 };
 
 RUSH_REGISTER_TEST(ViewportTest, "gfx",
-    "Validates non-trivial viewports by drawing into four quadrants with distinct colors.");
+    "Validates quadrant viewports with triangle geometry.");
+
+// Validates a viewport centered in the screen with non-trivial offsets
+// from all edges of the render target. Renders a triangle into the
+// centered viewport and checks that geometry is confined to it.
+class ViewportOffsetTest final : public GfxScreenshotTestCase
+{
+public:
+	explicit ViewportOffsetTest(GfxContext* ctx)
+	{
+		if (!ctx)
+		{
+			return;
+		}
+
+		m_prim = std::make_unique<PrimitiveBatch>();
+		m_ready = true;
+	}
+
+	void render(GfxContext* ctx) override
+	{
+		if (!m_ready)
+		{
+			return;
+		}
+
+		const Tuple2i fbSize = Platform_GetWindow()->getFramebufferSize();
+		const float fullW = static_cast<float>(fbSize.x);
+		const float fullH = static_cast<float>(fbSize.y);
+
+		// Viewport inset by 1/4 on each side
+		const float insetX = fullW / 4.0f;
+		const float insetY = fullH / 4.0f;
+		const float vpW = fullW - 2.0f * insetX;
+		const float vpH = fullH - 2.0f * insetY;
+
+		GfxPassDesc passDesc;
+		passDesc.flags = GfxPassFlags::ClearAll;
+		passDesc.clearColors[0] = ColorRGBA8(0, 0, 0, 255);
+
+		Gfx_BeginPass(ctx, passDesc);
+
+		Gfx_SetViewport(ctx, GfxViewport(insetX, insetY, vpW, vpH));
+		Gfx_SetScissorRect(ctx, GfxRect{
+		    static_cast<int>(insetX), static_cast<int>(insetY),
+		    static_cast<int>(insetX + vpW), static_cast<int>(insetY + vpH)});
+		drawViewportTriangle(*m_prim, vpW, vpH, ColorRGBA8(0, 255, 0));
+
+		Gfx_EndPass(ctx);
+	}
+
+	TestResult validate(GfxContext*, const TestImage* image) override
+	{
+		if (!m_ready)
+		{
+			return TestResult::pass();
+		}
+
+		const TestResult screenshotCheck = validateScreenshot(image);
+		if (!screenshotCheck.passed)
+		{
+			return screenshotCheck;
+		}
+
+		const u32 w = image->size.x;
+		const u32 h = image->size.y;
+		const u32 insetX = w / 4;
+		const u32 insetY = h / 4;
+		const u32 margin = 4;
+
+		const ColorRGBA8 green(0, 255, 0);
+		const ColorRGBA8 black(0, 0, 0);
+
+		// Viewport spans [insetX .. w-insetX] x [insetY .. h-insetY]
+		const u32 vpCenterX = w / 2;
+
+		const PixelCheck checks[] = {
+			// Triangle apex: top-center of viewport
+			{ vpCenterX,             insetY + margin,     green, "apex"              },
+			// Triangle base: bottom of viewport
+			{ vpCenterX,             h - insetY - margin, green, "base center"       },
+			{ insetX + margin,       h - insetY - margin, green, "base left"         },
+			{ w - insetX - margin,   h - insetY - margin, green, "base right"        },
+
+			// Top corners of viewport: should be clear (outside triangle)
+			{ insetX + margin,       insetY + margin,     black, "vp top-left"       },
+			{ w - insetX - margin,   insetY + margin,     black, "vp top-right"      },
+
+			// Outside viewport: corners of the render target
+			{ margin,                margin,              black, "rt top-left"        },
+			{ w - margin,            margin,              black, "rt top-right"       },
+			{ margin,                h - margin,           black, "rt bottom-left"    },
+			{ w - margin,            h - margin,           black, "rt bottom-right"   },
+
+			// Just outside viewport edges
+			{ vpCenterX,             insetY - margin,     black, "above viewport"    },
+			{ vpCenterX,             h - insetY + margin, black, "below viewport"    },
+			{ insetX - margin,       h / 2,               black, "left of viewport"  },
+			{ w - insetX + margin,   h / 2,               black, "right of viewport" },
+		};
+
+		return runPixelChecks(image, checks, sizeof(checks) / sizeof(checks[0]));
+	}
+
+private:
+	std::unique_ptr<PrimitiveBatch> m_prim;
+};
+
+RUSH_REGISTER_TEST(ViewportOffsetTest, "gfx",
+    "Validates a centered viewport with non-trivial offsets from all edges.");
 
 // Validates that Gfx_SetScissorRect correctly clips rendering.
-// Draws a full-backbuffer green rect with a scissor restricting output to an
-// inner rectangle, then verifies that pixels outside the scissor remain the
-// clear color while pixels inside are green.
+// Draws a full-backbuffer triangle with a scissor restricting output to a
+// centered rectangle, then verifies that pixels outside the scissor remain
+// the clear color while pixels inside show the triangle.
 class ScissorTest final : public GfxScreenshotTestCase
 {
 public:
@@ -230,7 +361,7 @@ public:
 		const float fullW = static_cast<float>(fbSize.x);
 		const float fullH = static_cast<float>(fbSize.y);
 
-		// Scissor inset by 1/4 on each side, producing a centered rectangle
+		// Scissor inset by 1/4 on each side
 		const int insetX = fbSize.x / 4;
 		const int insetY = fbSize.y / 4;
 
@@ -240,13 +371,9 @@ public:
 
 		Gfx_BeginPass(ctx, passDesc);
 
-		// Full-backbuffer viewport, but scissor clips to the center half
 		Gfx_SetViewport(ctx, GfxViewport(0.0f, 0.0f, fullW, fullH));
 		Gfx_SetScissorRect(ctx, GfxRect{insetX, insetY, fbSize.x - insetX, fbSize.y - insetY});
-
-		m_prim->begin2D(fullW, fullH);
-		m_prim->drawRect(Box2(0.0f, 0.0f, fullW, fullH), ColorRGBA8(0, 255, 0));
-		m_prim->end2D();
+		drawViewportTriangle(*m_prim, fullW, fullH, ColorRGBA8(0, 255, 0));
 
 		Gfx_EndPass(ctx);
 	}
@@ -266,7 +393,6 @@ public:
 
 		const u32 w = image->size.x;
 		const u32 h = image->size.y;
-
 		const u32 insetX = w / 4;
 		const u32 insetY = h / 4;
 		const u32 margin = 4;
@@ -274,21 +400,22 @@ public:
 		const ColorRGBA8 green(0, 255, 0);
 		const ColorRGBA8 black(0, 0, 0);
 
-		struct PixelCheck
-		{
-			u32 x;
-			u32 y;
-			ColorRGBA8 expected;
-			const char* name;
-		};
-
 		const PixelCheck checks[] = {
-			// Inside scissor (center of the backbuffer)
+			// Center of the scissor region: triangle covers this
 			{ w / 2,                   h / 2,                   green, "center"                  },
-			{ insetX + margin,         insetY + margin,         green, "scissor top-left inside"  },
-			{ w - insetX - margin - 1, insetY + margin,         green, "scissor top-right inside" },
+
+			// Bottom of scissor: triangle base spans full width here
 			{ insetX + margin,         h - insetY - margin - 1, green, "scissor bot-left inside"  },
 			{ w - insetX - margin - 1, h - insetY - margin - 1, green, "scissor bot-right inside" },
+
+			// Top of scissor: triangle apex is at top-center of the full viewport,
+			// which is above the scissor, so the triangle is narrow here.
+			// The center column should still be colored.
+			{ w / 2,                   insetY + margin,         green, "scissor top-center inside"},
+
+			// Top corners of scissor: triangle doesn't reach here (apex is narrow)
+			{ insetX + margin,         insetY + margin,         black, "scissor top-left inside"  },
+			{ w - insetX - margin - 1, insetY + margin,         black, "scissor top-right inside" },
 
 			// Outside scissor (corners of the backbuffer)
 			{ margin,                  margin,                  black, "top-left corner outside"     },
@@ -303,21 +430,7 @@ public:
 			{ w / 2,                   h - insetY + margin,     black, "below scissor"    },
 		};
 
-		for (const auto& check : checks)
-		{
-			if (check.x >= w || check.y >= h)
-			{
-				continue;
-			}
-
-			const TestResult result = checkPixel(image, check.x, check.y, check.expected, check.name);
-			if (!result.passed)
-			{
-				return result;
-			}
-		}
-
-		return TestResult::pass();
+		return runPixelChecks(image, checks, sizeof(checks) / sizeof(checks[0]));
 	}
 
 private:
@@ -325,4 +438,4 @@ private:
 };
 
 RUSH_REGISTER_TEST(ScissorTest, "gfx",
-    "Validates scissor rect clips rendering to a centered sub-region.");
+    "Validates scissor rect clips triangle rendering to a centered sub-region.");
