@@ -4,7 +4,7 @@ RWStructuredBuffer<uint> outputBuffer : register(u1, space0);
 RaytracingAccelerationStructure TLAS : register(t2, space0);
 
 // Set 1: material texture array
-Texture2D textureArray[4] : register(t0, space1);
+Texture2D textureArray[] : register(t0, space1);
 
 uint packColor(float4 color)
 {

@@ -26,7 +26,8 @@ rush_add_app(Tests
 		TestViewportScissor.cpp
 )
 
-rush_shader_hlsl(TestRayTracing.hlsl cs_6_5)
+rush_shader_hlsl(TestRayTracing.hlsl cs_6_5
+	SPIRV_CROSS_ARGS --msl-argument-buffer-tier 1 --msl-device-argument-buffer 1)
 
 if(APPLE AND DEFINED RUSH_RENDER_API AND RUSH_RENDER_API STREQUAL "MTL")
 	rush_shader_metal(TestRayTracingPipeline.metal)
