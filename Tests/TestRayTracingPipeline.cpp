@@ -153,9 +153,9 @@ private:
 		const u32 indices[] = { 0, 1, 2 };
 
 		m_vertexBuffer = Gfx_CreateBuffer(GfxBufferFlags::RayTracing | GfxBufferFlags::Storage,
-			GfxFormat::GfxFormat_RGB32_Float, 3, u32(sizeof(Vec3)), vertices);
+			3, u32(sizeof(Vec3)), vertices);
 		m_indexBuffer = Gfx_CreateBuffer(GfxBufferFlags::RayTracing | GfxBufferFlags::Storage,
-			GfxFormat::GfxFormat_R32_Uint, 3, 4, indices);
+			3, 4, indices);
 
 		if (!m_vertexBuffer.valid() || !m_indexBuffer.valid())
 		{
