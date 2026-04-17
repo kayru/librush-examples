@@ -170,12 +170,9 @@ static DynamicArray<TestEntry>& registryStorage()
 	return entries;
 }
 
-void TestRegistry::add(TestFactory factory, const char* category)
+void TestRegistry::add(TestEntry entry)
 {
-	TestEntry entry;
-	entry.factory = factory;
-	entry.category = category;
-	registryStorage().push_back(entry);
+	registryStorage().push_back(std::move(entry));
 }
 
 const DynamicArray<TestEntry>& TestRegistry::all()
@@ -240,8 +237,6 @@ static bool matchesPattern(const char* pattern, const char* value)
 
 TestRunner::TestRunner(GfxContext* ctx, int argc, char** argv)
 {
-	m_initContext = ctx;
-
 	if (ctx)
 	{
 		GfxTextureDesc texDesc = GfxTextureDesc::make2D(
@@ -300,16 +295,19 @@ void TestRunner::updateInternal(GfxContext* ctx)
 		beginNextTest(ctx);
 		break;
 	case State::Render:
-		if (m_currentConfig.requiresGraphics)
+	{
+		const TestConfig& cfg = currentEntry().config;
+		if (cfg.requiresGraphics)
 		{
 			renderCurrent(ctx);
-			if (m_currentConfig.captureScreenshot)
+			if (cfg.captureScreenshot)
 			{
 				readbackOffscreenTarget(ctx);
 			}
 		}
 		m_state = State::Validate;
 		break;
+	}
 	case State::Validate:
 		finishCurrent(ctx);
 		break;
@@ -332,19 +330,18 @@ void TestRunner::beginNextTest(GfxContext* ctx)
 	const bool canRender = ctx != nullptr;
 	while (m_testIndex < m_selectedTests.size())
 	{
-		m_current.reset(m_selectedTests[m_testIndex++].factory(ctx));
-		m_currentConfig = m_current->config();
-		m_screenshot    = TestImage{};
+		const TestEntry& entry = m_selectedTests[m_testIndex++];
+		m_screenshot           = TestImage{};
 
-		if ((m_forceNoGraphics || !canRender) && m_currentConfig.requiresGraphics)
+		if ((m_forceNoGraphics || !canRender) && entry.config.requiresGraphics)
 		{
-			RUSH_LOG("[Test] SKIP: %s (graphics unavailable)", m_current->name());
-			m_current.reset();
+			RUSH_LOG("[Test] SKIP: %s (graphics unavailable)", entry.name.c_str());
 			++m_skippedCount;
 			continue;
 		}
 
-		RUSH_LOG("[Test] Begin: %s", m_current->name());
+		m_current.reset(entry.factory(ctx));
+		RUSH_LOG("[Test] Begin: %s", entry.name.c_str());
 		m_testStart = Clock::now();
 		m_state = State::Render;
 		return;
@@ -355,7 +352,8 @@ void TestRunner::beginNextTest(GfxContext* ctx)
 
 void TestRunner::renderCurrent(GfxContext* ctx)
 {
-	if (!m_currentConfig.requiresGraphics)
+	const TestEntry& entry = currentEntry();
+	if (!entry.config.requiresGraphics)
 	{
 		return;
 	}
@@ -365,20 +363,21 @@ void TestRunner::renderCurrent(GfxContext* ctx)
 
 void TestRunner::finishCurrent(GfxContext* ctx)
 {
-	const TestImage* imagePtr = m_currentConfig.captureScreenshot ? &m_screenshot : nullptr;
+	const TestEntry& entry    = currentEntry();
+	const TestImage* imagePtr = entry.config.captureScreenshot ? &m_screenshot : nullptr;
 	TestResult result         = m_current->validate(ctx, imagePtr);
-	const double elapsed = elapsedMs(m_testStart, Clock::now());
-	result.executionMs = elapsed;
+	const double elapsed      = elapsedMs(m_testStart, Clock::now());
+	result.executionMs        = elapsed;
 
 	if (!result.passed)
 	{
 		m_anyFailed = true;
-		RUSH_LOG_ERROR("[Test] FAIL: %s (%.2f ms) - %s", m_current->name(), result.executionMs,
+		RUSH_LOG_ERROR("[Test] FAIL: %s (%.2f ms) - %s", entry.name.c_str(), result.executionMs,
 		    result.message.length() == 0 ? "no message" : result.message.c_str());
 	}
 	else
 	{
-		RUSH_LOG("[Test] PASS: %s (%.2f ms)", m_current->name(), result.executionMs);
+		RUSH_LOG("[Test] PASS: %s (%.2f ms)", entry.name.c_str(), result.executionMs);
 	}
 
 	m_current.reset();
@@ -494,20 +493,12 @@ void TestRunner::configureFromArgs(int argc, char** argv)
 
 	for (const auto& entry : TestRegistry::all())
 	{
-		std::unique_ptr<TestCase> instance(entry.factory(m_initContext));
-		if (!instance)
+		if (m_forceNoGraphics && entry.config.requiresGraphics)
 		{
 			continue;
 		}
 
-		const char* name = instance->name();
-		const TestConfig config = instance->config();
-		if (m_forceNoGraphics && config.requiresGraphics)
-		{
-			continue;
-		}
-
-		if (shouldRunTest(entry, name))
+		if (shouldRunTest(entry))
 		{
 			m_selectedTests.push_back(entry);
 		}
@@ -557,15 +548,10 @@ void TestRunner::listTests() const
 {
 	for (const auto& entry : TestRegistry::all())
 	{
-		std::unique_ptr<TestCase> instance(entry.factory(m_initContext));
-		if (!instance)
-		{
-			continue;
-		}
 		RUSH_LOG("%s [%s] - %s",
-		    instance->name(),
+		    entry.name.c_str(),
 		    entry.category ? entry.category : "uncategorized",
-		    instance->description());
+		    entry.description ? entry.description : "");
 	}
 }
 
@@ -596,7 +582,7 @@ void TestRunner::listCategories() const
 	}
 }
 
-bool TestRunner::shouldRunTest(const TestEntry& entry, const char* testName) const
+bool TestRunner::shouldRunTest(const TestEntry& entry) const
 {
 	const char* category = entry.category ? entry.category : "uncategorized";
 
@@ -605,7 +591,7 @@ bool TestRunner::shouldRunTest(const TestEntry& entry, const char* testName) con
 		bool matched = false;
 		for (const auto& pattern : m_testPatterns)
 		{
-			if (matchesPattern(pattern.c_str(), testName))
+			if (matchesPattern(pattern.c_str(), entry.name.c_str()))
 			{
 				matched = true;
 				break;

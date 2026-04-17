@@ -12,6 +12,7 @@
 #include <cstring>
 #include <memory>
 #include <type_traits>
+#include <utility>
 
 namespace Rush
 {
@@ -54,26 +55,16 @@ struct TestResult
 	static TestResult fail(const char* format, ...);
 };
 
-// Base class for tests; implement name/description and validate at minimum.
+// Base class for tests; metadata (name, description, category, config)
+// is owned by the registry and passed alongside the factory, not stored
+// on the instance. Instances are only constructed when a test is about
+// to run.
 class TestCase
 {
 public:
 	virtual ~TestCase() = default;
-	virtual const char* name() const { return m_name.length() ? m_name.c_str() : "UnnamedTest"; }
-	virtual const char* description() const { return m_description.length() ? m_description.c_str() : ""; }
-	virtual TestConfig  config() const { return {}; }
-	virtual void        render(GfxContext*, GfxTexture renderTarget) {}
-	virtual TestResult  validate(GfxContext*, const TestImage* image) = 0;
-
-	void setMetadata(const char* name, const char* description)
-	{
-		m_name = name ? name : "";
-		m_description = description ? description : "";
-	}
-
-private:
-	String m_name;
-	String m_description;
+	virtual void       render(GfxContext*, GfxTexture renderTarget) {}
+	virtual TestResult validate(GfxContext*, const TestImage* image) = 0;
 };
 
 // GPU test with no screenshot capture by default.
@@ -82,13 +73,7 @@ private:
 class GfxTestCase : public TestCase
 {
 public:
-	TestConfig config() const override
-	{
-		TestConfig cfg;
-		cfg.requiresGraphics = true;
-		cfg.captureScreenshot = false;
-		return cfg;
-	}
+	static constexpr TestConfig kConfig = {/*captureScreenshot*/ false, /*requiresGraphics*/ true};
 
 protected:
 	bool m_ready = false;
@@ -107,13 +92,7 @@ private:
 class GfxScreenshotTestCase : public TestCase
 {
 public:
-	TestConfig config() const override
-	{
-		TestConfig cfg;
-		cfg.requiresGraphics = true;
-		cfg.captureScreenshot = true;
-		return cfg;
-	}
+	static constexpr TestConfig kConfig = {/*captureScreenshot*/ true, /*requiresGraphics*/ true};
 
 protected:
 	bool m_ready = false;
@@ -131,13 +110,7 @@ private:
 class CpuTestCase : public TestCase
 {
 public:
-	TestConfig config() const override
-	{
-		TestConfig cfg;
-		cfg.captureScreenshot = false;
-		cfg.requiresGraphics = false;
-		return cfg;
-	}
+	static constexpr TestConfig kConfig = {/*captureScreenshot*/ false, /*requiresGraphics*/ false};
 };
 
 // Validate that a screenshot image is present and has non-zero dimensions.
@@ -187,40 +160,50 @@ TestType* CreateTestInstance(GfxContext* ctx)
 
 String deriveTestName(const char* typeName);
 
-// Registry entry with factory and optional category tag.
+// Registry entry: metadata known at registration time plus a factory invoked
+// only when the test actually runs. Keeping name/description/category/config
+// static avoids constructing test instances just to query their identity.
 struct TestEntry
 {
-	TestFactory factory = nullptr;
-	const char* category = nullptr;
+	TestFactory factory     = nullptr;
+	String      name;
+	const char* description = "";
+	const char* category    = nullptr;
+	TestConfig  config;
 };
 
 // Global test registry.
 class TestRegistry
 {
 public:
-	static void add(TestFactory factory, const char* category);
+	static void add(TestEntry entry);
 	static const DynamicArray<TestEntry>& all();
 };
 
-// Registers a test factory with the global registry.
+// Registers a test with the global registry. Name is derived from the type
+// name (stripping Test/TestCase suffix). Config is taken from the test's base
+// class via TestType::kConfig, so no instance is constructed here.
 #define RUSH_REGISTER_TEST(TestType, Category, DescriptionLiteral)                           \
 	namespace                                                                                 \
 	{                                                                                         \
 	TestCase* Create##TestType(::Rush::GfxContext* ctx)                                       \
 	{                                                                                         \
-		TestCase* instance = ::Test::CreateTestInstance<TestType>(ctx);                       \
-		if (instance)                                                                         \
-		{                                                                                     \
-			auto name = ::Test::deriveTestName(#TestType);                                    \
-			instance->setMetadata(name.c_str(), DescriptionLiteral);                          \
-		}                                                                                     \
-		return instance;                                                                      \
+		return ::Test::CreateTestInstance<TestType>(ctx);                                     \
 	}                                                                                         \
-	struct TestType##Registrar                                                              \
-	{                                                                                        \
-		TestType##Registrar() { ::Test::TestRegistry::add(&Create##TestType, Category); }     \
-	};                                                                                       \
-	static TestType##Registrar s_##TestType##Registrar;                                     \
+	struct TestType##Registrar                                                                \
+	{                                                                                         \
+		TestType##Registrar()                                                                 \
+		{                                                                                     \
+			::Test::TestEntry entry;                                                          \
+			entry.factory     = &Create##TestType;                                            \
+			entry.name        = ::Test::deriveTestName(#TestType);                            \
+			entry.description = DescriptionLiteral;                                           \
+			entry.category    = Category;                                                     \
+			entry.config      = TestType::kConfig;                                            \
+			::Test::TestRegistry::add(std::move(entry));                                      \
+		}                                                                                     \
+	};                                                                                        \
+	static TestType##Registrar s_##TestType##Registrar;                                       \
 	}
 
 // Drives test execution and optional filtering.
@@ -254,9 +237,11 @@ private:
 	void configureFromArgs(int argc, char** argv);
 	void listTests() const;
 	void listCategories() const;
-	bool shouldRunTest(const TestEntry& entry, const char* testName) const;
+	bool shouldRunTest(const TestEntry& entry) const;
 	void printSummaryAndExit();
 	static double elapsedMs(TimePoint start, TimePoint end);
+
+	const TestEntry& currentEntry() const { return m_selectedTests[m_testIndex - 1]; }
 
 	State                     m_state = State::Init;
 	bool                      m_anyFailed = false;
@@ -264,13 +249,11 @@ private:
 	size_t                    m_testIndex = 0;
 	size_t                    m_skippedCount = 0;
 	std::unique_ptr<TestCase> m_current;
-	TestConfig                m_currentConfig;
 	TestImage                 m_screenshot;
 	DynamicArray<TestEntry>   m_selectedTests;
 	DynamicArray<String>      m_testPatterns;
 	DynamicArray<String>      m_categoryPatterns;
 	bool                      m_forceNoGraphics = false;
-	GfxContext*               m_initContext = nullptr;
 	TimePoint                 m_runStart;
 	TimePoint                 m_testStart;
 	int                       m_exitCode = 0;
