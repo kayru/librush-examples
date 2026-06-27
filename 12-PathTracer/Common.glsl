@@ -8,6 +8,7 @@
 #define PT_FLAG_DEBUG_SIMPLE_SHADING    (1 << 4)
 #define PT_FLAG_DEBUG_DISABLE_ACCUMULATION (1 << 5)
 #define PT_FLAG_DEBUG_HIT_MASK          (1 << 6)
+#define PT_FLAG_DEBUG_FOCAL_PLANE       (1 << 7)
 
 #define PT_DEBUG_VIS_NONE               0u
 #define PT_DEBUG_VIS_ALBEDO             1u
@@ -69,6 +70,8 @@ uniform SceneConstants
 	float focusDistance;
 	float apertureSize;
 	uint debugVisMode;
+
+	float focalPlaneFalloffPx;
 };
 
 layout(set=0, binding=1)
@@ -374,6 +377,20 @@ float balanceHeuristic(float f, float g)
 float powerHeuristic(float f, float g)
 {
 	return pow2(f) / (pow2(f) + pow2(g));
+}
+
+// Focus-assist overlay opacity: 1 in focus, fading as the circle of confusion grows.
+// hitDepth is the perpendicular distance from camera to the primary hit.
+float focalPlaneOverlay(float hitDepth)
+{
+	if (focusDistance <= 0.0 || hitDepth <= 0.0)
+	{
+		return 0.0;
+	}
+	float worldCoCRadius = (apertureSize * 0.5) * abs(hitDepth - focusDistance) / focusDistance;
+	float pixelCoCRadius = worldCoCRadius * (focalLength / cameraSensorSize.x) * float(outputSize.x) / hitDepth;
+	float range = max(focalPlaneFalloffPx, 1e-3);
+	return 1.0 - smoothstep(0.0, range, pixelCoCRadius);
 }
 
 #endif // __cplusplus

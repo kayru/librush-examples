@@ -33,6 +33,20 @@ inline bool SliderInt(const char* label, int* v, int v_min, int v_max,
 	return ImGui::SliderInt(label, v, v_min, v_max, display_format);
 }
 
+inline bool DragFloat2(const char* label, float* v, float v_speed = 1.0f,
+	float v_min = 0.0f, float v_max = 0.0f,
+	LabelMode mode = LabelMode::Above, const char* format = "%.3f", ImGuiSliderFlags flags = 0)
+{
+	if (mode == LabelMode::Above)
+	{
+		ImGui::Text("%s", label);
+		ImGui::SetNextItemWidth(-FLT_MIN);
+		std::string id = std::string("##") + label;
+		return ImGui::DragFloat2(id.c_str(), v, v_speed, v_min, v_max, format, flags);
+	}
+	return ImGui::DragFloat2(label, v, v_speed, v_min, v_max, format, flags);
+}
+
 inline bool DragFloat3(const char* label, float* v, float v_speed = 1.0f,
 	float v_min = 0.0f, float v_max = 0.0f,
 	LabelMode mode = LabelMode::Above, const char* format = "%.3f", ImGuiSliderFlags flags = 0)

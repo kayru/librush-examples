@@ -11,6 +11,7 @@ using namespace metal::raytracing;
 #define PT_FLAG_DEBUG_SIMPLE_SHADING    (1u << 4u)
 #define PT_FLAG_DEBUG_DISABLE_ACCUMULATION (1u << 5u)
 #define PT_FLAG_DEBUG_HIT_MASK          (1u << 6u)
+#define PT_FLAG_DEBUG_FOCAL_PLANE       (1u << 7u)
 
 #define PT_DEBUG_VIS_NONE               0u
 #define PT_DEBUG_VIS_ALBEDO             1u
@@ -223,6 +224,8 @@ struct SceneConstants
 	float focusDistance;
 	float apertureSize;
 	uint debugVisMode;
+
+	float focalPlaneFalloffPx;
 };
 
 struct MaterialConstants
@@ -398,6 +401,20 @@ static inline float3 getCameraViewVector(constant SceneConstants* scene, float2 
 	viewVector.y /= scene->matProj[1][1];
 	float3x3 view = float3x3(scene->matView[0].xyz, scene->matView[1].xyz, scene->matView[2].xyz);
 	return normalize(viewVector * transpose(view));
+}
+
+// Focus-assist overlay opacity: 1 in focus, fading as the circle of confusion grows.
+// hitDepth is the perpendicular distance from camera to the primary hit.
+static inline float focalPlaneOverlay(constant SceneConstants* scene, float hitDepth)
+{
+	if (scene->focusDistance <= 0.0f || hitDepth <= 0.0f)
+	{
+		return 0.0f;
+	}
+	float worldCoCRadius = (scene->apertureSize * 0.5f) * abs(hitDepth - scene->focusDistance) / scene->focusDistance;
+	float pixelCoCRadius = worldCoCRadius * (scene->focalLength / scene->cameraSensorSize.x) * float(scene->outputSize.x) / hitDepth;
+	float range = max(scene->focalPlaneFalloffPx, 1e-3f);
+	return 1.0f - smoothstep(0.0f, range, pixelCoCRadius);
 }
 
 static inline bool traceShadowRay(constant PathTracerSet0& set0, ray shadowRay)
@@ -610,6 +627,8 @@ kernel void main0(constant PathTracerSet0& set0 [[buffer(0)]],
 	const bool debugHitMask = (set0.scene->flags & PT_FLAG_DEBUG_HIT_MASK) != 0u;
 	const uint debugVisMode = set0.scene ? set0.scene->debugVisMode : PT_DEBUG_VIS_NONE;
 	const bool debugVisEnabled = debugVisMode != PT_DEBUG_VIS_NONE;
+	const bool showFocalPlane = (set0.scene->flags & PT_FLAG_DEBUG_FOCAL_PLANE) != 0u;
+	float focalOverlay = 0.0f;
 	uint lastBounce = 0u;
 	bool sawHit = false;
 
@@ -694,6 +713,11 @@ kernel void main0(constant PathTracerSet0& set0 [[buffer(0)]],
 			{
 				payload.roughness = max(payload.roughness, roughnessBias);
 				roughnessBias = payload.roughness;
+			}
+			if (i == 0u && showFocalPlane)
+			{
+				float hitDepth = payload.hitT * dot(set0.scene->matView[2].xyz, primaryRay.direction);
+				focalOverlay = focalPlaneOverlay(set0.scene, hitDepth);
 			}
 		}
 
@@ -847,6 +871,11 @@ kernel void main0(constant PathTracerSet0& set0 [[buffer(0)]],
 			primaryRay.direction = safeNormalize(N + mapToUniformSphere(reflectionSampleUV));
 			scatterPdfW = 1.0f / kPi;
 		}
+	}
+
+	if (showFocalPlane)
+	{
+		result = mix(result, float3(1.0f, 0.0f, 0.0f), focalOverlay);
 	}
 
 	if ((set0.scene->flags & PT_FLAG_DEBUG_DISABLE_ACCUMULATION) != 0u)

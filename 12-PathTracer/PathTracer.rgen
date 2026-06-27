@@ -155,10 +155,18 @@ void main()
 	float roughnessBias = 0;
 
 	const bool useEnvmap = bool(flags & PT_FLAG_USE_ENVMAP);
+	const bool showFocalPlane = bool(flags & PT_FLAG_DEBUG_FOCAL_PLANE);
+	float focalOverlay = 0.0;
 
 	for(uint i=0; i<=maxPathLength; ++i)
 	{
 		bool isHit = traceRay(primaryRay);
+
+		if (i == 0 && isHit && showFocalPlane)
+		{
+			float hitDepth = payload.hitT * dot(matView[2].xyz, primaryRay.direction);
+			focalOverlay = focalPlaneOverlay(hitDepth);
+		}
 
 		if (USE_DEBUG_FURNECE && i > 0) isHit = false;
 
@@ -317,6 +325,11 @@ void main()
 			primaryRay.direction = safeNormalize(N + mapToUniformSphere(reflectionSampleUV));
 			scatterPdfW = 1.0 / M_PI;
 		}
+	}
+
+	if (showFocalPlane)
+	{
+		result = mix(result, vec3(1, 0, 0), focalOverlay);
 	}
 
 	if (frameIndex > 0)

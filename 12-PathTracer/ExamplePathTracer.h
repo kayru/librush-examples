@@ -102,6 +102,8 @@ private:
 		float focusDistance;
 		float apertureSize;
 		u32 debugVisMode = 0;
+
+		float focalPlaneFalloffPx = 4.0f;
 	};
 
 	Mat4 m_worldTransform = Mat4::identity();
@@ -205,10 +207,13 @@ private:
 		int m_debugVisMode = 0;
 		float m_gamma = 1.8f;
 		float m_exposureEV100 = 0.0f;
-		Vec2 m_cameraSensorSizeMM = Vec2(36.0f, 24.0f); // 35mm film
+		int m_sensorPreset = 0; // index into g_sensorPresets
+		Vec2 m_cameraSensorSizeMM = Vec2(36.0f, 24.0f);
 		float m_focalLengthMM = 50.0;
-		float m_apertureSizeMM = 0.0;
+		float m_apertureFStop = 2.8f;
 		float m_focusDistance = 1.0;
+		bool m_showFocusAssist = false;
+		float m_focusAssistFalloffPx = 4.0f;
 		float m_envmapRotationDegrees = 0.0;
 	};
 

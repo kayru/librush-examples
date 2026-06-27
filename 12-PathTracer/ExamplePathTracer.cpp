@@ -301,6 +301,25 @@ inline float focalLengthToFov(float focalLength, float sensorSize)
 	return 2.0f * atanf((sensorSize / 2.0f) / focalLength);
 }
 
+struct SensorPreset
+{
+	const char* name;
+	Vec2        sizeMM;
+};
+
+// Custom must be last.
+static const SensorPreset g_sensorPresets[] = {
+	{"Full Frame (36x24)", Vec2(36.0f, 24.0f)},
+	{"APS-C (23.6x15.7)", Vec2(23.6f, 15.7f)},
+	{"APS-C Canon (22.3x14.9)", Vec2(22.3f, 14.9f)},
+	{"Super 35 (24.9x18.7)", Vec2(24.89f, 18.66f)},
+	{"Micro 4/3 (17.3x13)", Vec2(17.3f, 13.0f)},
+	{"1 inch (13.2x8.8)", Vec2(13.2f, 8.8f)},
+	{"Medium Format (44x33)", Vec2(44.0f, 33.0f)},
+	{"Custom", Vec2(36.0f, 24.0f)},
+};
+static constexpr int g_sensorCustomIndex = int(RUSH_COUNTOF(g_sensorPresets)) - 1;
+
 void ExamplePathTracer::onUpdate()
 {
 	if (!m_startupError.empty())
@@ -330,9 +349,33 @@ void ExamplePathTracer::onUpdate()
 	renderSettingsChanged |= ImGui::Checkbox("Neutral background", &m_settings.m_useNeutralBackground);
 	renderSettingsChanged |= ImGui::Checkbox("Depth of Field", &m_settings.m_useDepthOfField);
 		renderSettingsChanged |= ImGui::Checkbox("Normal mapping", &m_settings.m_useNormalMapping);
+		{
+			const char* sensorNames[RUSH_COUNTOF(g_sensorPresets)];
+			for (int i = 0; i < int(RUSH_COUNTOF(g_sensorPresets)); ++i)
+			{
+				sensorNames[i] = g_sensorPresets[i].name;
+			}
+			if (ImGuiExt::Combo("Sensor size", &m_settings.m_sensorPreset, sensorNames, int(RUSH_COUNTOF(g_sensorPresets))))
+			{
+				if (m_settings.m_sensorPreset != g_sensorCustomIndex)
+				{
+					m_settings.m_cameraSensorSizeMM = g_sensorPresets[m_settings.m_sensorPreset].sizeMM;
+				}
+				renderSettingsChanged = true;
+			}
+			if (m_settings.m_sensorPreset == g_sensorCustomIndex)
+			{
+				renderSettingsChanged |= ImGuiExt::DragFloat2("Sensor size (mm)", &m_settings.m_cameraSensorSizeMM.x, 0.1f, 1.0f, 200.0f);
+			}
+		}
 		renderSettingsChanged |= ImGuiExt::SliderFloat("Focal length (mm)", &m_settings.m_focalLengthMM, 1.0f, 250.0f);
-		renderSettingsChanged |= ImGuiExt::SliderFloat("Aperture size (mm)", &m_settings.m_apertureSizeMM, 0.0f, 100000.0f, ImGuiExt::LabelMode::Above, "%.3f", ImGuiSliderFlags_Logarithmic);
+		renderSettingsChanged |= ImGuiExt::SliderFloat("Aperture (f-stop)", &m_settings.m_apertureFStop, 1.0f, 32.0f, ImGuiExt::LabelMode::Above, "f/%.1f", ImGuiSliderFlags_Logarithmic);
 		renderSettingsChanged |= ImGuiExt::SliderFloat("Focus distance", &m_settings.m_focusDistance, 0.0f, 1000.0f, ImGuiExt::LabelMode::Above, "%.3f", ImGuiSliderFlags_Logarithmic);
+		renderSettingsChanged |= ImGui::Checkbox("Focus assist", &m_settings.m_showFocusAssist);
+		if (m_settings.m_showFocusAssist)
+		{
+			renderSettingsChanged |= ImGuiExt::SliderFloat("Focus assist falloff (px)", &m_settings.m_focusAssistFalloffPx, 0.5f, 64.0f, ImGuiExt::LabelMode::Above, "%.1f", ImGuiSliderFlags_Logarithmic);
+		}
 		renderSettingsChanged |= ImGuiExt::SliderFloat("Envmap rotation (deg)", &m_settings.m_envmapRotationDegrees, 0.0f, 360.0f);
 		ImGuiExt::SliderFloat("Exposure EV100", &m_settings.m_exposureEV100, -10.0f, 10.0f);
 		ImGuiExt::SliderFloat("Gamma", &m_settings.m_gamma, 0.25f, 3.0f);
@@ -551,6 +594,7 @@ void ExamplePathTracer::render()
 	constants.flags |= m_settings.m_debugSimpleShading ? PT_FLAG_DEBUG_SIMPLE_SHADING : 0;
 	constants.flags |= m_settings.m_debugDisableAccumulation ? PT_FLAG_DEBUG_DISABLE_ACCUMULATION : 0;
 	constants.flags |= m_settings.m_debugHitMask ? PT_FLAG_DEBUG_HIT_MASK : 0;
+	constants.flags |= m_settings.m_showFocusAssist ? PT_FLAG_DEBUG_FOCAL_PLANE : 0;
 	constants.debugVisMode = (u32)m_settings.m_debugVisMode;
 
 	GfxContext* ctx = Platform_GetGfxContext();
@@ -571,7 +615,10 @@ void ExamplePathTracer::render()
 	constants.cameraSensorSize = m_settings.m_cameraSensorSizeMM / 1000.0f;
 	constants.focalLength = m_settings.m_focalLengthMM / 1000.0f;
 	constants.focusDistance = m_settings.m_focusDistance;
-	constants.apertureSize = m_settings.m_apertureSizeMM / 1000.0f;
+	// Aperture diameter = focal length / f-number.
+	const float apertureDiameterMM = m_settings.m_focalLengthMM / m_settings.m_apertureFStop;
+	constants.apertureSize = apertureDiameterMM / 1000.0f;
+	constants.focalPlaneFalloffPx = m_settings.m_focusAssistFalloffPx;
 
 	GfxMarkerScope markerFrame(ctx, "Frame");
 
