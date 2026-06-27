@@ -17,12 +17,13 @@ rush_add_app(12-PathTracer
 set(shaderDependencies
 	Common.glsl
 	BRDF.glsl
+	ShaderShared.glsl
 )
 
 if(APPLE AND DEFINED RUSH_RENDER_API AND RUSH_RENDER_API STREQUAL "MTL")
 	rush_shader_hlsl(Blit.hlsl vs_6_0)
 	rush_shader_hlsl(BlitTonemap.hlsl ps_6_0)
-	rush_shader_metal(PathTracer.metal)
+	rush_shader_metal(PathTracer.metal DEPENDS ${shaderDependencies})
 else()
 	rush_shader_hlsl(Blit.hlsl vs_6_0)
 	rush_shader_hlsl(BlitTonemap.hlsl ps_6_0)

@@ -26,14 +26,7 @@
 
 #ifndef __cplusplus
 
-#define M_PI 3.14159265358979323846264338327950288
-#define saturate(x) clamp(x, 0.0, 1.0)
-
-vec3 safeNormalize(vec3 v)
-{
-	float l = length(v);
-	return l == 0 ? v : v / l;
-}
+#include "ShaderShared.glsl"
 
 // global resources
 // Binding layout (set=0):
@@ -175,55 +168,6 @@ float pow2(float x)
 	return x*x;
 }
 
-float pow5(float x)
-{
-	float x2 = x * x;
-	return x2 * x2 * x;
-}
-
-float max3(vec3 v)
-{
-	return max(max(v.x, v.y), v.z);
-}
-
-uint randomUint16(inout uint seed)
-{
-	seed = 214013 * seed + 2531011;
-	return (seed ^ seed >> 16);
-}
-
-uint randomUint32(inout uint seed)
-{
-	uint a = randomUint16(seed) << 16;
-	uint b = randomUint16(seed) & 0xFFFF;
-	return a | b;
-}
-
-float randomFloat(inout uint seed)
-{
-	seed = 214013 * seed + 2531011;
-	return float(seed >> 16) * (1.0f / 65535.0f);
-}
-
-vec2 randomFloat2(inout uint seed)
-{
-	float x = randomFloat(seed);
-	float y = randomFloat(seed);
-	return vec2(x, y);
-}
-
-uint hashFnv1(uint x)
-{
-	uint state = 0x811c9dc5;
-	for (uint i = 0; i < 4; ++i)
-	{
-		state *= 0x01000193;
-		state ^= (x & 0xFF);
-		x = x >> 8;
-	}
-	return state;
-}
-
 // Point on hemisphere surface around Z+ with cosine weighted distribution
 vec3 mapToCosineHemisphere(vec2 uv)
 {
@@ -244,31 +188,8 @@ vec3 mapToUniformHemisphere(vec2 uv)
 }
 vec3 sampleUniformHemisphere(inout uint seed) { return mapToUniformHemisphere(randomFloat2(seed)); };
 
-// Point on sphere surface
-vec3 mapToUniformSphere(vec2 uv)
-{
-	float phi = uv.x * M_PI * 2.0;
-	float z = 1.0 - 2.0 * uv.y;
-	float r = sqrt(1.0 - z * z);
-	float x = r * cos(phi);
-	float y = r * sin(phi);
-	return vec3(x,y,z);
-}
+// mapToUniformSphere and sampleUniformDisk live in ShaderShared.glsl
 vec3 sampleUniformSphere(inout uint seed) { return mapToUniformSphere(randomFloat2(seed)); };
-
-vec2 sampleUniformDisk(inout uint seed)
-{
-	for (;;)
-	{
-		vec2 v;
-		v.x = randomFloat(seed) * 2.0 - 1.0;
-		v.y = randomFloat(seed) * 2.0 - 1.0;
-		if (dot(v, v) <= 1.0)
-		{
-			return v;
-		}
-	}
-}
 
 mat3 makeOrthonormalBasis(vec3 n)
 {
@@ -295,27 +216,6 @@ Surface unpack(DefaultPayload p)
 	result.specularColor = p.baseColor * p.metalness + (p.reflectance * (1.0 - p.metalness));
 	result.linearRoughness = max(0.0001, p.roughness * p.roughness);
 	return result;
-}
-
-// Halton sequence implementation by Ollj
-// https://www.shadertoy.com/view/tl2GDw
-
-float Halton(int b, int i)
-{
-	float r = 0.0;
-	float f = 1.0;
-	while (i > 0) 
-	{
-		f = f / float(b);
-		r = r + f * float(i % b);
-		i = int(floor(float(i) / float(b)));
-	}
-	return r;
-}
-
-vec2 Halton23(int i)
-{
-	return vec2(Halton(2, i), Halton(3, i));
 }
 
 vec2 cartesianToLatLongTexcoord(vec3 p)
@@ -374,24 +274,7 @@ float balanceHeuristic(float f, float g)
 	return f / (f+g);
 }
 
-float powerHeuristic(float f, float g)
-{
-	return pow2(f) / (pow2(f) + pow2(g));
-}
-
-// Focus-assist overlay opacity: 1 in focus, fading as the circle of confusion grows.
-// hitDepth is the perpendicular distance from camera to the primary hit.
-float focalPlaneOverlay(float hitDepth)
-{
-	if (focusDistance <= 0.0 || hitDepth <= 0.0)
-	{
-		return 0.0;
-	}
-	float worldCoCRadius = (apertureSize * 0.5) * abs(hitDepth - focusDistance) / focusDistance;
-	float pixelCoCRadius = worldCoCRadius * (focalLength / cameraSensorSize.x) * float(outputSize.x) / hitDepth;
-	float range = max(focalPlaneFalloffPx, 1e-3);
-	return 1.0 - smoothstep(0.0, range, pixelCoCRadius);
-}
+// powerHeuristic and focalPlaneOverlay live in ShaderShared.glsl
 
 #endif // __cplusplus
 

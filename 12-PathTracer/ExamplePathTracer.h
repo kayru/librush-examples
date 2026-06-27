@@ -209,8 +209,9 @@ private:
 		float m_exposureEV100 = 0.0f;
 		int m_sensorPreset = 0; // index into g_sensorPresets
 		Vec2 m_cameraSensorSizeMM = Vec2(36.0f, 24.0f);
-		float m_focalLengthMM = 50.0;
-		float m_apertureFStop = 2.8f;
+		int m_focalLengthPreset = 4; // index into g_focalLengthPresets (35 mm)
+		float m_focalLengthMM = 35.0;
+		float m_apertureFStop = 1.4f;
 		float m_focusDistance = 1.0;
 		bool m_showFocusAssist = false;
 		float m_focusAssistFalloffPx = 4.0f;

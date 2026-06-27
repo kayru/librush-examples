@@ -165,7 +165,8 @@ void main()
 		if (i == 0 && isHit && showFocalPlane)
 		{
 			float hitDepth = payload.hitT * dot(matView[2].xyz, primaryRay.direction);
-			focalOverlay = focalPlaneOverlay(hitDepth);
+			focalOverlay = focalPlaneOverlay(hitDepth, focusDistance, apertureSize,
+				focalLength, cameraSensorSize.x, float(outputSize.x), focalPlaneFalloffPx);
 		}
 
 		if (USE_DEBUG_FURNECE && i > 0) isHit = false;

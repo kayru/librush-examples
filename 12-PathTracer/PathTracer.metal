@@ -27,24 +27,9 @@ using namespace metal::raytracing;
 #define PT_MATERIAL_MODE_PBR_METALLIC_ROUGHNESS   0u
 #define PT_MATERIAL_MODE_PBR_SPECULAR_GLOSSINESS  1u
 
+#include "ShaderShared.glsl"
+
 static constant float kPi = 3.14159265359f;
-
-static inline float pow5(float v)
-{
-	float v2 = v * v;
-	return v2 * v2 * v;
-}
-
-static inline float max3(float3 v)
-{
-	return max(max(v.x, v.y), v.z);
-}
-
-static inline float3 safeNormalize(float3 v)
-{
-	float l = length(v);
-	return l == 0.0f ? v : v / l;
-}
 
 static inline float D_GGX(float linearRoughness, float NoH)
 {
@@ -85,84 +70,6 @@ static inline float3 importanceSampleDGGXVNDF(float2 uv, float linearRoughness, 
 	return float3(linearRoughness * Nh.x, linearRoughness * Nh.y, max(0.0f, Nh.z));
 }
 
-static inline uint randomUint16(thread uint& seed)
-{
-	seed = 214013u * seed + 2531011u;
-	return (seed ^ (seed >> 16));
-}
-
-static inline uint randomUint32(thread uint& seed)
-{
-	uint a = randomUint16(seed) << 16;
-	uint b = randomUint16(seed) & 0xffffu;
-	return a | b;
-}
-
-static inline float randomFloat(thread uint& seed)
-{
-	seed = 214013u * seed + 2531011u;
-	return float(seed >> 16) * (1.0f / 65535.0f);
-}
-
-static inline float2 randomFloat2(thread uint& seed)
-{
-	return float2(randomFloat(seed), randomFloat(seed));
-}
-
-static inline uint hashFnv1(uint x)
-{
-	uint state = 0x811c9dc5u;
-	for (uint i = 0; i < 4; ++i)
-	{
-		state *= 0x01000193u;
-		state ^= (x & 0xffu);
-		x >>= 8u;
-	}
-	return state;
-}
-
-static inline float3 mapToUniformSphere(float2 uv)
-{
-	float phi = uv.x * kPi * 2.0f;
-	float z = 1.0f - 2.0f * uv.y;
-	float r = sqrt(1.0f - z * z);
-	float x = r * cos(phi);
-	float y = r * sin(phi);
-	return float3(x, y, z);
-}
-
-static inline float2 sampleUniformDisk(thread uint& seed)
-{
-	for (;;)
-	{
-		float2 v;
-		v.x = randomFloat(seed) * 2.0f - 1.0f;
-		v.y = randomFloat(seed) * 2.0f - 1.0f;
-		if (dot(v, v) <= 1.0f)
-		{
-			return v;
-		}
-	}
-}
-
-static inline float Halton(int b, int i)
-{
-	float r = 0.0f;
-	float f = 1.0f;
-	while (i > 0)
-	{
-		f = f / float(b);
-		r = r + f * float(i % b);
-		i = int(floor(float(i) / float(b)));
-	}
-	return r;
-}
-
-static inline float2 Halton23(int i)
-{
-	return float2(Halton(2, i), Halton(3, i));
-}
-
 static inline float2 cartesianToLatLongTexcoord(float3 p)
 {
 	float u = (1.0f + atan2(p.z, -p.x) / kPi);
@@ -187,13 +94,6 @@ static inline float3 envMapPixelIndexToDirection(uint idx, float2 pixelJitter, i
 	float2 pixelPos = float2(float(x), float(y));
 	float2 uv = (pixelPos + pixelJitter) / float2(float(envmapSize.x), float(envmapSize.y));
 	return latLongTexcoordToCartesian(uv);
-}
-
-static inline float powerHeuristic(float f, float g)
-{
-	float f2 = f * f;
-	float g2 = g * g;
-	return f2 / (f2 + g2);
 }
 
 static inline float3 getSimpleSkyColor(float3 dir)
@@ -401,20 +301,6 @@ static inline float3 getCameraViewVector(constant SceneConstants* scene, float2 
 	viewVector.y /= scene->matProj[1][1];
 	float3x3 view = float3x3(scene->matView[0].xyz, scene->matView[1].xyz, scene->matView[2].xyz);
 	return normalize(viewVector * transpose(view));
-}
-
-// Focus-assist overlay opacity: 1 in focus, fading as the circle of confusion grows.
-// hitDepth is the perpendicular distance from camera to the primary hit.
-static inline float focalPlaneOverlay(constant SceneConstants* scene, float hitDepth)
-{
-	if (scene->focusDistance <= 0.0f || hitDepth <= 0.0f)
-	{
-		return 0.0f;
-	}
-	float worldCoCRadius = (scene->apertureSize * 0.5f) * abs(hitDepth - scene->focusDistance) / scene->focusDistance;
-	float pixelCoCRadius = worldCoCRadius * (scene->focalLength / scene->cameraSensorSize.x) * float(scene->outputSize.x) / hitDepth;
-	float range = max(scene->focalPlaneFalloffPx, 1e-3f);
-	return 1.0f - smoothstep(0.0f, range, pixelCoCRadius);
 }
 
 static inline bool traceShadowRay(constant PathTracerSet0& set0, ray shadowRay)
@@ -717,7 +603,8 @@ kernel void main0(constant PathTracerSet0& set0 [[buffer(0)]],
 			if (i == 0u && showFocalPlane)
 			{
 				float hitDepth = payload.hitT * dot(set0.scene->matView[2].xyz, primaryRay.direction);
-				focalOverlay = focalPlaneOverlay(set0.scene, hitDepth);
+				focalOverlay = focalPlaneOverlay(hitDepth, set0.scene->focusDistance, set0.scene->apertureSize,
+					set0.scene->focalLength, set0.scene->cameraSensorSize.x, float(set0.scene->outputSize.x), set0.scene->focalPlaneFalloffPx);
 			}
 		}
 

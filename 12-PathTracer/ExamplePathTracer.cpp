@@ -320,6 +320,32 @@ static const SensorPreset g_sensorPresets[] = {
 };
 static constexpr int g_sensorCustomIndex = int(RUSH_COUNTOF(g_sensorPresets)) - 1;
 
+struct FocalLengthPreset
+{
+	const char* name;
+	float       mm;
+};
+
+// Custom must be last.
+static const FocalLengthPreset g_focalLengthPresets[] = {
+	{"14 mm", 14.0f},
+	{"20 mm", 20.0f},
+	{"24 mm", 24.0f},
+	{"28 mm", 28.0f},
+	{"35 mm", 35.0f},
+	{"50 mm", 50.0f},
+	{"70 mm", 70.0f},
+	{"85 mm", 85.0f},
+	{"105 mm", 105.0f},
+	{"135 mm", 135.0f},
+	{"200 mm", 200.0f},
+	{"300 mm", 300.0f},
+	{"400 mm", 400.0f},
+	{"600 mm", 600.0f},
+	{"Custom", 50.0f},
+};
+static constexpr int g_focalLengthCustomIndex = int(RUSH_COUNTOF(g_focalLengthPresets)) - 1;
+
 void ExamplePathTracer::onUpdate()
 {
 	if (!m_startupError.empty())
@@ -368,7 +394,25 @@ void ExamplePathTracer::onUpdate()
 				renderSettingsChanged |= ImGuiExt::DragFloat2("Sensor size (mm)", &m_settings.m_cameraSensorSizeMM.x, 0.1f, 1.0f, 200.0f);
 			}
 		}
-		renderSettingsChanged |= ImGuiExt::SliderFloat("Focal length (mm)", &m_settings.m_focalLengthMM, 1.0f, 250.0f);
+		{
+			const char* focalNames[RUSH_COUNTOF(g_focalLengthPresets)];
+			for (int i = 0; i < int(RUSH_COUNTOF(g_focalLengthPresets)); ++i)
+			{
+				focalNames[i] = g_focalLengthPresets[i].name;
+			}
+			if (ImGuiExt::Combo("Focal length", &m_settings.m_focalLengthPreset, focalNames, int(RUSH_COUNTOF(g_focalLengthPresets))))
+			{
+				if (m_settings.m_focalLengthPreset != g_focalLengthCustomIndex)
+				{
+					m_settings.m_focalLengthMM = g_focalLengthPresets[m_settings.m_focalLengthPreset].mm;
+				}
+				renderSettingsChanged = true;
+			}
+			if (m_settings.m_focalLengthPreset == g_focalLengthCustomIndex)
+			{
+				renderSettingsChanged |= ImGuiExt::SliderFloat("Focal length (mm)", &m_settings.m_focalLengthMM, 1.0f, 800.0f, ImGuiExt::LabelMode::Above, "%.1f", ImGuiSliderFlags_Logarithmic);
+			}
+		}
 		renderSettingsChanged |= ImGuiExt::SliderFloat("Aperture (f-stop)", &m_settings.m_apertureFStop, 1.0f, 32.0f, ImGuiExt::LabelMode::Above, "f/%.1f", ImGuiSliderFlags_Logarithmic);
 		renderSettingsChanged |= ImGuiExt::SliderFloat("Focus distance", &m_settings.m_focusDistance, 0.0f, 1000.0f, ImGuiExt::LabelMode::Above, "%.3f", ImGuiSliderFlags_Logarithmic);
 		renderSettingsChanged |= ImGui::Checkbox("Focus assist", &m_settings.m_showFocusAssist);
