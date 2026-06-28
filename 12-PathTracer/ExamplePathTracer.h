@@ -103,6 +103,7 @@ private:
 		float apertureSize;
 		u32 debugVisMode = 0;
 
+		Tuple2i focusPickPixel = {-1, -1}; // cursor pixel; x < 0 = no pick
 		float focalPlaneFalloffPx = 4.0f;
 	};
 
@@ -195,6 +196,11 @@ private:
 	GfxOwn<GfxTexture>               m_envmap;
 	GfxOwn<GfxBuffer>                m_envmapDistribution;
 
+	// click-to-focus: shader writes the cursor pixel's depth here, read back same frame
+	GfxOwn<GfxBuffer> m_focusFeedbackBuffer;
+	Tuple2i           m_focusPickPixel = {};
+	bool              m_focusPickRequested = false;
+
 	struct Settings
 	{
 		bool m_useEnvmap = false;
@@ -227,6 +233,7 @@ private:
 	void saveCamera();
 	void loadCamera();
 	void resetCamera();
+	void focusOnCursor();
 	void loadEnvmap(const char* filename);
 
 	VirtualGamepad m_virtualGamepad;

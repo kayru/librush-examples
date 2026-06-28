@@ -125,6 +125,7 @@ struct SceneConstants
 	float apertureSize;
 	uint debugVisMode;
 
+	int2 focusPickPixel; // cursor pixel; x < 0 = no pick
 	float focalPlaneFalloffPx;
 };
 
@@ -168,7 +169,8 @@ struct PathTracerSet0
 	device EnvmapCell* envmapDistribution [[id(6)]];
 	device MaterialConstants* materials [[id(7)]];
 	device uint* materialIndices [[id(8)]];
-	instance_acceleration_structure tlas [[id(9)]];
+	device float* focusFeedback [[id(9)]];
+	instance_acceleration_structure tlas [[id(10)]];
 };
 
 #define PT_MAX_TEXTURES 1024
@@ -515,6 +517,7 @@ kernel void main0(constant PathTracerSet0& set0 [[buffer(0)]],
 	const bool debugVisEnabled = debugVisMode != PT_DEBUG_VIS_NONE;
 	const bool showFocalPlane = (set0.scene->flags & PT_FLAG_DEBUG_FOCAL_PLANE) != 0u;
 	float focalOverlay = 0.0f;
+	float primaryDepth = -1.0f; // primary-hit depth for the focus feedback buffer
 	uint lastBounce = 0u;
 	bool sawHit = false;
 
@@ -600,11 +603,15 @@ kernel void main0(constant PathTracerSet0& set0 [[buffer(0)]],
 				payload.roughness = max(payload.roughness, roughnessBias);
 				roughnessBias = payload.roughness;
 			}
-			if (i == 0u && showFocalPlane)
+			if (i == 0u)
 			{
 				float hitDepth = payload.hitT * dot(set0.scene->matView[2].xyz, primaryRay.direction);
-				focalOverlay = focalPlaneOverlay(hitDepth, set0.scene->focusDistance, set0.scene->apertureSize,
-					set0.scene->focalLength, set0.scene->cameraSensorSize.x, float(set0.scene->outputSize.x), set0.scene->focalPlaneFalloffPx);
+				primaryDepth = hitDepth;
+				if (showFocalPlane)
+				{
+					focalOverlay = focalPlaneOverlay(hitDepth, set0.scene->focusDistance, set0.scene->apertureSize,
+						set0.scene->focalLength, set0.scene->cameraSensorSize.x, float(set0.scene->outputSize.x), set0.scene->focalPlaneFalloffPx);
+				}
 			}
 		}
 
@@ -763,6 +770,11 @@ kernel void main0(constant PathTracerSet0& set0 [[buffer(0)]],
 	if (showFocalPlane)
 	{
 		result = mix(result, float3(1.0f, 0.0f, 0.0f), focalOverlay);
+	}
+
+	if (set0.scene->focusPickPixel.x >= 0 && all(pixelIndex == set0.scene->focusPickPixel))
+	{
+		set0.focusFeedback[0] = primaryDepth;
 	}
 
 	if ((set0.scene->flags & PT_FLAG_DEBUG_DISABLE_ACCUMULATION) != 0u)

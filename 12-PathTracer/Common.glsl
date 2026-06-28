@@ -37,9 +37,10 @@
 //  4 indexBuffer
 //  5 vertexBuffer
 //  6 envmapDistributionBuffer
-//  7 TLAS (Vulkan)
+//  7 focusFeedbackBuffer
+//  8 TLAS (Vulkan)
 // Metal argument buffers follow the same ordering; when Metal-only material buffers
-// are bound, they occupy slots 7/8, and TLAS shifts to 9.
+// are bound, they occupy slots 7/8, focusFeedback is 9, and TLAS shifts to 10.
 // Binding layout (set=1): texture array at binding 0.
 
 layout(set=0, binding=0)
@@ -64,6 +65,7 @@ uniform SceneConstants
 	float apertureSize;
 	uint debugVisMode;
 
+	ivec2 focusPickPixel; // cursor pixel; x < 0 = no pick
 	float focalPlaneFalloffPx;
 };
 
@@ -108,12 +110,19 @@ buffer EnvmapDistributionBuffer
 	EnvmapCell envmapDistributionBuffer[];
 };
 
+// click-to-focus: cursor pixel writes its primary-hit depth here
+layout(set = 0, binding = 7, std430)
+buffer FocusFeedbackBuffer
+{
+	float focusFeedback[];
+};
+
 vec3 getPosition(Vertex v) { return vec3(v.position[0], v.position[1], v.position[2]); }
 vec3 getNormal(Vertex v) { return vec3(v.normal[0], v.normal[1], v.normal[2]); }
 vec2 getTexcoord(Vertex v) { return vec2(v.texcoord[0], v.texcoord[1]); }
 vec4 getTangent(Vertex v) { return vec4(v.tangent[0], v.tangent[1], v.tangent[2], v.tangent[3]); }
 
-layout(set=0, binding=7)
+layout(set=0, binding=8)
 uniform accelerationStructureEXT TLAS;
 
 #define MaxTextures 1024

@@ -157,16 +157,21 @@ void main()
 	const bool useEnvmap = bool(flags & PT_FLAG_USE_ENVMAP);
 	const bool showFocalPlane = bool(flags & PT_FLAG_DEBUG_FOCAL_PLANE);
 	float focalOverlay = 0.0;
+	float primaryDepth = -1.0; // primary-hit depth for the focus feedback buffer
 
 	for(uint i=0; i<=maxPathLength; ++i)
 	{
 		bool isHit = traceRay(primaryRay);
 
-		if (i == 0 && isHit && showFocalPlane)
+		if (i == 0 && isHit)
 		{
 			float hitDepth = payload.hitT * dot(matView[2].xyz, primaryRay.direction);
-			focalOverlay = focalPlaneOverlay(hitDepth, focusDistance, apertureSize,
-				focalLength, cameraSensorSize.x, float(outputSize.x), focalPlaneFalloffPx);
+			primaryDepth = hitDepth;
+			if (showFocalPlane)
+			{
+				focalOverlay = focalPlaneOverlay(hitDepth, focusDistance, apertureSize,
+					focalLength, cameraSensorSize.x, float(outputSize.x), focalPlaneFalloffPx);
+			}
 		}
 
 		if (USE_DEBUG_FURNECE && i > 0) isHit = false;
@@ -340,4 +345,9 @@ void main()
 	}
 
 	imageStore(outputImage, pixelIndex, vec4(result, 1));
+
+	if (focusPickPixel.x >= 0 && pixelIndex == focusPickPixel)
+	{
+		focusFeedback[0] = primaryDepth;
+	}
 }

@@ -109,6 +109,17 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 		GfxBufferDesc cbDesc(GfxBufferFlags::TransientConstant, GfxFormat_Unknown, 1, sizeof(TonemapConstants));
 		m_tonemapConstantBuffer = Gfx_CreateBuffer(cbDesc);
 	}
+
+	{
+		// click-to-focus feedback (shader writes the depth, CPU reads it back)
+		GfxBufferDesc bd;
+		bd.flags       = GfxBufferFlags::Storage;
+		bd.hostVisible = true;
+		bd.stride      = sizeof(float);
+		bd.count       = 1;
+		bd.debugName   = "FocusFeedback";
+		m_focusFeedbackBuffer = Gfx_CreateBuffer(bd);
+	}
 	
 	if (rtAvailable && m_startupError.empty())
 	{
@@ -136,11 +147,11 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 		pipelineDesc.bindings.descriptorSets[0].textures = 1; // envmap
 		pipelineDesc.bindings.descriptorSets[0].rwImages = 1; // output image
 #if RUSH_RENDER_API == RUSH_RENDER_API_MTL
-	// Metal argument buffer layout is sequential; extra material buffers shift TLAS binding.
-	// set=0 bindings: 0 cb,1 sampler,2 envmap,3 output,4 ib,5 vb,6 envmap dist,7 material,8 material index,9 TLAS.
-	pipelineDesc.bindings.descriptorSets[0].rwBuffers = 5; // IB + VB + envmap distribution + materials + material indices
+	// Metal argument buffer layout is sequential; extra material buffers shift later bindings.
+	// set=0 bindings: 0 cb,1 sampler,2 envmap,3 output,4 ib,5 vb,6 envmap dist,7 material,8 material index,9 focus feedback,10 TLAS.
+	pipelineDesc.bindings.descriptorSets[0].rwBuffers = 6; // IB + VB + envmap distribution + materials + material indices + focus feedback
 #else
-	pipelineDesc.bindings.descriptorSets[0].rwBuffers = 3; // IB + VB + envmap distribution
+	pipelineDesc.bindings.descriptorSets[0].rwBuffers = 4; // IB + VB + envmap distribution + focus feedback
 #endif
 		pipelineDesc.bindings.descriptorSets[0].accelerationStructures = 1; // TLAS
 		pipelineDesc.bindings.descriptorSets[1] = materialDescriptorSetDesc;
@@ -495,6 +506,10 @@ void ExamplePathTracer::onUpdate()
 			{
 				resetCamera();
 			}
+			else if (e.code == Key_F)
+			{
+				focusOnCursor();
+			}
 			else if (e.code == Key_1)
 			{
 				m_settings.m_useEnvmap = !m_settings.m_useEnvmap;
@@ -640,6 +655,7 @@ void ExamplePathTracer::render()
 	constants.flags |= m_settings.m_debugHitMask ? PT_FLAG_DEBUG_HIT_MASK : 0;
 	constants.flags |= m_settings.m_showFocusAssist ? PT_FLAG_DEBUG_FOCAL_PLANE : 0;
 	constants.debugVisMode = (u32)m_settings.m_debugVisMode;
+	constants.focusPickPixel = m_focusPickRequested ? m_focusPickPixel : Tuple2i{-1, -1};
 
 	GfxContext* ctx = Platform_GetGfxContext();
 
@@ -695,11 +711,31 @@ void ExamplePathTracer::render()
 		{
 			Gfx_SetStorageBuffer(ctx, 4, m_materialIndexBuffer);
 		}
+		Gfx_SetStorageBuffer(ctx, 5, m_focusFeedbackBuffer);
+#else
+		Gfx_SetStorageBuffer(ctx, 3, m_focusFeedbackBuffer);
 #endif
 		Gfx_SetDescriptors(ctx, 1, m_materialDescriptorSet);
 		Gfx_SetAccelerationStructure(ctx, 0, m_tlas);
 
 		Gfx_TraceRays(ctx, m_rtPipeline, m_sbtBuffer, outputImageDesc.width, outputImageDesc.height);
+
+		if (m_focusPickRequested)
+		{
+			m_focusPickRequested = false;
+			Gfx_Finish(); // ensure the shader's feedback write completed
+			GfxMappedBuffer mapped = Gfx_MapBuffer(m_focusFeedbackBuffer);
+			if (mapped.data)
+			{
+				const float depth = *reinterpret_cast<const float*>(mapped.data);
+				if (depth > 0.0f) // <= 0 = background
+				{
+					m_settings.m_focusDistance = depth;
+					m_frameIndex = 0;
+				}
+			}
+			Gfx_UnmapBuffer(mapped);
+		}
 	}
 
 	Gfx_AddImageBarrier(ctx, m_outputImage, GfxResourceState_ShaderRead);
@@ -1577,6 +1613,40 @@ void ExamplePathTracer::resetCamera()
 	m_camera = Camera(aspect, fov, 0.25f);
 	m_camera.lookAt(Vec3(m_boundingBox.m_max) + Vec3(2.0f), m_boundingBox.center());
 	m_frameIndex = 0;
+}
+
+void ExamplePathTracer::focusOnCursor()
+{
+	if (m_showUI && ImGui::GetIO().WantCaptureMouse)
+	{
+		return;
+	}
+
+	// feedback is only written in the normal render path, not the debug views
+	if (m_settings.m_debugSimpleShading || m_settings.m_debugHitMask || m_settings.m_debugVisMode != 0)
+	{
+		return;
+	}
+
+	const Vec2 windowSize = m_window->getSizeFloat();
+	if (windowSize.x <= 0.0f || windowSize.y <= 0.0f)
+	{
+		return;
+	}
+
+	// flip Y: the blit displays the traced image upside down (row 0 at the bottom)
+	const Vec2 mousePos = m_window->getMouseState().pos;
+	if (mousePos.x < 0.0f || mousePos.y < 0.0f || mousePos.x >= windowSize.x || mousePos.y >= windowSize.y)
+	{
+		return;
+	}
+
+	const Tuple2i fbSize = m_window->getFramebufferSize();
+	const int px = int((mousePos.x / windowSize.x) * float(fbSize.x));
+	const int py = int((1.0f - mousePos.y / windowSize.y) * float(fbSize.y));
+
+	m_focusPickPixel = Tuple2i{px < fbSize.x ? px : fbSize.x - 1, py < fbSize.y ? py : fbSize.y - 1};
+	m_focusPickRequested = true;
 }
 
 void ExamplePathTracer::saveCamera()
