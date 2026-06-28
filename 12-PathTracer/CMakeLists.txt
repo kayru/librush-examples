@@ -16,7 +16,6 @@ rush_add_app(12-PathTracer
 
 set(shaderDependencies
 	Common.glsl
-	BRDF.glsl
 	ShaderShared.glsl
 	PathTracerConstants.glsl
 )

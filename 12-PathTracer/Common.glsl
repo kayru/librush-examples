@@ -146,34 +146,6 @@ struct RayDesc
 	float maxT;
 };
 
-float nudgeULP(float x, int delta)
-{
-	return uintBitsToFloat(floatBitsToUint(x) + delta);
-}
-
-// Point on hemisphere surface around Z+ with cosine weighted distribution
-vec3 mapToCosineHemisphere(vec2 uv)
-{
-	float r = sqrt(uv.x);
-	float theta = 2.0 * M_PI * uv.y;
-	float x = r * cos(theta);
-	float y = r * sin(theta);
-	return vec3(x, y, sqrt(1.0 - uv.x));
-}
-vec3 sampleCosineHemisphere(inout uint seed) { return mapToCosineHemisphere(randomFloat2(seed)); };
-
-// Point on hemisphere surface around Z+
-vec3 mapToUniformHemisphere(vec2 uv)
-{
-	float r = sqrt(1.0 - uv.x * uv.x);
-	float phi = 2.0 * M_PI * uv.y;
-	return vec3(cos(phi) * r, sin(phi) * r, uv.x);
-}
-vec3 sampleUniformHemisphere(inout uint seed) { return mapToUniformHemisphere(randomFloat2(seed)); };
-
-// mapToUniformSphere and sampleUniformDisk live in ShaderShared.glsl
-vec3 sampleUniformSphere(inout uint seed) { return mapToUniformSphere(randomFloat2(seed)); };
-
 mat3 makeOrthonormalBasis(vec3 n)
 {
 	vec3 u = abs(dot(n, vec3(0,1,0))) < 0.9 ? vec3(0,1,0) : vec3(1,0,0);
@@ -216,11 +188,6 @@ vec3 importanceSampleSkyLightDir(inout uint randomSeed)
 	{
 		return envMapPixelIndexToDirection(entry.i, jitter);
 	}
-}
-
-float balanceHeuristic(float f, float g)
-{
-	return f / (f+g);
 }
 
 // powerHeuristic and focalPlaneOverlay live in ShaderShared.glsl

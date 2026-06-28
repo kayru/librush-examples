@@ -7,8 +7,6 @@ using namespace metal::raytracing;
 #include "PathTracerConstants.glsl"
 #include "ShaderShared.glsl"
 
-static constant float kPi = 3.14159265359f;
-
 // D_GGX, G1_Smith, F_Schlick and importanceSampleDGGXVNDF live in ShaderShared.glsl.
 
 // cartesianToLatLongTexcoord and latLongTexcoordToCartesian live in ShaderShared.glsl.
@@ -431,8 +429,6 @@ kernel void main0(constant PathTracerSet0& set0 [[buffer(0)]],
 	const bool showFocalPlane = (set0.scene->flags & PT_FLAG_DEBUG_FOCAL_PLANE) != 0u;
 	float focalOverlay = 0.0f;
 	float primaryDepth = -1.0f; // primary-hit depth for the focus feedback buffer
-	uint lastBounce = 0u;
-	bool sawHit = false;
 
 	intersector<triangle_data, instancing> intersector;
 	intersector.assume_geometry_type(geometry_type::triangle);
@@ -496,7 +492,6 @@ kernel void main0(constant PathTracerSet0& set0 [[buffer(0)]],
 
 	for (uint i = 0u; i <= maxPathLength; ++i)
 	{
-		lastBounce = i;
 		intersection_result<triangle_data, instancing> hit = intersector.intersect(primaryRay, set0.tlas);
 		bool isHit = hit.type != intersection_type::none;
 
@@ -509,7 +504,6 @@ kernel void main0(constant PathTracerSet0& set0 [[buffer(0)]],
 		float2 uv = float2(0.0f);
 		if (isHit)
 		{
-			sawHit = true;
 			fillPayload(set0, set1, hit, payload, uv);
 			if (useRoughnessBias)
 			{
@@ -622,7 +616,7 @@ kernel void main0(constant PathTracerSet0& set0 [[buffer(0)]],
 				float misWeight = useEnvmap ? powerHeuristic(lightPdfW, brdfPdfW) : 1.0f;
 				result += throughput * lightColor * brdf * misWeight / (lightPdfW * 2.0f);
 
-				float diffusePdfW = 1.0f / kPi;
+				float diffusePdfW = 1.0f / M_PI;
 				float3 diffuseBrdf = diffuseColor * NoL;
 				misWeight = useEnvmap ? powerHeuristic(lightPdfW, diffusePdfW) : 1.0f;
 				result += throughput * lightColor * diffuseBrdf * misWeight / (lightPdfW * 2.0f);
@@ -676,7 +670,7 @@ kernel void main0(constant PathTracerSet0& set0 [[buffer(0)]],
 			throughput /= (1.0f - specularProbability);
 
 			primaryRay.direction = safeNormalize(N + mapToUniformSphere(reflectionSampleUV));
-			scatterPdfW = 1.0f / kPi;
+			scatterPdfW = 1.0f / M_PI;
 		}
 	}
 

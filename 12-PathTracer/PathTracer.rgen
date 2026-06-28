@@ -2,7 +2,6 @@
 #extension GL_EXT_ray_tracing : enable
 
 #include "Common.glsl"
-#include "BRDF.glsl"
 
 #define USE_DEBUG_FURNECE          bool(0)
 #define USE_DEBUG_REFLECTIONS      bool(0)
