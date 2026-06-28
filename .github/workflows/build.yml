@@ -27,10 +27,10 @@ jobs:
           - os: macos-14
             configure-preset: ninja-release-metal
             build-preset: ninja-release-metal
-          - os: windows-latest
+          - os: windows-2022
             configure-preset: vs2022-vk
             build-preset: vs2022-debug-vk
-          - os: windows-latest
+          - os: windows-2022
             configure-preset: vs2022-vk
             build-preset: vs2022-release-vk
           - os: macos-14
