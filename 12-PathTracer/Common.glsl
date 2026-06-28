@@ -1,28 +1,7 @@
 #ifndef INCLUDED_COMMON_GLSL
 #define INCLUDED_COMMON_GLSL
 
-#define PT_FLAG_USE_ENVMAP              (1 << 0)
-#define PT_FLAG_USE_NEUTRAL_BACKGROUND  (1 << 1)
-#define PT_FLAG_USE_DEPTH_OF_FIELD      (1 << 2)
-#define PT_FLAG_USE_NORMAL_MAPPING      (1 << 3)
-#define PT_FLAG_DEBUG_SIMPLE_SHADING    (1 << 4)
-#define PT_FLAG_DEBUG_DISABLE_ACCUMULATION (1 << 5)
-#define PT_FLAG_DEBUG_HIT_MASK          (1 << 6)
-#define PT_FLAG_DEBUG_FOCAL_PLANE       (1 << 7)
-
-#define PT_DEBUG_VIS_NONE               0u
-#define PT_DEBUG_VIS_ALBEDO             1u
-#define PT_DEBUG_VIS_GEO_NORMAL         2u
-#define PT_DEBUG_VIS_SHADING_NORMAL     3u
-#define PT_DEBUG_VIS_NORMAL_MAPPED      4u
-#define PT_DEBUG_VIS_TANGENT            5u
-#define PT_DEBUG_VIS_BITANGENT          6u
-#define PT_DEBUG_VIS_METALNESS          7u
-#define PT_DEBUG_VIS_ROUGHNESS          8u
-#define PT_DEBUG_VIS_UV                 9u
-
-#define PT_MATERIAL_MODE_PBR_METALLIC_ROUGHNESS   0
-#define PT_MATERIAL_MODE_PBR_SPECULAR_GLOSSINESS  1
+#include "PathTracerConstants.glsl"
 
 #ifndef __cplusplus
 
@@ -172,11 +151,6 @@ float nudgeULP(float x, int delta)
 	return uintBitsToFloat(floatBitsToUint(x) + delta);
 }
 
-float pow2(float x)
-{
-	return x*x;
-}
-
 // Point on hemisphere surface around Z+ with cosine weighted distribution
 vec3 mapToCosineHemisphere(vec2 uv)
 {
@@ -209,47 +183,13 @@ mat3 makeOrthonormalBasis(vec3 n)
 	return mat3(x, y, z);
 }
 
-struct Surface
-{
-	vec3 normal;
-	vec3 diffuseColor;
-	vec3 specularColor;
-	float linearRoughness;
-};
-
+// Surface and unpackSurface live in ShaderShared.glsl
 Surface unpack(DefaultPayload p)
 {
-	Surface result;
-	result.normal = p.normal;
-	result.diffuseColor = p.baseColor - p.baseColor * p.metalness;
-	result.specularColor = p.baseColor * p.metalness + (p.reflectance * (1.0 - p.metalness));
-	result.linearRoughness = max(0.0001, p.roughness * p.roughness);
-	return result;
+	return unpackSurface(p.baseColor, p.metalness, p.roughness, p.reflectance);
 }
 
-vec2 cartesianToLatLongTexcoord(vec3 p)
-{
-	// http://gl.ict.usc.edu/Data/HighResProbes
-
-	float u = (1.0f + atan(p.z, -p.x) / M_PI);
-	float v = acos(p.y) / M_PI;
-
-	return vec2(u * 0.5f, v);
-}
-
-vec3 latLongTexcoordToCartesian(vec2 uv)
-{
-	// http://gl.ict.usc.edu/Data/HighResProbes
-
-	float theta = M_PI*(uv.x*2.0 - 1.0);
-	float phi = M_PI*uv.y;
-
-	float x = sin(phi)*sin(theta);
-	float y = cos(phi);
-	float z = -sin(phi)*cos(theta);
-
-	return vec3(z, y, x);
-}
+// cartesianToLatLongTexcoord and latLongTexcoordToCartesian live in ShaderShared.glsl
 
 vec3 envMapPixelIndexToDirection(uint i, vec2 pixelJitter)
 {

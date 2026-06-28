@@ -18,6 +18,7 @@ set(shaderDependencies
 	Common.glsl
 	BRDF.glsl
 	ShaderShared.glsl
+	PathTracerConstants.glsl
 )
 
 if(APPLE AND DEFINED RUSH_RENDER_API AND RUSH_RENDER_API STREQUAL "MTL")

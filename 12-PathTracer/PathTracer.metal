@@ -4,88 +4,14 @@
 using namespace metal;
 using namespace metal::raytracing;
 
-#define PT_FLAG_USE_ENVMAP              (1u << 0u)
-#define PT_FLAG_USE_NEUTRAL_BACKGROUND  (1u << 1u)
-#define PT_FLAG_USE_DEPTH_OF_FIELD      (1u << 2u)
-#define PT_FLAG_USE_NORMAL_MAPPING      (1u << 3u)
-#define PT_FLAG_DEBUG_SIMPLE_SHADING    (1u << 4u)
-#define PT_FLAG_DEBUG_DISABLE_ACCUMULATION (1u << 5u)
-#define PT_FLAG_DEBUG_HIT_MASK          (1u << 6u)
-#define PT_FLAG_DEBUG_FOCAL_PLANE       (1u << 7u)
-
-#define PT_DEBUG_VIS_NONE               0u
-#define PT_DEBUG_VIS_ALBEDO             1u
-#define PT_DEBUG_VIS_GEO_NORMAL         2u
-#define PT_DEBUG_VIS_SHADING_NORMAL     3u
-#define PT_DEBUG_VIS_NORMAL_MAPPED      4u
-#define PT_DEBUG_VIS_TANGENT            5u
-#define PT_DEBUG_VIS_BITANGENT          6u
-#define PT_DEBUG_VIS_METALNESS          7u
-#define PT_DEBUG_VIS_ROUGHNESS          8u
-#define PT_DEBUG_VIS_UV                 9u
-
-#define PT_MATERIAL_MODE_PBR_METALLIC_ROUGHNESS   0u
-#define PT_MATERIAL_MODE_PBR_SPECULAR_GLOSSINESS  1u
-
+#include "PathTracerConstants.glsl"
 #include "ShaderShared.glsl"
 
 static constant float kPi = 3.14159265359f;
 
-static inline float D_GGX(float linearRoughness, float NoH)
-{
-	float oneMinusNoHSquared = 1.0f - NoH * NoH;
-	float a = NoH * linearRoughness;
-	float k = linearRoughness / (oneMinusNoHSquared + a * a);
-	float d = k * k * (1.0f / kPi);
-	return max(0.0f, d);
-}
+// D_GGX, G1_Smith, F_Schlick and importanceSampleDGGXVNDF live in ShaderShared.glsl.
 
-static inline float G1_Smith(float linearRoughness, float NoL)
-{
-	float a2 = linearRoughness * linearRoughness;
-	return 2.0f * NoL / (NoL + sqrt(a2 + (1.0f - a2) * (NoL * NoL)));
-}
-
-static inline float3 F_Schlick(float3 f0, float f90, float VoH)
-{
-	float f = pow5(1.0f - VoH);
-	return f + f0 * (f90 - f);
-}
-
-static inline float3 importanceSampleDGGXVNDF(float2 uv, float linearRoughness, float3 V)
-{
-	float3 Vh = normalize(float3(linearRoughness * V.x, linearRoughness * V.y, V.z));
-	float lensq = Vh.x * Vh.x + Vh.y * Vh.y;
-	float3 T1 = lensq > 0.0f ? float3(-Vh.y, Vh.x, 0.0f) * rsqrt(lensq) : float3(1.0f, 0.0f, 0.0f);
-	float3 T2 = cross(Vh, T1);
-
-	float r = sqrt(uv.x);
-	float phi = 2.0f * kPi * uv.y;
-	float t1 = r * cos(phi);
-	float t2 = r * sin(phi);
-	float s = 0.5f * (1.0f + Vh.z);
-	t2 = (1.0f - s) * sqrt(max(0.0f, 1.0f - t1 * t1)) + s * t2;
-
-	float3 Nh = t1 * T1 + t2 * T2 + sqrt(max(0.0f, 1.0f - t1 * t1 - t2 * t2)) * Vh;
-	return float3(linearRoughness * Nh.x, linearRoughness * Nh.y, max(0.0f, Nh.z));
-}
-
-static inline float2 cartesianToLatLongTexcoord(float3 p)
-{
-	float u = (1.0f + atan2(p.z, -p.x) / kPi);
-	float v = acos(clamp(p.y, -1.0f, 1.0f)) / kPi;
-	return float2(u * 0.5f, v);
-}
-
-static inline float3 latLongTexcoordToCartesian(float2 uv)
-{
-	float theta = kPi * (uv.x * 2.0f - 1.0f);
-	float phi = kPi * uv.y;
-	float x = cos(theta) * sin(phi);
-	float y = cos(phi);
-	float z = -sin(theta) * sin(phi);
-	return float3(x, y, z);
-}
+// cartesianToLatLongTexcoord and latLongTexcoordToCartesian live in ShaderShared.glsl.
 
 static inline float3 envMapPixelIndexToDirection(uint idx, float2 pixelJitter, int2 envmapSize)
 {
@@ -96,13 +22,7 @@ static inline float3 envMapPixelIndexToDirection(uint idx, float2 pixelJitter, i
 	return latLongTexcoordToCartesian(uv);
 }
 
-static inline float3 getSimpleSkyColor(float3 dir)
-{
-	float3 colorT = float3(0.5f, 0.66f, 0.9f) * 2.0f;
-	float3 colorB = float3(0.15f, 0.18f, 0.15f);
-	float a = dir.y * 0.5f + 0.5f;
-	return mix(colorB, colorT, a);
-}
+// getSunDirection, getSunColor and getSkyColor live in ShaderShared.glsl
 
 struct SceneConstants
 {
@@ -296,14 +216,7 @@ static inline float3 debugVisColor(uint mode, thread const Payload& payload, flo
 	}
 }
 
-static inline float3 getCameraViewVector(constant SceneConstants* scene, float2 uv)
-{
-	float3 viewVector = float3((uv - 0.5f) * 2.0f, 1.0f);
-	viewVector.x /= scene->matProj[0][0];
-	viewVector.y /= scene->matProj[1][1];
-	float3x3 view = float3x3(scene->matView[0].xyz, scene->matView[1].xyz, scene->matView[2].xyz);
-	return normalize(viewVector * transpose(view));
-}
+// getCameraViewVector lives in ShaderShared.glsl
 
 static inline bool traceShadowRay(constant PathTracerSet0& set0, ray shadowRay)
 {
@@ -495,7 +408,7 @@ kernel void main0(constant PathTracerSet0& set0 [[buffer(0)]],
 	primaryRay.min_distance = 0.0f;
 	primaryRay.max_distance = 1e9f;
 	primaryRay.origin = set0.scene->cameraPosition.xyz;
-	primaryRay.direction = getCameraViewVector(set0.scene, pixelUV + pixelJitter);
+	primaryRay.direction = getCameraViewVector(pixelUV + pixelJitter, set0.scene->matView, set0.scene->matProj);
 
 	if ((set0.scene->flags & PT_FLAG_USE_DEPTH_OF_FIELD) != 0u)
 	{
@@ -544,7 +457,7 @@ kernel void main0(constant PathTracerSet0& set0 [[buffer(0)]],
 					simpleColor = useEnvmap
 						? sampleEnvmap(set0.scene, set0.envmapTexture, set0.defaultSampler,
 							applyEnvmapTransform(set0.scene, primaryRay.direction)).value
-						: getSimpleSkyColor(primaryRay.direction);
+						: getSkyColor(primaryRay.direction);
 					if ((set0.scene->flags & PT_FLAG_USE_NEUTRAL_BACKGROUND) != 0u)
 					{
 						simpleColor = float3(0.25f);
@@ -630,7 +543,7 @@ kernel void main0(constant PathTracerSet0& set0 [[buffer(0)]],
 			}
 			else
 			{
-				result += throughput * getSimpleSkyColor(primaryRay.direction);
+				result += throughput * getSkyColor(primaryRay.direction);
 			}
 			break;
 		}
@@ -653,10 +566,10 @@ kernel void main0(constant PathTracerSet0& set0 [[buffer(0)]],
 		float3 N = normalize(payload.normal);
 		float3 V = -primaryRay.direction;
 
-		float3 diffuseColor = payload.baseColor - payload.baseColor * payload.metalness;
-		float3 specularColor = payload.baseColor * payload.metalness
-			+ (payload.reflectance * (1.0f - payload.metalness));
-		float linearRoughness = max(0.0001f, payload.roughness * payload.roughness);
+		Surface surf = unpackSurface(payload.baseColor, payload.metalness, payload.roughness, payload.reflectance);
+		float3 diffuseColor = surf.diffuseColor;
+		float3 specularColor = surf.specularColor;
+		float linearRoughness = surf.linearRoughness;
 		if (i == maxPathLength)
 		{
 			break;
@@ -678,8 +591,8 @@ kernel void main0(constant PathTracerSet0& set0 [[buffer(0)]],
 			}
 			else
 			{
-				L = normalize(float3(3.0f, 5.0f, 3.0f));
-				lightColor = float3(0.95f, 0.90f, 0.8f) * 2.5f * kPi;
+				L = getSunDirection();
+				lightColor = getSunColor();
 				lightPdfW = 1.0f;
 			}
 
