@@ -994,6 +994,10 @@ void ExampleModelViewer::loadConfig()
 	{
 		RUSH_LOG("Loaded config from '%s'", path.c_str());
 	}
+	else
+	{
+		RUSH_LOG("No usable config at '%s' (using defaults)", path.c_str());
+	}
 
 	m_interpolatedCamera = m_camera;
 }
