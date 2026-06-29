@@ -111,6 +111,7 @@ private:
 	Box3 m_boundingBox;
 
 	std::string m_statusString;
+	std::string m_modelFilename;
 	bool m_valid = false;
 
 	bool m_haveNormals = false;
@@ -222,16 +223,52 @@ private:
 		bool m_showFocusAssist = false;
 		float m_focusAssistFalloffPx = 4.0f;
 		float m_envmapRotationDegrees = 0.0;
+
+		template <typename Ar> void describe(Ar& ar)
+		{
+			ar.field("useEnvmap", m_useEnvmap);
+			ar.field("useNeutralBackground", m_useNeutralBackground);
+			ar.field("useDepthOfField", m_useDepthOfField);
+			ar.field("useNormalMapping", m_useNormalMapping);
+			ar.field("debugSimpleShading", m_debugSimpleShading);
+			ar.field("debugDisableAccumulation", m_debugDisableAccumulation);
+			ar.field("debugHitMask", m_debugHitMask);
+			ar.field("debugVisMode", m_debugVisMode);
+			ar.field("gamma", m_gamma);
+			ar.field("exposureEV100", m_exposureEV100);
+			ar.field("sensorPreset", m_sensorPreset);
+			ar.field("cameraSensorSizeMM", m_cameraSensorSizeMM);
+			ar.field("focalLengthPreset", m_focalLengthPreset);
+			ar.field("focalLengthMM", m_focalLengthMM);
+			ar.field("apertureFStop", m_apertureFStop);
+			ar.field("focusDistance", m_focusDistance);
+			ar.field("showFocusAssist", m_showFocusAssist);
+			ar.field("focusAssistFalloffPx", m_focusAssistFalloffPx);
+			ar.field("envmapRotationDegrees", m_envmapRotationDegrees);
+		}
 	};
 
 	Settings m_settings;
+
+	// Root of the serialized per-scene config.
+	struct ConfigRoot
+	{
+		Camera&   camera;
+		Settings& settings;
+		template <typename Ar> void describe(Ar& ar)
+		{
+			ar.field("camera", camera);
+			ar.field("settings", settings);
+		}
+	};
 
 	void loadingThreadFunction();
 	void createRayTracingScene(GfxContext* ctx);
 
 	void createGpuScene();
-	void saveCamera();
-	void loadCamera();
+	std::string configFilePath() const;
+	void saveConfig();
+	void loadConfig();
 	void resetCamera();
 	void focusOnCursor();
 	void loadEnvmap(const char* filename);

@@ -109,6 +109,10 @@ HumanFriendlyValue getHumanFriendlyValueShort(double v);
 void interpolateCamera(Camera& camera, const Camera& target, float deltaTime, float positionSmoothing = 0.9f,
     float rotationSmoothing = 0.85f);
 
+// Per-scene config path next to the executable: "<tag>_config_<hash>.bin", hashed
+// from the model path (resolved against cwd). modelFilename may be null/empty.
+std::string sceneConfigPath(const char* tag, const char* modelFilename);
+
 TexturedQuad2D makeFullScreenQuad();
 
 struct ProceduralSceneVertex

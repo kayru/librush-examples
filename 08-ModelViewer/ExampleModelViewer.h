@@ -36,6 +36,11 @@ private:
 	bool loadModelNative(const char* filename);
 	bool buildProceduralModel();
 
+	std::string configFilePath() const;
+	void saveConfig();
+	void loadConfig();
+	void resetCamera();
+
 	void enqueueLoadTexture(const std::string& filename, u32 materialId);
 
 	Timer m_timer;
@@ -83,7 +88,9 @@ private:
 	};
 
 	std::string m_statusString;
+	std::string m_modelFilename;
 	bool m_valid = false;
+	bool m_useProceduralScene = false;
 
 	std::unordered_map<u64, GfxOwn<GfxBuffer>> m_materialConstantBuffers;
 
@@ -117,7 +124,31 @@ private:
 	WindowEventListener m_windowEvents;
 
 	const bool m_reverseZ = true;
-	float m_cameraScale = 1.0f;
+
+	// Persisted per-scene configuration (saved/loaded via the shared framework).
+	struct Settings
+	{
+		float m_cameraScale = 1.0f;
+
+		template <typename Ar> void describe(Ar& ar)
+		{
+			ar.field("cameraScale", m_cameraScale);
+		}
+	};
+
+	Settings m_settings;
+
+	// Root of the serialized per-scene config.
+	struct ConfigRoot
+	{
+		Camera&   camera;
+		Settings& settings;
+		template <typename Ar> void describe(Ar& ar)
+		{
+			ar.field("camera", camera);
+			ar.field("settings", settings);
+		}
+	};
 
 	u32 m_msaaQuality = 1;
 

@@ -12,6 +12,7 @@
 #include <Rush/UtilHash.h>
 #include <Rush/UtilLog.h>
 
+#include <Common/Reflect.h>
 #include <Common/Utils.h>
 
 #include "Model.h"
@@ -110,6 +111,7 @@ ExampleModelViewer::ExampleModelViewer() : ExampleApp(), m_boundingBox(Vec3(0.0f
 	if (getPositionalArg(g_appCfg.argc, g_appCfg.argv, 0, modelFilename))
 	{
 		m_statusString            = std::string("Model: ") + modelFilename;
+		m_modelFilename           = modelFilename;
 		m_valid                   = loadModel(modelFilename);
 
 		if (!m_valid)
@@ -132,15 +134,11 @@ ExampleModelViewer::ExampleModelViewer() : ExampleApp(), m_boundingBox(Vec3(0.0f
 	else
 	{
 		m_statusString = "Procedural scene (cube + plane)";
+		m_useProceduralScene = true;
 		m_valid = buildProceduralModel();
 	}
 
-	float aspect = m_window->getAspect();
-	float fov    = 1.0f;
-
-	m_camera = Camera(aspect, fov, 0.25f);
-	m_camera.lookAt(Vec3(m_boundingBox.m_max) + Vec3(2.0f), m_boundingBox.center());
-	m_interpolatedCamera = m_camera;
+	loadConfig();
 
 	m_cameraMan = new CameraManipulator();
 
@@ -184,16 +182,30 @@ void ExampleModelViewer::onUpdate()
 	{
 		switch (e.type)
 		{
+		case WindowEventType_KeyDown:
+			if (e.code == Key_F2)
+			{
+				saveConfig();
+			}
+			else if (e.code == Key_F3)
+			{
+				loadConfig();
+			}
+			else if (e.code == Key_F4)
+			{
+				resetCamera();
+			}
+			break;
 		case WindowEventType_Scroll:
 			if (e.scroll.y > 0)
 			{
-				m_cameraScale *= 1.25f;
+				m_settings.m_cameraScale *= 1.25f;
 			}
 			else
 			{
-				m_cameraScale *= 0.9f;
+				m_settings.m_cameraScale *= 0.9f;
 			}
-			RUSH_LOG("Camera scale: %f", m_cameraScale);
+			RUSH_LOG("Camera scale: %f", m_settings.m_cameraScale);
 			break;
 		default: break;
 		}
@@ -213,10 +225,10 @@ void ExampleModelViewer::onUpdate()
 		m_virtualGamepad.update(m_window);
 	}
 
-	float clipNear = 0.25f * m_cameraScale;
+	float clipNear = 0.25f * m_settings.m_cameraScale;
 	m_camera.setClip(clipNear, m_camera.getFarPlane());
 	m_camera.setAspect(m_window->getAspect());
-	m_cameraMan->setMoveSpeed(20.0f * m_cameraScale);
+	m_cameraMan->setMoveSpeed(20.0f * m_settings.m_cameraScale);
 
 	m_cameraMan->update(&m_camera, dt, m_window->getKeyboardState(), m_window->getMouseState());
 
@@ -950,6 +962,49 @@ bool ExampleModelViewer::buildProceduralModel()
 	m_indexBuffer = Gfx_CreateBuffer(ibDesc, data.indices.data());
 
 	return m_vertexBuffer.valid() && m_indexBuffer.valid();
+}
+
+// Adding/removing/reordering Settings fields needs no bump (tagged format).
+// Bump only on incompatible semantic changes or a Camera blob layout change.
+static constexpr u32 kConfigVersion = 1;
+
+std::string ExampleModelViewer::configFilePath() const
+{
+	const char* model = (m_useProceduralScene || m_modelFilename.empty()) ? nullptr : m_modelFilename.c_str();
+	return sceneConfigPath("modelviewer", model);
+}
+
+void ExampleModelViewer::saveConfig()
+{
+	const std::string path = configFilePath();
+	ConfigRoot root{m_camera, m_settings};
+	if (Reflect::saveToFile(path.c_str(), kConfigVersion, root))
+	{
+		RUSH_LOG("Saved config to '%s'", path.c_str());
+	}
+}
+
+void ExampleModelViewer::loadConfig()
+{
+	resetCamera(); // default framing; the file overwrites whatever it carries
+
+	const std::string path = configFilePath();
+	ConfigRoot root{m_camera, m_settings};
+	if (Reflect::loadFromFile(path.c_str(), kConfigVersion, root))
+	{
+		RUSH_LOG("Loaded config from '%s'", path.c_str());
+	}
+
+	m_interpolatedCamera = m_camera;
+}
+
+void ExampleModelViewer::resetCamera()
+{
+	const float aspect = m_window->getAspect();
+	const float fov    = 1.0f;
+	m_camera = Camera(aspect, fov, 0.25f);
+	m_camera.lookAt(Vec3(m_boundingBox.m_max) + Vec3(2.0f), m_boundingBox.center());
+	m_interpolatedCamera = m_camera;
 }
 
 bool ExampleModelViewer::loadModel(const char* filename)

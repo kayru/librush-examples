@@ -25,6 +25,7 @@
 
 #include <Common/ImGuiImpl.h>
 #include <Common/ImGuiExt.h>
+#include <Common/Reflect.h>
 #include <Common/Utils.h>
 #include <imgui.h>
 
@@ -203,6 +204,7 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 	if (getPositionalArg(g_appCfg.argc, g_appCfg.argv, 0, modelFilename))
 	{
 		m_statusString            = std::string("Model: ") + modelFilename;
+		m_modelFilename           = modelFilename;
 		m_valid                   = loadModel(modelFilename);
 
 		if (!m_valid)
@@ -288,7 +290,7 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 		createGpuScene();
 	}
 
-	loadCamera();
+	loadConfig();
 
 	m_cameraMan = new CameraManipulator();
 }
@@ -496,11 +498,11 @@ void ExamplePathTracer::onUpdate()
 			}
 			else if (e.code == Key_F2)
 			{
-				saveCamera();
+				saveConfig();
 			}
 			else if (e.code == Key_F3)
 			{
-				loadCamera();
+				loadConfig();
 			}
 			else if (e.code == Key_F4)
 			{
@@ -1649,40 +1651,50 @@ void ExamplePathTracer::focusOnCursor()
 	m_focusPickRequested = true;
 }
 
-void ExamplePathTracer::saveCamera()
+// Adding/removing/reordering Settings fields needs no bump (tagged format).
+// Bump only on incompatible semantic changes or a Camera blob layout change.
+static constexpr u32 kConfigVersion = 1;
+
+std::string ExamplePathTracer::configFilePath() const
 {
-	FileOut f("camera.bin");
-	if (f.valid())
+	const char* model = (m_useProceduralScene || m_modelFilename.empty()) ? nullptr : m_modelFilename.c_str();
+	return sceneConfigPath("pathtracer", model);
+}
+
+void ExamplePathTracer::saveConfig()
+{
+	const std::string path = configFilePath();
+	ConfigRoot root{m_camera, m_settings};
+	if (Reflect::saveToFile(path.c_str(), kConfigVersion, root))
 	{
-		f.writeT(m_camera);
-		RUSH_LOG("Camera saved to file");
+		RUSH_LOG("Saved config to '%s'", path.c_str());
 	}
 }
 
-void ExamplePathTracer::loadCamera()
+void ExamplePathTracer::loadConfig()
 {
+	// Establish scene defaults first; the file overwrites whatever it carries.
 	if (m_useProceduralScene)
 	{
-		float aspect = m_window->getAspect();
-		float fov = 1.0f;
+		const float aspect = m_window->getAspect();
+		const float fov    = 1.0f;
 		m_camera = Camera(aspect, fov, 0.25f);
-		Vec3 center = m_boundingBox.center();
+		const Vec3 center = m_boundingBox.center();
 		m_camera.lookAt(center + Vec3(2.0f, 2.5f, 2.0f), center);
-		m_frameIndex = 0;
-		return;
-	}
-
-	FileIn f("camera.bin");
-	if (f.valid())
-	{
-		f.readT(m_camera);
-		m_frameIndex = 0;
-		RUSH_LOG("Camera loaded from file");
 	}
 	else
 	{
 		resetCamera();
 	}
+
+	const std::string path = configFilePath();
+	ConfigRoot root{m_camera, m_settings};
+	if (Reflect::loadFromFile(path.c_str(), kConfigVersion, root))
+	{
+		RUSH_LOG("Loaded config from '%s'", path.c_str());
+	}
+
+	m_frameIndex = 0;
 }
 
 bool ExamplePathTracer::loadModel(const char* filename)

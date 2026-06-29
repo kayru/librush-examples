@@ -2,9 +2,12 @@
 
 #include <Rush/UtilFile.h>
 #include <Rush/UtilCamera.h>
+#include <Rush/UtilHash.h>
+#include <Rush/UtilLog.h>
 
 #include <algorithm>
 #include <cctype>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <string_view>
@@ -353,6 +356,31 @@ void interpolateCamera(
 	float t1 = 1.0f - float(pow(pow(positionSmoothing, 60.0f), deltaTime));
 	float t2 = 1.0f - float(pow(pow(rotationSmoothing, 60.0f), deltaTime));
 	camera.blendTo(target, t1, t2);
+}
+
+std::string sceneConfigPath(const char* tag, const char* modelFilename)
+{
+	std::string key;
+	if (!modelFilename || !*modelFilename)
+	{
+		key = "procedural";
+	}
+	else
+	{
+		std::error_code ec;
+		const std::filesystem::path canonical = std::filesystem::weakly_canonical(modelFilename, ec);
+		key = ec ? std::string(modelFilename) : canonical.generic_string();
+#if defined(_WIN32)
+		key = toLower(key);
+#endif
+	}
+
+	const u64 hash = hashStrFnv1a64(key.c_str());
+
+	char name[64];
+	snprintf(name, sizeof(name), "%s_config_%016llx.bin", tag, static_cast<unsigned long long>(hash));
+
+	return std::string(Platform_GetExecutableDirectory()) + "/" + name;
 }
 
 TexturedQuad2D makeFullScreenQuad()

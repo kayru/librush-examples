@@ -1,6 +1,7 @@
 set(COMMON_SRC
 	Utils.h
 	Utils.cpp
+	Reflect.h
 	ExampleApp.h
 	ExampleApp.cpp
 	ImGuiImpl.h
