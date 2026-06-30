@@ -394,7 +394,7 @@ kernel void main0(constant PathTracerSet0& set0 [[buffer(0)]],
 	const int2 pixelIndex = int2(gid);
 	const float2 pixelUV = float2(pixelIndex) / float2(outputSize);
 
-	uint pixelLinearIndex = uint(pixelIndex.x + pixelIndex.y * outputSize.y);
+	uint pixelLinearIndex = uint(pixelIndex.x + pixelIndex.y * outputSize.x);
 	uint pixelRandomSeed = hashFnv1(pixelLinearIndex + pixelLinearIndex * 1294974679u);
 	uint randomSeed = hashFnv1(pixelRandomSeed + set0.scene->frameIndex);
 	float2 pixelJitter = (randomFloat2(randomSeed) - 0.5f) / float2(outputSize);

@@ -106,7 +106,7 @@ void main()
 	ivec2 pixelIndex = ivec2(gl_LaunchIDEXT.xy);
 	vec2 pixelUV = vec2(pixelIndex)/vec2(outputSize);
 
-	uint pixelLinearIndex = pixelIndex.x + pixelIndex.y * outputSize.y;
+	uint pixelLinearIndex = pixelIndex.x + pixelIndex.y * outputSize.x;
 
 	uint pixelRandomSeed = hashFnv1(pixelLinearIndex + pixelLinearIndex * 1294974679);
 	uint randomSeed = hashFnv1(pixelRandomSeed + frameIndex);
