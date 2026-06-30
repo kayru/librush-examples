@@ -176,7 +176,7 @@ private:
 	std::vector<TextureData*>                     m_pendingTextures;
 	std::vector<TextureData*>                     m_loadedTextures;
 
-	static constexpr u32     MaxTextures = 1024;
+	static constexpr u32     MaxTextures = PT_MAX_TEXTURES;
 	GfxOwn<GfxDescriptorSet> m_materialDescriptorSet;
 
 	bool m_loadingThreadShouldExit = false;

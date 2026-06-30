@@ -1,9 +1,10 @@
 #version 460
 #extension GL_EXT_ray_tracing : enable
 
+#define PT_CONFIG_SBT_HIT
 #include "Common.glsl"
 
-layout(location = 0) rayPayloadInEXT DefaultPayload payload;
+layout(location = 0) rayPayloadInEXT PtPayload payload;
 hitAttributeEXT vec2 hitAttributes;
 
 layout(shaderRecordEXT) buffer block
@@ -11,71 +12,17 @@ layout(shaderRecordEXT) buffer block
 	MaterialConstants materialConstants;
 };
 
-#define INTERPOLATE(v, f, b) (f(v[0]) * b.x + f(v[1]) * b.y + f(v[2]) * b.z)
-
 void main()
 {
-	payload.hitT = gl_HitTEXT;
+	PathTracerContext ctx;
 
-	vec3 barycentrics = vec3(
-		1 - hitAttributes.x - hitAttributes.y,
-		hitAttributes.x,
-		hitAttributes.y);
+	PtHit hit;
+	hit.valid = true;
+	hit.t = gl_HitTEXT;
+	hit.primId = gl_PrimitiveID;
+	hit.bary = hitAttributes;
+	hit.frontFacing = gl_HitKindEXT != 255u;
 
-	uint triIndices[3];
-	triIndices[0] = indexBuffer[materialConstants.firstIndex + gl_PrimitiveID*3 + 0];
-	triIndices[1] = indexBuffer[materialConstants.firstIndex + gl_PrimitiveID*3 + 1];
-	triIndices[2] = indexBuffer[materialConstants.firstIndex + gl_PrimitiveID*3 + 2];
-
-	Vertex triVertices[3];
-	triVertices[0] = vertexBuffer[triIndices[0]];
-	triVertices[1] = vertexBuffer[triIndices[1]];
-	triVertices[2] = vertexBuffer[triIndices[2]];
-
-	vec2 uv = INTERPOLATE(triVertices, getTexcoord, barycentrics);
-
-	vec4 albedoSample   = texture(sampler2D(textureDescriptors[materialConstants.albedoTextureId],   defaultSampler), uv);
-	vec4 specularSample = texture(sampler2D(textureDescriptors[materialConstants.specularTextureId], defaultSampler), uv);
-
-	if (materialConstants.materialMode == PT_MATERIAL_MODE_PBR_METALLIC_ROUGHNESS)
-	{
-		payload.baseColor.rgb = albedoSample.rgb * materialConstants.albedoFactor.rgb;
-		payload.metalness = materialConstants.metallicFactor * specularSample.b;
-		payload.roughness = materialConstants.roughnessFactor * specularSample.g;
-	}
-	else
-	{
-		payload.metalness = max3(specularSample.rgb * materialConstants.specularFactor.rgb);
-		payload.roughness = 1.0 - specularSample.a * materialConstants.roughnessFactor;
-		payload.baseColor.rgb = mix(albedoSample.rgb * materialConstants.albedoFactor.rgb, specularSample.rgb * materialConstants.specularFactor.rgb, payload.metalness);
-	}
-
-	payload.reflectance = materialConstants.reflectance;
-
-	payload.normal = normalize(INTERPOLATE(triVertices, getNormal, barycentrics));
-
-	const bool useNormalMapping = bool(flags & PT_FLAG_USE_NORMAL_MAPPING) && materialConstants.normalTextureId != 0;
-
-	if (useNormalMapping)
-	{
-		vec3 normalSample = texture(sampler2D(textureDescriptors[materialConstants.normalTextureId], defaultSampler), uv).xyz * 2.0 - 1.0;
-		normalSample.z = sqrt(max(0, 1.0 - normalSample.x * normalSample.x - normalSample.y * normalSample.y));
-
-		vec4 tangent = INTERPOLATE(triVertices, getTangent, barycentrics);
-		vec3 tanU = tangent.xyz;
-		vec3 tanV = cross(payload.normal, tangent.xyz) * tangent.w;
-
-		mat3 basis = mat3(tanU, tanV, payload.normal);
-
-		payload.normal = normalize(basis * normalSample);
-	}
-
-	payload.geoNormal = cross(getPosition(triVertices[1]) - getPosition(triVertices[0]), getPosition(triVertices[2]) - getPosition(triVertices[0]));
-	payload.geoNormal = normalize(payload.geoNormal);
-
-	if (gl_HitKindEXT == 255)
-	{
-		payload.normal = -payload.normal;
-		payload.geoNormal = -payload.geoNormal;
-	}
+	uint indexBase = materialConstants.firstIndex + gl_PrimitiveID * 3u;
+	fillPayload(ctx, hit, indexBase, materialConstants, payload);
 }

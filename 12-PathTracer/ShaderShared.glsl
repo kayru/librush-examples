@@ -11,6 +11,7 @@
 	#define vec2 float2
 	#define vec3 float3
 	#define vec4 float4
+	#define ivec2 int2
 	#define mat3 float3x3
 	#define mat4 float4x4
 	#define inversesqrt rsqrt
@@ -194,6 +195,21 @@ SHADER_INLINE vec3 importanceSampleDGGXVNDF(vec2 uv, float linearRoughness, vec3
 
 	vec3 Nh = t1 * T1 + t2 * T2 + sqrt(max(0.0f, 1.0f - pow2(t1) - pow2(t2))) * Vh;
 	return vec3(linearRoughness * Nh.x, linearRoughness * Nh.y, max(0.0f, Nh.z));
+}
+
+// Upper-left 3x3 of a 4x4 (GLSL mat3(mat4) is implicit; Metal needs explicit columns).
+SHADER_INLINE mat3 toMat3(mat4 m)
+{
+	return mat3(m[0].xyz, m[1].xyz, m[2].xyz);
+}
+
+// Orthonormal frame whose 3rd column is n (rotationally arbitrary about n).
+SHADER_INLINE mat3 makeOrthonormalBasis(vec3 n)
+{
+	vec3 up = abs(n.z) < 0.999f ? vec3(0.0f, 0.0f, 1.0f) : vec3(0.0f, 1.0f, 0.0f);
+	vec3 t = normalize(cross(up, n));
+	vec3 b = cross(n, t);
+	return mat3(t, b, n);
 }
 
 // Lat-long environment mapping (http://gl.ict.usc.edu/Data/HighResProbes).

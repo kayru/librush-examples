@@ -104,9 +104,8 @@ vec4 getTangent(Vertex v) { return vec4(v.tangent[0], v.tangent[1], v.tangent[2]
 layout(set=0, binding=8)
 uniform accelerationStructureEXT TLAS;
 
-#define MaxTextures 1024
 layout(set=1, binding = 0)
-uniform texture2D textureDescriptors[MaxTextures];
+uniform texture2D textureDescriptors[PT_MAX_TEXTURES];
 
 // common types and functions
 
@@ -125,72 +124,8 @@ struct MaterialConstants
 	uint materialMode;
 };
 
-struct DefaultPayload
-{
-	float hitT;
-
-	vec3 baseColor;
-	float metalness;
-	float roughness;
-	float reflectance;
-
-	vec3 normal;
-	vec3 geoNormal;
-};
-
-struct RayDesc
-{
-	vec3 origin;
-	float minT;
-	vec3 direction;
-	float maxT;
-};
-
-mat3 makeOrthonormalBasis(vec3 n)
-{
-	vec3 u = abs(dot(n, vec3(0,1,0))) < 0.9 ? vec3(0,1,0) : vec3(1,0,0);
-	vec3 z = n;
-	vec3 x = normalize(cross(u, z));
-	vec3 y = cross(z, x);
-	return mat3(x, y, z);
-}
-
-// Surface and unpackSurface live in ShaderShared.glsl
-Surface unpack(DefaultPayload p)
-{
-	return unpackSurface(p.baseColor, p.metalness, p.roughness, p.reflectance);
-}
-
-// cartesianToLatLongTexcoord and latLongTexcoordToCartesian live in ShaderShared.glsl
-
-vec3 envMapPixelIndexToDirection(uint i, vec2 pixelJitter)
-{
-	uint x = i % envmapSize.x;
-	uint y = i / envmapSize.x;
-
-	vec2 pixelPos = vec2(x, y);
-	vec2 uv = (pixelPos + pixelJitter) / vec2(envmapSize);
-
-	return latLongTexcoordToCartesian(uv);
-}
-
-vec3 importanceSampleSkyLightDir(inout uint randomSeed)
-{
-	uint i = randomUint32(randomSeed) % (envmapSize.x * envmapSize.y);
-	EnvmapCell entry = envmapDistributionBuffer[i];
-	vec2 jitter = randomFloat2(randomSeed); // jitter within a texel
-
-	if (randomFloat(randomSeed) <= entry.p)
-	{
-		return envMapPixelIndexToDirection(i, jitter);
-	}
-	else
-	{
-		return envMapPixelIndexToDirection(entry.i, jitter);
-	}
-}
-
-// powerHeuristic and focalPlaneOverlay live in ShaderShared.glsl
+#include "PathTracerContext.glsl"
+#include "PathTracerCore.glsl"
 
 #endif // __cplusplus
 

@@ -8,6 +8,8 @@ rush_add_app(12-PathTracer
 		PathTracer.rgen
 		PathTracer.rmiss
 		PathTracer.metal
+		PathTracerContext.glsl
+		PathTracerCore.glsl
 	LIBS
 		stb
 		tiny_obj_loader
@@ -18,6 +20,8 @@ set(shaderDependencies
 	Common.glsl
 	ShaderShared.glsl
 	PathTracerConstants.glsl
+	PathTracerContext.glsl
+	PathTracerCore.glsl
 )
 
 if(APPLE AND DEFINED RUSH_RENDER_API AND RUSH_RENDER_API STREQUAL "MTL")
