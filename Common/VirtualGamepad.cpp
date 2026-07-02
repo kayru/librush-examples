@@ -3,6 +3,7 @@
 #include <Rush/GfxBitmapFont.h>
 #include <Rush/GfxPrimitiveBatch.h>
 #include <Rush/MathCommon.h>
+#include <Rush/UtilCamera.h>
 #include <Rush/UtilColor.h>
 #include <Rush/Window.h>
 
@@ -346,6 +347,34 @@ void VirtualGamepad::draw(PrimitiveBatch* prim, BitmapFontRenderer* font, const 
 				font->draw(prim, textPos, btn.label, btn.pressed ? ColorRGBA8::White() : ColorRGBA8(200, 200, 200));
 			}
 		}
+	}
+}
+
+void VirtualGamepad::updateFlyCamera(Window* window, Camera& camera, float dt, float moveSpeed, float turnSpeed)
+{
+	if (m_flyVerticalSlider < 0)
+	{
+		const Box2  safe    = window->getSafeArea();
+		const float sliderX = safe.m_min.x + 170.0f;
+		const float sliderY = safe.m_max.y - 100.0f;
+		m_flyVerticalSlider = addVerticalSlider(Vec2(sliderX, sliderY), 40.0f, 120.0f);
+	}
+
+	update(window);
+
+	const Vec2  leftStick    = getLeftStick();
+	const float verticalMove = getButtonValue(m_flyVerticalSlider);
+	if (leftStick.length() > 0.0f || verticalMove != 0.0f)
+	{
+		const Vec3 move(leftStick.x, verticalMove, -leftStick.y);
+		camera.move(move * dt * moveSpeed);
+	}
+
+	const Vec2 rightStick = getRightStick();
+	if (rightStick.length() > 0.0f)
+	{
+		camera.rotateOnAxis(rightStick.x * dt * turnSpeed, Vec3(0.0f, 1.0f, 0.0f));
+		camera.rotateOnAxis(rightStick.y * dt * turnSpeed, camera.getRight());
 	}
 }
 

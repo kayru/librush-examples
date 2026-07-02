@@ -36,7 +36,7 @@ private:
 	bool loadModelNative(const char* filename);
 	bool buildProceduralModel();
 
-	std::string configFilePath() const;
+	const char* configModelName() const; // model path for the config key, or null when procedural
 	void saveConfig();
 	void loadConfig();
 	void resetCamera();
@@ -138,18 +138,6 @@ private:
 
 	Settings m_settings;
 
-	// Root of the serialized per-scene config.
-	struct ConfigRoot
-	{
-		Camera&   camera;
-		Settings& settings;
-		template <typename Ar> void describe(Ar& ar)
-		{
-			ar.field("camera", camera);
-			ar.field("settings", settings);
-		}
-	};
-
 	u32 m_msaaQuality = 1;
 
 	struct TextureData
@@ -178,5 +166,4 @@ private:
 	void loadingThreadFunction();
 
 	VirtualGamepad m_virtualGamepad;
-	int m_btnVertical = -1;
 };

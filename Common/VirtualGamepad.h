@@ -8,6 +8,7 @@ namespace Rush
 
 class PrimitiveBatch;
 class BitmapFontRenderer;
+class Camera;
 
 class VirtualGamepad
 {
@@ -40,6 +41,8 @@ public:
 	bool update(Window* window);
 	void draw(PrimitiveBatch* prim, BitmapFontRenderer* font, const Vec2& windowSize) const;
 
+	void updateFlyCamera(Window* window, Camera& camera, float dt, float moveSpeed, float turnSpeed = 2.0f);
+
 	Vec2 getLeftStick() const { return m_leftNorm; }
 	Vec2 getRightStick() const { return m_rightNorm; }
 
@@ -52,6 +55,8 @@ private:
 	static constexpr float DeadZone   = 0.15f;
 
 	bool isTouchClaimed(u64 id) const;
+
+	int m_flyVerticalSlider = -1;
 
 	Vec2 m_leftOrigin = Vec2(0.0f);
 	Vec2 m_leftOffset = Vec2(0.0f);

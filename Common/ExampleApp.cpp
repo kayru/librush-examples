@@ -87,7 +87,10 @@ bool ExampleApp::isDesktop() const
 
 ExampleApp::ExampleApp() : m_window(Platform_GetWindow())
 {
-	m_window->retain();
+	if (m_window) // null in headless mode
+	{
+		m_window->retain();
+	}
 
 	m_prim = new PrimitiveBatch();
 	m_font = new BitmapFontRenderer(BitmapFontRenderer::createEmbeddedFont(true, 0, 1));
@@ -140,7 +143,10 @@ ExampleApp::~ExampleApp()
 	delete m_font;
 	delete m_prim;
 
-	m_window->release();
+	if (m_window)
+	{
+		m_window->release();
+	}
 }
 
 void ExampleApp::SetupScreenshot(const AppConfig& cfg, int argc, char** argv)
@@ -199,7 +205,14 @@ void ExampleApp::update()
 
 	if (done)
 	{
-		m_window->close();
+		if (m_window)
+		{
+			m_window->close();
+		}
+		else
+		{
+			Platform_RequestExit(); // headless: no window to close
+		}
 	}
 }
 
@@ -210,6 +223,11 @@ void ExampleApp::renderMessage(const char* message)
 
 void ExampleApp::renderMessage(const char* message, const ColorRGBA8& color, float scale)
 {
+	if (!m_window) // nothing to render to in headless mode
+	{
+		return;
+	}
+
 	auto ctx = Platform_GetGfxContext();
 
 	GfxPassDesc passDesc;

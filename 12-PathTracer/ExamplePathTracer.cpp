@@ -49,16 +49,6 @@ int main(int argc, char** argv)
 	return Example_Main<ExamplePathTracer>(g_appCfg, argc, argv);
 }
 
-struct TimingScope
-{
-	TimingScope(MovingAverage<double, 60>& output) : m_output(output) {}
-
-	~TimingScope() { m_output.add(m_timer.time()); }
-
-	MovingAverage<double, 60>& m_output;
-	Timer                      m_timer;
-};
-
 ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f), Vec3(0.0f))
 {
 	Gfx_SetPresentInterval(0);

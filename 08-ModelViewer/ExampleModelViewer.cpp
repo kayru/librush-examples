@@ -12,14 +12,10 @@
 #include <Rush/UtilHash.h>
 #include <Rush/UtilLog.h>
 
-#include <Common/Reflect.h>
+#include <Common/SceneConfig.h>
 #include <Common/Utils.h>
 
 #include "Model.h"
-
-#include <stb_image.h>
-#include <stb_image_resize.h>
-#include <tiny_obj_loader.h>
 
 #include <chrono>
 #include <stdio.h>
@@ -43,16 +39,6 @@ int main(int argc, char** argv)
 
 	return Example_Main<ExampleModelViewer>(g_appCfg, argc, argv);
 }
-
-struct TimingScope
-{
-	TimingScope(MovingAverage<double, 60>& output) : m_output(output) {}
-
-	~TimingScope() { m_output.add(m_timer.time()); }
-
-	MovingAverage<double, 60>& m_output;
-	Timer                      m_timer;
-};
 
 ExampleModelViewer::ExampleModelViewer() : ExampleApp(), m_boundingBox(Vec3(0.0f), Vec3(0.0f))
 {
@@ -211,20 +197,6 @@ void ExampleModelViewer::onUpdate()
 		}
 	}
 
-	if (!isDesktop())
-	{
-		// Lazy-init gamepad buttons (need window size)
-		if (m_btnVertical < 0)
-		{
-			const Box2 safe = m_window->getSafeArea();
-			const float sliderX = safe.m_min.x + 170.0f;
-			const float sliderY = safe.m_max.y - 100.0f;
-			m_btnVertical = m_virtualGamepad.addVerticalSlider(Vec2(sliderX, sliderY), 40.0f, 120.0f);
-		}
-
-		m_virtualGamepad.update(m_window);
-	}
-
 	float clipNear = 0.25f * m_settings.m_cameraScale;
 	m_camera.setClip(clipNear, m_camera.getFarPlane());
 	m_camera.setAspect(m_window->getAspect());
@@ -234,21 +206,7 @@ void ExampleModelViewer::onUpdate()
 
 	if (!isDesktop())
 	{
-		const Vec2 leftStick = m_virtualGamepad.getLeftStick();
-		const float verticalMove = m_virtualGamepad.getButtonValue(m_btnVertical);
-		if (leftStick.length() > 0.0f || verticalMove != 0.0f)
-		{
-			const Vec3 move(leftStick.x, verticalMove, -leftStick.y);
-			m_camera.move(move * dt * m_cameraMan->getMoveSpeed());
-		}
-
-		const Vec2 rightStick = m_virtualGamepad.getRightStick();
-		if (rightStick.length() > 0.0f)
-		{
-			const float turnSpeed = 2.0f;
-			m_camera.rotateOnAxis(rightStick.x * dt * turnSpeed, Vec3(0.0f, 1.0f, 0.0f));
-			m_camera.rotateOnAxis(rightStick.y * dt * turnSpeed, m_camera.getRight());
-		}
+		m_virtualGamepad.updateFlyCamera(m_window, m_camera, dt, m_cameraMan->getMoveSpeed());
 	}
 
 	interpolateCamera(m_interpolatedCamera, m_camera, dt);
@@ -470,46 +428,8 @@ void ExampleModelViewer::loadingThreadFunction()
 		{
 			RUSH_LOG("Loading texture '%s'", pendingLoad->filename.c_str());
 
-			int w, h, comp;
-			u8* pixels = stbi_load(pendingLoad->filename.c_str(), &w, &h, &comp, 4);
-
-			if (pixels)
+			if (loadImageWithMips(pendingLoad->filename.c_str(), GfxFormat_RGBA8_Unorm, pendingLoad->desc, pendingLoad->mips))
 			{
-				u32 mipIndex = 0;
-
-				{
-					u32 levelSize = w * h * 4;
-					pendingLoad->mips[mipIndex].resize(levelSize);
-					memcpy(pendingLoad->mips[mipIndex].data(), pixels, levelSize);
-					mipIndex++;
-				}
-
-				u32 mipWidth  = w;
-				u32 mipHeight = h;
-
-				while (mipWidth != 1 && mipHeight != 1)
-				{
-					u32 nextMipWidth  = max<u32>(1, mipWidth / 2);
-					u32 nextMipHeight = max<u32>(1, mipHeight / 2);
-
-					u32 levelSize = nextMipWidth * nextMipHeight * 4;
-					pendingLoad->mips[mipIndex].resize(levelSize);
-
-					const u32 mipPitch     = mipWidth * 4;
-					const u32 nextMipPitch = nextMipWidth * 4;
-
-					int resizeResult = stbir_resize_uint8(pendingLoad->mips[mipIndex - 1].data(), mipWidth, mipHeight,
-					    mipPitch, pendingLoad->mips[mipIndex].data(), nextMipWidth, nextMipHeight, nextMipPitch, 4);
-					RUSH_ASSERT(resizeResult);
-
-					mipIndex++;
-					mipWidth  = nextMipWidth;
-					mipHeight = nextMipHeight;
-				}
-
-				pendingLoad->desc      = GfxTextureDesc::make2D(w, h);
-				pendingLoad->desc.mips = mipIndex;
-
 				m_loadingMutex.lock();
 				m_loadedTextures.push_back(pendingLoad);
 				m_loadingMutex.unlock();
@@ -549,36 +469,24 @@ void ExampleModelViewer::enqueueLoadTexture(const std::string& filename, u32 mat
 
 bool ExampleModelViewer::loadModelObj(const char* filename)
 {
-	std::vector<tinyobj::shape_t>    shapes;
-	std::vector<tinyobj::material_t> materials;
-	std::string                      errors;
-
-	std::string directory = directoryFromFilename(filename);
-
-	bool loaded = tinyobj::LoadObj(shapes, materials, errors, filename, directory.c_str());
-	if (!loaded)
+	ProceduralSceneData data;
+	if (!loadObjScene(filename, data))
 	{
-		RUSH_LOG_ERROR("OBJ loader error: %s", errors.c_str());
 		return false;
 	}
 
 	const GfxBufferDesc materialCbDesc(GfxBufferFlags::Constant, GfxFormat_Unknown, 1, sizeof(MaterialConstants));
-	for (auto& objMaterial : materials)
+	for (const auto& mat : data.materials)
 	{
 		MaterialConstants constants;
-		constants.baseColor.x = objMaterial.diffuse[0];
-		constants.baseColor.y = objMaterial.diffuse[1];
-		constants.baseColor.z = objMaterial.diffuse[2];
-		constants.baseColor.w = 1.0f;
+		constants.baseColor = mat.baseColor;
 
 		u32 materialId = u32(m_materials.size());
 
 		Material material;
-		if (!objMaterial.diffuse_texname.empty())
+		if (!mat.diffuseTextureName.empty())
 		{
-			std::string filename = directory + objMaterial.diffuse_texname;
-			fixDirectorySeparatorsInplace(filename);
-			enqueueLoadTexture(filename, materialId);
+			enqueueLoadTexture(mat.diffuseTextureName, materialId);
 		}
 
 		material.albedoTexture = m_defaultWhiteTexture.get();
@@ -632,111 +540,31 @@ bool ExampleModelViewer::loadModelObj(const char* filename)
 	RUSH_LOG("Converting mesh");
 
 	std::vector<Vertex> vertices;
-	std::vector<u32>    indices;
-
-	m_boundingBox.expandInit();
-
-	for (const auto& shape : shapes)
+	vertices.reserve(data.vertices.size());
+	for (const auto& v : data.vertices)
 	{
-		u32         firstVertex = (u32)vertices.size();
-		const auto& mesh        = shape.mesh;
-
-		const u32 vertexCount = (u32)mesh.positions.size() / 3;
-
-		const bool haveTexcoords = !mesh.texcoords.empty();
-		const bool haveNormals   = mesh.positions.size() == mesh.normals.size();
-
-		for (u32 i = 0; i < vertexCount; ++i)
-		{
-			Vertex v;
-
-			v.position.x = mesh.positions[i * 3 + 0];
-			v.position.y = mesh.positions[i * 3 + 1];
-			v.position.z = mesh.positions[i * 3 + 2];
-
-			m_boundingBox.expand(v.position);
-
-			if (haveTexcoords)
-			{
-				v.texcoord.x = mesh.texcoords[i * 2 + 0];
-				v.texcoord.y = mesh.texcoords[i * 2 + 1];
-
-				v.texcoord.y = 1.0f - v.texcoord.y;
-			}
-			else
-			{
-				v.texcoord = Vec2(0.0f);
-			}
-
-			if (haveNormals)
-			{
-				v.normal.x = mesh.normals[i * 3 + 0];
-				v.normal.y = mesh.normals[i * 3 + 1];
-				v.normal.z = mesh.normals[i * 3 + 2];
-			}
-			else
-			{
-				v.normal = Vec3(0.0);
-			}
-
-			v.position.x = -v.position.x;
-			v.normal.x   = -v.normal.x;
-
-			vertices.push_back(v);
-		}
-
-		if (!haveNormals)
-		{
-			const u32 triangleCount = (u32)mesh.indices.size() / 3;
-			for (u32 i = 0; i < triangleCount; ++i)
-			{
-				u32 idxA = firstVertex + mesh.indices[i * 3 + 0];
-				u32 idxB = firstVertex + mesh.indices[i * 3 + 2];
-				u32 idxC = firstVertex + mesh.indices[i * 3 + 1];
-
-				Vec3 a = vertices[idxA].position;
-				Vec3 b = vertices[idxB].position;
-				Vec3 c = vertices[idxC].position;
-
-				Vec3 normal = cross(b - a, c - b);
-
-				normal = normalize(normal);
-
-				vertices[idxA].normal += normal;
-				vertices[idxB].normal += normal;
-				vertices[idxC].normal += normal;
-			}
-
-			for (u32 i = firstVertex; i < (u32)vertices.size(); ++i)
-			{
-				vertices[i].normal = normalize(vertices[i].normal);
-			}
-		}
-
-		u32 currentMaterialId = 0xFFFFFFFF;
-
-		const u32 triangleCount = (u32)mesh.indices.size() / 3;
-		for (u32 triangleIt = 0; triangleIt < triangleCount; ++triangleIt)
-		{
-			if (mesh.material_ids[triangleIt] != currentMaterialId || m_segments.empty())
-			{
-				currentMaterialId = mesh.material_ids[triangleIt];
-				m_segments.push_back(MeshSegment());
-				m_segments.back().material    = currentMaterialId;
-				m_segments.back().indexOffset = (u32)indices.size();
-				m_segments.back().indexCount  = 0;
-			}
-
-			indices.push_back(mesh.indices[triangleIt * 3 + 0] + firstVertex);
-			indices.push_back(mesh.indices[triangleIt * 3 + 2] + firstVertex);
-			indices.push_back(mesh.indices[triangleIt * 3 + 1] + firstVertex);
-
-			m_segments.back().indexCount += 3;
-		}
-
-		m_vertexCount = (u32)vertices.size();
-		m_indexCount  = (u32)indices.size();
+		Vertex dst;
+		dst.position = v.position;
+		dst.normal   = v.normal;
+		dst.texcoord = v.texcoord;
+		vertices.push_back(dst);
 	}
+
+	std::vector<u32> indices = data.indices;
+
+	m_segments.reserve(data.segments.size());
+	for (const auto& seg : data.segments)
+	{
+		MeshSegment outSeg;
+		outSeg.material    = seg.material; // raw id preserved; 0xFFFFFFFF falls back to the default material
+		outSeg.indexOffset = seg.indexOffset;
+		outSeg.indexCount  = seg.indexCount;
+		m_segments.push_back(outSeg);
+	}
+
+	m_boundingBox = data.bounds;
+	m_vertexCount = (u32)vertices.size();
+	m_indexCount  = (u32)indices.size();
 
 	RUSH_LOG("Uploading mesh to GPU");
 
@@ -968,46 +796,26 @@ bool ExampleModelViewer::buildProceduralModel()
 // Bump only on incompatible semantic changes or a Camera blob layout change.
 static constexpr u32 kConfigVersion = 1;
 
-std::string ExampleModelViewer::configFilePath() const
+const char* ExampleModelViewer::configModelName() const
 {
-	const char* model = (m_useProceduralScene || m_modelFilename.empty()) ? nullptr : m_modelFilename.c_str();
-	return sceneConfigPath("modelviewer", model);
+	return (m_useProceduralScene || m_modelFilename.empty()) ? nullptr : m_modelFilename.c_str();
 }
 
 void ExampleModelViewer::saveConfig()
 {
-	const std::string path = configFilePath();
-	ConfigRoot root{m_camera, m_settings};
-	if (Reflect::saveToFile(path.c_str(), kConfigVersion, root))
-	{
-		RUSH_LOG("Saved config to '%s'", path.c_str());
-	}
+	saveSceneConfig("modelviewer", configModelName(), kConfigVersion, m_camera, m_settings);
 }
 
 void ExampleModelViewer::loadConfig()
 {
 	resetCamera(); // default framing; the file overwrites whatever it carries
-
-	const std::string path = configFilePath();
-	ConfigRoot root{m_camera, m_settings};
-	if (Reflect::loadFromFile(path.c_str(), kConfigVersion, root))
-	{
-		RUSH_LOG("Loaded config from '%s'", path.c_str());
-	}
-	else
-	{
-		RUSH_LOG("No usable config at '%s' (using defaults)", path.c_str());
-	}
-
+	loadSceneConfig("modelviewer", configModelName(), kConfigVersion, m_camera, m_settings);
 	m_interpolatedCamera = m_camera;
 }
 
 void ExampleModelViewer::resetCamera()
 {
-	const float aspect = m_window->getAspect();
-	const float fov    = 1.0f;
-	m_camera = Camera(aspect, fov, 0.25f);
-	m_camera.lookAt(Vec3(m_boundingBox.m_max) + Vec3(2.0f), m_boundingBox.center());
+	m_camera = makeFramedCamera(m_boundingBox, m_window->getAspect());
 	m_interpolatedCamera = m_camera;
 }
 

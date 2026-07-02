@@ -4,6 +4,7 @@
 #include <Rush/GfxCommon.h>
 #include <Rush/GfxPrimitiveBatch.h>
 #include <Rush/UtilDataStream.h>
+#include <Rush/UtilTimer.h>
 #include <vector>
 #include <string>
 #include <filesystem>
@@ -58,6 +59,15 @@ template <typename T, size_t SIZE> struct MovingAverage
 	T      buf[SIZE];
 };
 
+struct TimingScope
+{
+	TimingScope(MovingAverage<double, 60>& output) : m_output(output) {}
+	~TimingScope() { m_output.add(m_timer.time()); }
+
+	MovingAverage<double, 60>& m_output;
+	Timer                      m_timer;
+};
+
 template <typename T> static void writeContainer(DataStream& stream, const std::vector<T>& data)
 {
 	u32 count = (u32)data.size();
@@ -109,6 +119,11 @@ HumanFriendlyValue getHumanFriendlyValueShort(double v);
 void interpolateCamera(Camera& camera, const Camera& target, float deltaTime, float positionSmoothing = 0.9f,
     float rotationSmoothing = 0.85f);
 
+Camera makeFramedCamera(const Box3& bounds, float aspect, float fov = 1.0f, float nearClip = 0.25f);
+
+// Loads an image into a full RGBA8 mip chain. Threadsafe; returns false if the file won't load.
+bool loadImageWithMips(const char* filename, GfxFormat format, GfxTextureDesc& outDesc, std::vector<u8> (&outMips)[16]);
+
 // Per-scene config path next to the executable: "<tag>_config_<hash>.bin", hashed
 // from the model path (resolved against cwd). modelFilename may be null/empty.
 std::string sceneConfigPath(const char* tag, const char* modelFilename);
@@ -126,7 +141,8 @@ struct ProceduralSceneVertex
 
 struct ProceduralSceneMaterial
 {
-	Vec4 baseColor = Vec4(1.0f);
+	Vec4        baseColor = Vec4(1.0f);
+	std::string diffuseTextureName; // empty when untextured
 };
 
 struct ProceduralSceneSegment
@@ -146,5 +162,9 @@ struct ProceduralSceneData
 };
 
 void buildProceduralScene(ProceduralSceneData& out);
+
+// Loads a Wavefront OBJ into the neutral scene representation (X-mirrored to engine convention,
+// one segment per material run, raw material ids). Returns false on load failure.
+bool loadObjScene(const char* filename, ProceduralSceneData& out);
 
 } // namespace Rush
