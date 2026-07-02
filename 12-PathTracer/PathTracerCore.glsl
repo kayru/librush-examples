@@ -183,6 +183,37 @@ SHADER_INLINE LightSample importanceSampleEnvmap(PathTracerContext ctx, INOUT(ui
 	return sampleEnvmap(ctx, importanceSampleSkyLightDir(ctx, randomSeed));
 }
 
+// Inline configs (Metal kernel, Vulkan ray query) resolve the material from the per-triangle
+// index buffer via the PT_* macros; SBT configs get it from the hit-group shader record instead.
+#ifdef PT_INLINE_TRACING
+SHADER_INLINE MaterialConstants resolveMaterial(PathTracerContext ctx, uint primId)
+{
+	MaterialConstants material;
+	material.albedoFactor = vec4(1.0f);
+	material.specularFactor = vec4(1.0f);
+	material.albedoTextureId = 0u;
+	material.specularTextureId = 0u;
+	material.normalTextureId = 0u;
+	material.firstIndex = 0u;
+	material.alphaMode = 0u;
+	material.metallicFactor = 1.0f;
+	material.roughnessFactor = 1.0f;
+	material.reflectance = 0.04f;
+	material.materialMode = PT_MATERIAL_MODE_PBR_METALLIC_ROUGHNESS;
+
+	uint materialIndex = 0u;
+	if (PT_HAS_MATERIAL_INDICES(ctx))
+	{
+		materialIndex = PT_MATERIAL_INDEX(ctx, primId);
+	}
+	if (PT_HAS_MATERIALS(ctx))
+	{
+		material = PT_MATERIAL(ctx, materialIndex);
+	}
+	return material;
+}
+#endif
+
 // Trace wrappers: closest hit (fills payload) and any hit (shadow). One pair per config.
 #ifdef __METAL_VERSION__
 
@@ -195,33 +226,6 @@ SHADER_INLINE PtHit toPtHit(intersection_result<triangle_data, instancing> res)
 	hit.bary = res.triangle_barycentric_coord;
 	hit.frontFacing = res.triangle_front_facing;
 	return hit;
-}
-
-SHADER_INLINE MaterialConstants resolveMaterial(PathTracerContext ctx, uint primId)
-{
-	MaterialConstants material;
-	material.albedoFactor = float4(1.0f);
-	material.specularFactor = float4(1.0f);
-	material.albedoTextureId = 0u;
-	material.specularTextureId = 0u;
-	material.normalTextureId = 0u;
-	material.firstIndex = 0u;
-	material.alphaMode = 0u;
-	material.metallicFactor = 1.0f;
-	material.roughnessFactor = 1.0f;
-	material.reflectance = 0.04f;
-	material.materialMode = PT_MATERIAL_MODE_PBR_METALLIC_ROUGHNESS;
-
-	uint materialIndex = 0u;
-	if (ctx.s0->materialIndices)
-	{
-		materialIndex = ctx.s0->materialIndices[primId];
-	}
-	if (ctx.s0->materials)
-	{
-		material = ctx.s0->materials[materialIndex];
-	}
-	return material;
 }
 
 SHADER_INLINE bool ptTraceFill(PathTracerContext ctx, PtRay r, INOUT(PtPayload) pl)
@@ -258,6 +262,43 @@ SHADER_INLINE bool ptTraceShadow(PathTracerContext ctx, PtRay r)
 	mr.max_distance = r.maxT;
 
 	return it.intersect(mr, ctx.s0->tlas).type != intersection_type::none;
+}
+
+#elif defined(PT_CONFIG_RAYQUERY)
+
+// Inline ray query: same intersection contract as the Metal intersector above, expressed with
+// GL_EXT_ray_query. All geometry is opaque, so traversal auto-commits and proceed does no work.
+bool ptTraceFill(PathTracerContext ctx, PtRay r, INOUT(PtPayload) pl)
+{
+	rayQueryEXT rq;
+	rayQueryInitializeEXT(rq, TLAS, gl_RayFlagsOpaqueEXT, 0xFFu, r.origin, r.minT, r.direction, r.maxT);
+	while (rayQueryProceedEXT(rq)) {}
+
+	if (rayQueryGetIntersectionTypeEXT(rq, true) == gl_RayQueryCommittedIntersectionNoneEXT)
+	{
+		return false;
+	}
+
+	PtHit hit;
+	hit.valid = true;
+	hit.t = rayQueryGetIntersectionTEXT(rq, true);
+	hit.primId = uint(rayQueryGetIntersectionPrimitiveIndexEXT(rq, true));
+	hit.bary = rayQueryGetIntersectionBarycentricsEXT(rq, true);
+	hit.frontFacing = rayQueryGetIntersectionFrontFaceEXT(rq, true);
+
+	// Single-geometry BLAS: primId is the global triangle index (matches the Metal kernel).
+	fillPayload(ctx, hit, hit.primId * 3u, resolveMaterial(ctx, hit.primId), pl);
+	return true;
+}
+
+bool ptTraceShadow(PathTracerContext ctx, PtRay r)
+{
+	rayQueryEXT rq;
+	rayQueryInitializeEXT(rq, TLAS,
+		gl_RayFlagsOpaqueEXT | gl_RayFlagsTerminateOnFirstHitEXT,
+		0xFFu, r.origin, r.minT, r.direction, r.maxT);
+	while (rayQueryProceedEXT(rq)) {}
+	return rayQueryGetIntersectionTypeEXT(rq, true) != gl_RayQueryCommittedIntersectionNoneEXT;
 }
 
 #elif defined(PT_CONFIG_SBT_RAYGEN)

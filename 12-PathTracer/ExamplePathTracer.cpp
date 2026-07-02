@@ -14,8 +14,7 @@
 #include <Rush/UtilLog.h>
 
 #include <stb_image.h>
-#include <stb_image_resize.h>
-#include <tiny_obj_loader.h>
+#include <stb_image_write.h>
 #include <cgltf.h>
 #include <algorithm>
 #include <chrono>
@@ -25,7 +24,7 @@
 
 #include <Common/ImGuiImpl.h>
 #include <Common/ImGuiExt.h>
-#include <Common/Reflect.h>
+#include <Common/SceneConfig.h>
 #include <Common/Utils.h>
 #include <imgui.h>
 
@@ -41,6 +40,10 @@ int main(int argc, char** argv)
 	g_appCfg.argv      = argv;
 	g_appCfg.resizable = true;
 
+	// --out=<png> renders offscreen and exits; run without a window or swapchain.
+	std::string headlessOut;
+	g_appCfg.headless = getArgString(argc, argv, "out", nullptr, headlessOut);
+
 #ifdef RUSH_DEBUG
 	g_appCfg.debug = true;
 	Log::breakOnError = true;
@@ -53,9 +56,11 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 {
 	Gfx_SetPresentInterval(0);
 
-	ImGuiImpl_Startup(m_window);
-
-	m_windowEvents.setOwner(m_window);
+	if (m_window) // no window/UI in headless (--out) mode
+	{
+		ImGuiImpl_Startup(m_window);
+		m_windowEvents.setOwner(m_window);
+	}
 
 	auto setError = [this](const char* message)
 	{
@@ -76,7 +81,8 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 
 	GfxDescriptorSetDesc materialDescriptorSetDesc;
 	materialDescriptorSetDesc.flags = GfxDescriptorSetFlags::TextureArray;
-	materialDescriptorSetDesc.stageFlags = GfxStageFlags::RayTracing;
+	// Compute is needed by the ray-query pipeline; the set is shared with the RT pipeline.
+	materialDescriptorSetDesc.stageFlags = GfxStageFlags::RayTracing | GfxStageFlags::Compute;
 	materialDescriptorSetDesc.textures = MaxTextures;
 	if (rtAvailable)
 	{
@@ -155,9 +161,37 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 				setError("Failed to create ray tracing pipeline.");
 			}
 		}
+
+#if RUSH_RENDER_API != RUSH_RENDER_API_MTL
+		// Inline ray-query path: same shading run from a compute shader. Bindings mirror PT_CONFIG_RAYQUERY.
+		if (m_startupError.empty() && caps.rayTracingInline)
+		{
+			GfxOwn<GfxComputeShader> cs = Gfx_CreateComputeShader(loadShaderFromFile(RUSH_SHADER_NAME("PathTracer.comp")));
+			if (cs.valid())
+			{
+				GfxComputePipelineDesc rqDesc;
+				rqDesc.cs = cs.get();
+				rqDesc.workGroupSize = {8, 8, 1};
+				rqDesc.bindings.descriptorSets[0].constantBuffers = 1; // scene constants
+				rqDesc.bindings.descriptorSets[0].samplers = 1; // default sampler
+				rqDesc.bindings.descriptorSets[0].textures = 1; // envmap
+				rqDesc.bindings.descriptorSets[0].rwImages = 1; // output image
+				// IB + VB + envmap distribution + materials + material indices + focus feedback
+				rqDesc.bindings.descriptorSets[0].rwBuffers = 6;
+				rqDesc.bindings.descriptorSets[0].accelerationStructures = 1; // TLAS
+				rqDesc.bindings.descriptorSets[1] = materialDescriptorSetDesc;
+				m_rayQueryPipeline = Gfx_CreateComputePipeline(rqDesc);
+			}
+			if (!m_rayQueryPipeline.valid())
+			{
+				RUSH_LOG("Ray query pipeline unavailable; falling back to RT pipeline only");
+			}
+		}
+#endif
 	}
 
-	if (m_startupError.empty())
+	// The tonemap blit targets the swapchain, so it is only needed for on-screen display.
+	if (m_startupError.empty() && m_window)
 	{
 		GfxShaderSource vsSource = loadShaderFromFile(RUSH_SHADER_NAME("Blit.hlsl"));
 		GfxShaderSource psSource = loadShaderFromFile(RUSH_SHADER_NAME("BlitTonemap.hlsl"));
@@ -282,12 +316,30 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 
 	loadConfig();
 
+	// Headless render-to-PNG (applied after loadConfig so command-line wins over the saved config):
+	//   --out=<png> [--spp=N] [--tracing=rayquery|pipeline] [--w=W] [--h=H]
+	if (getArgString(g_appCfg.argc, g_appCfg.argv, "out", nullptr, m_headlessOutPath))
+	{
+		u32 v = 0;
+		if (getArgU32(g_appCfg.argc, g_appCfg.argv, "spp", nullptr, v) && v > 0) { m_headlessSpp = v; }
+		if (getArgU32(g_appCfg.argc, g_appCfg.argv, "w", nullptr, v) && v > 0) { m_headlessSize.x = int(v); }
+		if (getArgU32(g_appCfg.argc, g_appCfg.argv, "h", nullptr, v) && v > 0) { m_headlessSize.y = int(v); }
+		// Default to the RT pipeline unless --tracing=rayquery is given (ignore any saved config mode).
+		std::string mode;
+		getArgString(g_appCfg.argc, g_appCfg.argv, "tracing", nullptr, mode);
+		const bool rq = (mode == "rayquery" || mode == "rq");
+		m_settings.m_tracingMode = int(rq ? TracingMode::RayQuery : TracingMode::RayTracingPipeline);
+	}
+
 	m_cameraMan = new CameraManipulator();
 }
 
 ExamplePathTracer::~ExamplePathTracer()
 {
-	ImGuiImpl_Shutdown();
+	if (m_window)
+	{
+		ImGuiImpl_Shutdown();
+	}
 
 	for (const auto& it : m_textures)
 	{
@@ -351,6 +403,20 @@ static constexpr int g_focalLengthCustomIndex = int(RUSH_COUNTOF(g_focalLengthPr
 
 void ExamplePathTracer::onUpdate()
 {
+	if (!m_headlessOutPath.empty())
+	{
+		if (m_startupError.empty())
+		{
+			renderHeadless(Platform_GetGfxContext());
+		}
+		else
+		{
+			RUSH_LOG_ERROR("HEADLESS: %s", m_startupError.c_str());
+		}
+		Platform_RequestExit();
+		return;
+	}
+
 	if (!m_startupError.empty())
 	{
 		renderMessage(m_startupError.c_str());
@@ -457,6 +523,19 @@ void ExamplePathTracer::onUpdate()
 					renderSettingsChanged = true;
 				}
 			}
+#if RUSH_RENDER_API != RUSH_RENDER_API_MTL
+			if (m_rayQueryPipeline.valid())
+			{
+				const char* tracingModeItems[] = {"RT pipeline", "Ray query"};
+				int tracingMode = m_settings.m_tracingMode;
+				if (ImGuiExt::Combo("Tracing mode", &tracingMode, tracingModeItems, (int)RUSH_COUNTOF(tracingModeItems)))
+				{
+					m_settings.m_tracingMode = tracingMode;
+					rebuildAccelerationStructures();
+					renderSettingsChanged = true;
+				}
+			}
+#endif
 			if (ImGui::Button("Reset accumulation"))
 			{
 				m_outputImage.reset();
@@ -538,19 +617,6 @@ void ExamplePathTracer::onUpdate()
 		}
 	}
 
-	if (!isDesktop())
-	{
-		if (m_btnVertical < 0)
-		{
-			const Box2 safe = m_window->getSafeArea();
-			const float sliderX = safe.m_min.x + 170.0f;
-			const float sliderY = safe.m_max.y - 100.0f;
-			m_btnVertical = m_virtualGamepad.addVerticalSlider(Vec2(sliderX, sliderY), 40.0f, 120.0f);
-		}
-
-		m_virtualGamepad.update(m_window);
-	}
-
 	if (!m_showUI || (!ImGui::GetIO().WantCaptureKeyboard && !ImGui::GetIO().WantCaptureMouse))
 	{
 		m_cameraMan->update(&m_camera, dt, m_window->getKeyboardState(), m_window->getMouseState());
@@ -558,21 +624,7 @@ void ExamplePathTracer::onUpdate()
 
 	if (!isDesktop())
 	{
-		const Vec2 leftStick = m_virtualGamepad.getLeftStick();
-		const float verticalMove = m_virtualGamepad.getButtonValue(m_btnVertical);
-		if (leftStick.length() > 0.0f || verticalMove != 0.0f)
-		{
-			const Vec3 move(leftStick.x, verticalMove, -leftStick.y);
-			m_camera.move(move * dt * m_cameraMan->getMoveSpeed());
-		}
-
-		const Vec2 rightStick = m_virtualGamepad.getRightStick();
-		if (rightStick.length() > 0.0f)
-		{
-			const float turnSpeed = 2.0f;
-			m_camera.rotateOnAxis(rightStick.x * dt * turnSpeed, Vec3(0.0f, 1.0f, 0.0f));
-			m_camera.rotateOnAxis(rightStick.y * dt * turnSpeed, m_camera.getRight());
-		}
+		m_virtualGamepad.updateFlyCamera(m_window, m_camera, dt, m_cameraMan->getMoveSpeed());
 	}
 
 	if (m_camera.getPosition() != oldCamera.getPosition()
@@ -624,7 +676,17 @@ void ExamplePathTracer::createRayTracingScene(GfxContext* ctx)
 	Gfx_AddFullPipelineBarrier(ctx);
 }
 
-void ExamplePathTracer::render()
+float ExamplePathTracer::computeExposure() const
+{
+	return 1.0f / (1.2f * powf(2.0f, -m_settings.m_exposureEV100));
+}
+
+float ExamplePathTracer::outputAspect() const
+{
+	return m_window ? m_window->getAspect() : (float(m_headlessSize.x) / float(m_headlessSize.y));
+}
+
+ExamplePathTracer::SceneConstants ExamplePathTracer::makeSceneConstants(Tuple2i outputSize, u32 frameIndex) const
 {
 	Mat4 matView = m_camera.buildViewMatrix();
 	Mat4 matProj = m_camera.buildProjMatrix();
@@ -636,7 +698,7 @@ void ExamplePathTracer::render()
 	constants.matViewProjInv = (matView * matProj).inverse().transposed();
 	constants.matEnvmapTransform = Mat4::rotationY(toRadians(m_settings.m_envmapRotationDegrees)).transposed();
 	constants.cameraPosition = Vec4(m_camera.getPosition());
-	constants.frameIndex = m_frameIndex;
+	constants.frameIndex = frameIndex;
 	constants.flags = 0;
 	constants.flags |= m_settings.m_useEnvmap ? PT_FLAG_USE_ENVMAP: 0;
 	constants.flags |= m_settings.m_useNeutralBackground ? PT_FLAG_USE_NEUTRAL_BACKGROUND : 0;
@@ -648,7 +710,164 @@ void ExamplePathTracer::render()
 	constants.flags |= m_settings.m_showFocusAssist ? PT_FLAG_DEBUG_FOCAL_PLANE : 0;
 	constants.debugVisMode = (u32)m_settings.m_debugVisMode;
 	constants.focusPickPixel = m_focusPickRequested ? m_focusPickPixel : Tuple2i{-1, -1};
+	constants.outputSize = outputSize;
+	constants.envmapSize = Gfx_GetTextureDesc(m_envmap).getSize2D();
+	constants.cameraSensorSize = m_settings.m_cameraSensorSizeMM / 1000.0f;
+	constants.focalLength = m_settings.m_focalLengthMM / 1000.0f;
+	constants.focusDistance = m_settings.m_focusDistance;
+	// Aperture diameter = focal length / f-number.
+	const float apertureDiameterMM = m_settings.m_focalLengthMM / m_settings.m_apertureFStop;
+	constants.apertureSize = apertureDiameterMM / 1000.0f;
+	constants.focalPlaneFalloffPx = m_settings.m_focusAssistFalloffPx;
+	return constants;
+}
 
+// CPU port of BlitTonemap.hlsl (Stachowiak neutral tonemap) so the headless PNG matches the viewport.
+static float tonemapCurve(float v)
+{
+	const float c = v + v * v + 0.5f * v * v * v;
+	return c / (1.0f + c);
+}
+
+static Vec3 neutralTonemap(Vec3 col)
+{
+	const float yX = 0.2126f * col.x + 0.7152f * col.y + 0.0722f * col.z;
+	const float yY = -0.1146f * col.x - 0.3854f * col.y + 0.5f * col.z;
+	const float yZ = 0.5f * col.x - 0.4542f * col.y - 0.0458f * col.z;
+
+	const float bt = tonemapCurve(sqrtf(yY * yY + yZ * yZ) * 2.4f);
+
+	float desat = max(0.0f, (bt - 0.7f) * 0.8f);
+	desat *= desat;
+
+	const Vec3 desatCol = col + (Vec3(yX) - col) * desat;
+
+	const float tmLuma = tonemapCurve(yX);
+	const Vec3  tm0    = col * max(0.0f, tmLuma / max(1e-5f, yX));
+	const Vec3  tm1    = Vec3(tonemapCurve(desatCol.x), tonemapCurve(desatCol.y), tonemapCurve(desatCol.z));
+
+	return (tm0 + (tm1 - tm0) * (bt * bt)) * 0.97f;
+}
+
+void ExamplePathTracer::renderHeadless(GfxContext* ctx)
+{
+	if (!m_valid || !m_materialDescriptorSet.valid())
+	{
+		RUSH_LOG_ERROR("HEADLESS: scene is not ready");
+		return;
+	}
+
+	const bool rayQuery = useInlineScene();
+	if (m_settings.m_tracingMode == int(TracingMode::RayQuery) && !rayQuery)
+	{
+		RUSH_LOG_ERROR("HEADLESS: ray query requested but unavailable; using RT pipeline");
+	}
+
+	const Tuple2i size   = m_headlessSize;
+	const u32     width  = u32(size.x);
+	const u32     height = u32(size.y);
+
+	m_camera.setFov(focalLengthToFov(m_settings.m_focalLengthMM, m_settings.m_cameraSensorSizeMM.x));
+	m_camera.setAspect(float(width) / float(height));
+
+	GfxTextureDesc texDesc = GfxTextureDesc::make2D(size, GfxFormat_RGBA32_Float, GfxUsageFlags::StorageImage_ShaderResource);
+	m_outputImage = Gfx_CreateTexture(texDesc);
+
+	rebuildAccelerationStructures();
+	createRayTracingScene(ctx);
+
+	for (u32 frame = 0; frame < m_headlessSpp; ++frame)
+	{
+		SceneConstants constants = makeSceneConstants(size, frame);
+		Gfx_UpdateBuffer(ctx, m_sceneConstantBuffer, &constants, sizeof(constants));
+
+		Gfx_SetConstantBuffer(ctx, 0, m_sceneConstantBuffer);
+		Gfx_SetSampler(ctx, 0, m_samplerStates.anisotropicWrap);
+		Gfx_SetTexture(ctx, 0, m_envmap);
+		Gfx_SetStorageImage(ctx, 0, m_outputImage);
+		Gfx_SetStorageBuffer(ctx, 0, m_indexBuffer);
+		Gfx_SetStorageBuffer(ctx, 1, m_vertexBuffer);
+		Gfx_SetStorageBuffer(ctx, 2, m_envmapDistribution);
+		if (rayQuery)
+		{
+			if (m_materialBuffer.valid()) { Gfx_SetStorageBuffer(ctx, 3, m_materialBuffer); }
+			if (m_materialIndexBuffer.valid()) { Gfx_SetStorageBuffer(ctx, 4, m_materialIndexBuffer); }
+			Gfx_SetStorageBuffer(ctx, 5, m_focusFeedbackBuffer);
+		}
+		else
+		{
+			Gfx_SetStorageBuffer(ctx, 3, m_focusFeedbackBuffer);
+		}
+		Gfx_SetDescriptors(ctx, 1, m_materialDescriptorSet);
+		Gfx_SetAccelerationStructure(ctx, 0, m_tlas);
+
+#if RUSH_RENDER_API == RUSH_RENDER_API_MTL
+		Gfx_TraceRays(ctx, m_rtPipeline, m_sbtBuffer, width, height);
+#else
+		if (rayQuery)
+		{
+			Gfx_SetComputePipeline(ctx, m_rayQueryPipeline);
+			Gfx_Dispatch(ctx, (width + 7u) / 8u, (height + 7u) / 8u, 1u);
+		}
+		else
+		{
+			Gfx_TraceRays(ctx, m_rtPipeline, m_sbtBuffer, width, height);
+		}
+#endif
+
+		Gfx_AddFullPipelineBarrier(ctx); // accumulation reads the previous frame's writes
+	}
+
+	const GfxImageCopyInfo copyInfo = Gfx_GetImageCopyInfo(GfxFormat_RGBA32_Float, {width, height, 1});
+	GfxBufferDesc stagingDesc;
+	stagingDesc.flags       = GfxBufferFlags::Storage;
+	stagingDesc.stride      = 1;
+	stagingDesc.count       = copyInfo.bytesPerRow * copyInfo.rowCount;
+	stagingDesc.hostVisible = true;
+	GfxOwn<GfxBuffer> staging = Gfx_CreateBuffer(stagingDesc);
+
+	GfxImageRegion fullRegion;
+	Gfx_AddImageBarrier(ctx, m_outputImage, GfxResourceState_TransferSrc);
+	Gfx_CopyTextureToBuffer(ctx, m_outputImage, fullRegion, staging);
+	Gfx_Finish();
+
+	GfxMappedBuffer mapped = Gfx_MapBuffer(staging);
+	if (!mapped.data)
+	{
+		RUSH_LOG_ERROR("HEADLESS: failed to map readback buffer");
+		return;
+	}
+
+	std::vector<u8> rgba(size_t(width) * height * 4);
+	const float exposure = computeExposure();
+	const float invGamma = 1.0f / m_settings.m_gamma;
+	for (u32 y = 0; y < height; ++y)
+	{
+		const float* row = reinterpret_cast<const float*>(reinterpret_cast<const u8*>(mapped.data) + size_t(y) * copyInfo.bytesPerRow);
+		// The traced image has row 0 at the bottom (matches the display blit); flip for the PNG.
+		u8* dst = rgba.data() + size_t(height - 1 - y) * width * 4;
+		for (u32 x = 0; x < width; ++x)
+		{
+			const Vec3 tonemapped = neutralTonemap(Vec3(row[x * 4 + 0], row[x * 4 + 1], row[x * 4 + 2]) * exposure);
+			const float channels[3] = {tonemapped.x, tonemapped.y, tonemapped.z};
+			for (u32 c = 0; c < 3; ++c)
+			{
+				float v = powf(channels[c] < 0.0f ? 0.0f : channels[c], invGamma);
+				v = v > 1.0f ? 1.0f : v;
+				dst[x * 4 + c] = u8(v * 255.0f + 0.5f);
+			}
+			dst[x * 4 + 3] = 255;
+		}
+	}
+	Gfx_UnmapBuffer(mapped);
+
+	stbi_write_png(m_headlessOutPath.c_str(), int(width), int(height), 4, rgba.data(), int(width * 4));
+	RUSH_LOG("HEADLESS: wrote %s (%s, %ux%u, %u spp)", m_headlessOutPath.c_str(),
+		rayQuery ? "rayquery" : "pipeline", width, height, m_headlessSpp);
+}
+
+void ExamplePathTracer::render()
+{
 	GfxContext* ctx = Platform_GetGfxContext();
 
 	GfxTextureDesc outputImageDesc = Gfx_GetTextureDesc(m_outputImage);
@@ -662,21 +881,13 @@ void ExamplePathTracer::render()
 		m_frameIndex = 0;
 	}
 
-	constants.outputSize = outputImageDesc.getSize2D();
-	constants.envmapSize = Gfx_GetTextureDesc(m_envmap).getSize2D();
-	constants.cameraSensorSize = m_settings.m_cameraSensorSizeMM / 1000.0f;
-	constants.focalLength = m_settings.m_focalLengthMM / 1000.0f;
-	constants.focusDistance = m_settings.m_focusDistance;
-	// Aperture diameter = focal length / f-number.
-	const float apertureDiameterMM = m_settings.m_focalLengthMM / m_settings.m_apertureFStop;
-	constants.apertureSize = apertureDiameterMM / 1000.0f;
-	constants.focalPlaneFalloffPx = m_settings.m_focusAssistFalloffPx;
+	SceneConstants constants = makeSceneConstants(outputImageDesc.getSize2D(), m_frameIndex);
 
 	GfxMarkerScope markerFrame(ctx, "Frame");
 
 	Gfx_UpdateBuffer(ctx, m_sceneConstantBuffer, &constants, sizeof(constants));
 
-	const bool rtReady = m_rtPipeline.valid() && m_materialDescriptorSet.valid();
+	const bool rtReady = (m_rtPipeline.valid() || m_rayQueryPipeline.valid()) && m_materialDescriptorSet.valid();
 	if (m_valid && rtReady)
 	{
 		GfxMarkerScope markerFrame(ctx, "Model");
@@ -686,7 +897,9 @@ void ExamplePathTracer::render()
 			createRayTracingScene(ctx);
 		}
 
-		GfxMarkerScope markerRT(ctx, "RT");
+		const bool inlineScene = useInlineScene();
+
+		GfxMarkerScope markerRT(ctx, inlineScene ? "RayQuery" : "RT");
 		Gfx_SetConstantBuffer(ctx, 0, m_sceneConstantBuffer);
 		Gfx_SetSampler(ctx, 0, m_samplerStates.anisotropicWrap);
 		Gfx_SetTexture(ctx, 0, m_envmap);
@@ -694,23 +907,38 @@ void ExamplePathTracer::render()
 		Gfx_SetStorageBuffer(ctx, 0, m_indexBuffer);
 		Gfx_SetStorageBuffer(ctx, 1, m_vertexBuffer);
 		Gfx_SetStorageBuffer(ctx, 2, m_envmapDistribution);
-#if RUSH_RENDER_API == RUSH_RENDER_API_MTL
-		if (m_materialBuffer.valid())
+		if (inlineScene)
 		{
-			Gfx_SetStorageBuffer(ctx, 3, m_materialBuffer);
+			if (m_materialBuffer.valid())
+			{
+				Gfx_SetStorageBuffer(ctx, 3, m_materialBuffer);
+			}
+			if (m_materialIndexBuffer.valid())
+			{
+				Gfx_SetStorageBuffer(ctx, 4, m_materialIndexBuffer);
+			}
+			Gfx_SetStorageBuffer(ctx, 5, m_focusFeedbackBuffer);
 		}
-		if (m_materialIndexBuffer.valid())
+		else
 		{
-			Gfx_SetStorageBuffer(ctx, 4, m_materialIndexBuffer);
+			Gfx_SetStorageBuffer(ctx, 3, m_focusFeedbackBuffer);
 		}
-		Gfx_SetStorageBuffer(ctx, 5, m_focusFeedbackBuffer);
-#else
-		Gfx_SetStorageBuffer(ctx, 3, m_focusFeedbackBuffer);
-#endif
 		Gfx_SetDescriptors(ctx, 1, m_materialDescriptorSet);
 		Gfx_SetAccelerationStructure(ctx, 0, m_tlas);
 
+#if RUSH_RENDER_API == RUSH_RENDER_API_MTL
 		Gfx_TraceRays(ctx, m_rtPipeline, m_sbtBuffer, outputImageDesc.width, outputImageDesc.height);
+#else
+		if (inlineScene)
+		{
+			Gfx_SetComputePipeline(ctx, m_rayQueryPipeline);
+			Gfx_Dispatch(ctx, (outputImageDesc.width + 7u) / 8u, (outputImageDesc.height + 7u) / 8u, 1u);
+		}
+		else
+		{
+			Gfx_TraceRays(ctx, m_rtPipeline, m_sbtBuffer, outputImageDesc.width, outputImageDesc.height);
+		}
+#endif
 
 		if (m_focusPickRequested)
 		{
@@ -744,7 +972,7 @@ void ExamplePathTracer::render()
 		GfxMarkerScope markerFrame(ctx, "Tonemap");
 
 		TonemapConstants constants = {};
-		constants.exposure = 1.0f / (1.2f * powf(2.0f, -m_settings.m_exposureEV100));
+		constants.exposure = computeExposure();
 		constants.gamma = m_settings.m_gamma;
 		Gfx_UpdateBuffer(ctx, m_tonemapConstantBuffer, &constants, sizeof(constants));
 
@@ -818,57 +1046,20 @@ void ExamplePathTracer::loadingThreadFunction()
 			RUSH_LOG("Loading texture '%s'", pendingLoad->filename.c_str());
 			m_loadingMutex.unlock();
 
-			int w, h, comp;
-			u8* pixels = stbi_load(pendingLoad->filename.c_str(), &w, &h, &comp, 4);
+			const bool loaded = loadImageWithMips(pendingLoad->filename.c_str(), pendingLoad->desc.format,
+			    pendingLoad->desc, pendingLoad->mips);
 
-			if (pixels)
+			m_loadingMutex.lock();
+			if (loaded)
 			{
-				u32 mipIndex = 0;
-
-				{
-					u32 levelSize = w * h * 4;
-					pendingLoad->mips[mipIndex].resize(levelSize);
-					memcpy(pendingLoad->mips[mipIndex].data(), pixels, levelSize);
-					mipIndex++;
-				}
-
-				u32 mipWidth  = w;
-				u32 mipHeight = h;
-
-				while (mipWidth != 1 && mipHeight != 1)
-				{
-					u32 nextMipWidth  = max<u32>(1, mipWidth / 2);
-					u32 nextMipHeight = max<u32>(1, mipHeight / 2);
-
-					u32 levelSize = nextMipWidth * nextMipHeight * 4;
-					pendingLoad->mips[mipIndex].resize(levelSize);
-
-					const u32 mipPitch     = mipWidth * 4;
-					const u32 nextMipPitch = nextMipWidth * 4;
-
-					int resizeResult = stbir_resize_uint8(pendingLoad->mips[mipIndex - 1].data(), mipWidth, mipHeight,
-					    mipPitch, pendingLoad->mips[mipIndex].data(), nextMipWidth, nextMipHeight, nextMipPitch, 4);
-					RUSH_ASSERT(resizeResult);
-
-					mipIndex++;
-					mipWidth  = nextMipWidth;
-					mipHeight = nextMipHeight;
-				}
-
-				pendingLoad->desc      = GfxTextureDesc::make2D(w, h, pendingLoad->desc.format);
-				pendingLoad->desc.mips = mipIndex;
-
-				m_loadingMutex.lock();
 				m_loadedTextures.push_back(pendingLoad);
-				m_loadingMutex.unlock();
-
-				free(pixels);
 			}
 			else
 			{
 				RUSH_LOG("Failed to load texture '%s'", pendingLoad->filename.c_str());
 				m_loadedTextures.push_back(nullptr);
 			}
+			m_loadingMutex.unlock();
 		}
 		else
 		{
@@ -1258,153 +1449,57 @@ bool ExamplePathTracer::loadModelGLTF(const char* filename)
 
 bool ExamplePathTracer::loadModelObj(const char* filename)
 {
-	std::vector<tinyobj::shape_t>    shapes;
-	std::vector<tinyobj::material_t> materials;
-	std::string                      errors;
-
-	std::string directory = directoryFromFilename(filename);
-
-	bool loaded = tinyobj::LoadObj(shapes, materials, errors, filename, directory.c_str());
-	if (!loaded)
+	ProceduralSceneData data;
+	if (!loadObjScene(filename, data))
 	{
-		RUSH_LOG_ERROR("OBJ loader error: %s", errors.c_str());
 		return false;
 	}
 
 	RUSH_LOG("Converting mesh from OBJ");
 
-	for (auto& objMaterial : materials)
+	for (const auto& mat : data.materials)
 	{
 		MaterialConstants constants;
-		constants.albedoFactor.x = objMaterial.diffuse[0];
-		constants.albedoFactor.y = objMaterial.diffuse[1];
-		constants.albedoFactor.z = objMaterial.diffuse[2];
-		constants.albedoFactor.w = 1.0f;
-		constants.albedoTextureId = m_defaultWhiteTextureId;
-
-		u32 materialId = u32(m_materials.size());
-		if (!objMaterial.diffuse_texname.empty())
-		{
-			std::string filename = directory + objMaterial.diffuse_texname;
-			fixDirectorySeparatorsInplace(filename);
-			constants.albedoTextureId = enqueueLoadTexture(filename, GfxFormat::GfxFormat_RGBA8_sRGB);
-		}
-
+		constants.albedoFactor    = mat.baseColor;
+		constants.albedoTextureId = mat.diffuseTextureName.empty()
+		    ? m_defaultWhiteTextureId
+		    : enqueueLoadTexture(mat.diffuseTextureName, GfxFormat::GfxFormat_RGBA8_sRGB);
 		m_materials.push_back(constants);
 	}
 
-	if (materials.empty())
+	if (data.materials.empty())
 	{
 		MaterialConstants constants;
 		constants.albedoTextureId = m_defaultWhiteTextureId;
 		m_materials.push_back(constants);
 	}
 
-	m_boundingBox.expandInit();
-
-	for (const auto& shape : shapes)
+	m_vertices.reserve(data.vertices.size());
+	for (const auto& v : data.vertices)
 	{
-		u32         firstVertex = (u32)m_vertices.size();
-		const auto& mesh        = shape.mesh;
-
-		const u32 vertexCount = (u32)mesh.positions.size() / 3;
-
-		const bool haveTexcoords = !mesh.texcoords.empty();
-		const bool haveNormals   = mesh.positions.size() == mesh.normals.size();
-
-		for (u64 i = 0; i < vertexCount; ++i)
-		{
-			Vertex v;
-
-			v.position.x = mesh.positions[i * 3 + 0];
-			v.position.y = mesh.positions[i * 3 + 1];
-			v.position.z = mesh.positions[i * 3 + 2];
-
-			m_boundingBox.expand(v.position);
-
-			if (haveTexcoords)
-			{
-				v.texcoord.x = mesh.texcoords[i * 2 + 0];
-				v.texcoord.y = mesh.texcoords[i * 2 + 1];
-
-				v.texcoord.y = 1.0f - v.texcoord.y;
-			}
-			else
-			{
-				v.texcoord = Vec2(0.0f);
-			}
-
-			if (haveNormals)
-			{
-				v.normal.x = mesh.normals[i * 3 + 0];
-				v.normal.y = mesh.normals[i * 3 + 1];
-				v.normal.z = mesh.normals[i * 3 + 2];
-			}
-			else
-			{
-				v.normal = Vec3(0.0);
-			}
-
-			v.position.x = -v.position.x;
-			v.normal.x   = -v.normal.x;
-
-			//v.normal = Vec3(1, 0, 0);
-
-			m_vertices.push_back(v);
-		}
-
-		if (!haveNormals)
-		{
-			const u32 triangleCount = (u32)mesh.indices.size() / 3;
-			for (u64 i = 0; i < triangleCount; ++i)
-			{
-				u32 idxA = firstVertex + mesh.indices[i * 3 + 0];
-				u32 idxB = firstVertex + mesh.indices[i * 3 + 2];
-				u32 idxC = firstVertex + mesh.indices[i * 3 + 1];
-
-				Vec3 a = m_vertices[idxA].position;
-				Vec3 b = m_vertices[idxB].position;
-				Vec3 c = m_vertices[idxC].position;
-
-				Vec3 normal = cross(b - a, c - b);
-
-				normal = normalize(normal);
-
-				m_vertices[idxA].normal += normal;
-				m_vertices[idxB].normal += normal;
-				m_vertices[idxC].normal += normal;
-			}
-
-			for (u32 i = firstVertex; i < (u32)m_vertices.size(); ++i)
-			{
-				m_vertices[i].normal = normalize(m_vertices[i].normal);
-			}
-		}
-
-		int currentMaterialId = -1;
-
-		const u32 triangleCount = (u32)mesh.indices.size() / 3;
-		for (u64 triangleIt = 0; triangleIt < triangleCount; ++triangleIt)
-		{
-			if (mesh.material_ids[triangleIt] != currentMaterialId || m_segments.empty())
-			{
-				currentMaterialId = mesh.material_ids[triangleIt];
-				m_segments.push_back(MeshSegment());
-				m_segments.back().material    = max(0,currentMaterialId);
-				m_segments.back().indexOffset = (u32)m_indices.size();
-				m_segments.back().indexCount  = 0;
-			}
-
-			m_indices.push_back(mesh.indices[triangleIt * 3 + 0] + firstVertex);
-			m_indices.push_back(mesh.indices[triangleIt * 3 + 2] + firstVertex);
-			m_indices.push_back(mesh.indices[triangleIt * 3 + 1] + firstVertex);
-
-			m_segments.back().indexCount += 3;
-		}
-
-		m_vertexCount = (u32)m_vertices.size();
-		m_indexCount  = (u32)m_indices.size();
+		Vertex dst;
+		dst.position = v.position;
+		dst.normal   = v.normal;
+		dst.texcoord = v.texcoord;
+		dst.tangent  = Vec4(v.tangent, 0.0f);
+		m_vertices.push_back(dst);
 	}
+
+	m_indices = data.indices;
+
+	m_segments.reserve(data.segments.size());
+	for (const auto& seg : data.segments)
+	{
+		MeshSegment outSeg;
+		outSeg.material    = u32(max(0, int(seg.material))); // untextured runs (raw -1) map to material 0
+		outSeg.indexOffset = seg.indexOffset;
+		outSeg.indexCount  = seg.indexCount;
+		m_segments.push_back(outSeg);
+	}
+
+	m_boundingBox = data.bounds;
+	m_vertexCount = (u32)m_vertices.size();
+	m_indexCount  = (u32)m_indices.size();
 
 	createGpuScene();
 
@@ -1520,19 +1615,56 @@ void ExamplePathTracer::createGpuScene()
 		m_materialIndexBuffer = Gfx_CreateBuffer(indexDesc, materialIndices.data());
 	}
 
-	const bool rtReady = m_rtPipeline.valid() && m_materialDescriptorSet.valid();
-	if (rtReady)
-	{
-		RUSH_LOG("Creating ray tracing data");
+	createBottomLevelAccelerationStructure();
+}
 
-		DynamicArray<GfxRayTracingGeometryDesc> geometries;
-#if RUSH_RENDER_API != RUSH_RENDER_API_MTL
-		geometries.reserve(m_segments.size());
+bool ExamplePathTracer::useInlineScene() const
+{
+#if RUSH_RENDER_API == RUSH_RENDER_API_MTL
+	return true;
 #else
-		geometries.reserve(1);
+	return m_settings.m_tracingMode == int(TracingMode::RayQuery) && m_rayQueryPipeline.valid();
 #endif
+}
 
-#if RUSH_RENDER_API != RUSH_RENDER_API_MTL
+void ExamplePathTracer::createBottomLevelAccelerationStructure()
+{
+	const bool rtReady = (m_rtPipeline.valid() || m_rayQueryPipeline.valid()) && m_materialDescriptorSet.valid();
+	if (!rtReady)
+	{
+		return;
+	}
+
+	RUSH_LOG("Creating ray tracing data");
+
+	const bool      inlineScene = useInlineScene();
+	const u32       ibStride    = 4;
+	const GfxFormat ibFormat    = GfxFormat_R32_Uint;
+
+	DynamicArray<GfxRayTracingGeometryDesc> geometries;
+
+	if (inlineScene)
+	{
+		// Single geometry over the whole mesh: primId is a global triangle index and the
+		// per-triangle material index buffer resolves the material inline (matches Metal).
+		geometries.reserve(1);
+
+		GfxRayTracingGeometryDesc geometryDesc;
+		geometryDesc.indexBuffer       = m_indexBuffer.get();
+		geometryDesc.indexFormat       = ibFormat;
+		geometryDesc.indexCount        = m_indexCount;
+		geometryDesc.indexBufferOffset = 0;
+		geometryDesc.vertexBuffer      = m_vertexBuffer.get();
+		geometryDesc.vertexFormat      = GfxFormat::GfxFormat_RGB32_Float;
+		geometryDesc.vertexStride      = sizeof(Vertex);
+		geometryDesc.vertexCount       = m_vertexCount;
+		geometries.push_back(geometryDesc);
+	}
+	else
+	{
+		// One geometry per segment; the material for each is baked into its SBT hit-group record.
+		geometries.reserve(m_segments.size());
+
 		const GfxCapability& caps             = Gfx_GetCapability();
 		const u32            shaderHandleSize = caps.rtShaderHandleSize;
 		const u32 sbtRecordSize = alignCeiling(u32(shaderHandleSize + sizeof(MaterialConstants)), shaderHandleSize);
@@ -1541,29 +1673,14 @@ void ExamplePathTracer::createGpuScene()
 		sbtData.resize(m_segments.size() * sbtRecordSize);
 
 		const u8* hitGroupHandle = Gfx_GetRayTracingShaderHandle(m_rtPipeline, GfxRayTracingShaderType::HitGroup, 0);
-#endif
 
-#if RUSH_RENDER_API == RUSH_RENDER_API_MTL
-		{
-			GfxRayTracingGeometryDesc geometryDesc;
-			geometryDesc.indexBuffer       = m_indexBuffer.get();
-			geometryDesc.indexFormat       = ibDesc.format;
-			geometryDesc.indexCount        = m_indexCount;
-			geometryDesc.indexBufferOffset = 0;
-			geometryDesc.vertexBuffer      = m_vertexBuffer.get();
-			geometryDesc.vertexFormat      = GfxFormat::GfxFormat_RGB32_Float;
-			geometryDesc.vertexStride      = sizeof(Vertex);
-			geometryDesc.vertexCount       = m_vertexCount;
-			geometries.push_back(geometryDesc);
-		}
-#else
 		for (size_t i = 0; i < m_segments.size(); ++i)
 		{
 			const auto& segment = m_segments[i];
 
 			GfxRayTracingGeometryDesc geometryDesc;
 			geometryDesc.indexBuffer       = m_indexBuffer.get();
-			geometryDesc.indexFormat       = ibDesc.format;
+			geometryDesc.indexFormat       = ibFormat;
 			geometryDesc.indexCount        = segment.indexCount;
 			geometryDesc.indexBufferOffset = segment.indexOffset * ibStride;
 			geometryDesc.vertexBuffer      = m_vertexBuffer.get();
@@ -1572,38 +1689,42 @@ void ExamplePathTracer::createGpuScene()
 			geometryDesc.vertexCount       = m_vertexCount;
 			geometries.push_back(geometryDesc);
 
-#if RUSH_RENDER_API != RUSH_RENDER_API_MTL
 			u8* sbtRecord          = &sbtData[i * sbtRecordSize];
 			u8* sbtRecordConstants = sbtRecord + shaderHandleSize;
 
 			MaterialConstants materialConstants = m_materials[segment.material];
 			materialConstants.firstIndex        = segment.indexOffset;
 
-			memcpy(sbtRecord, hitGroupHandle, sizeof(shaderHandleSize));
+			memcpy(sbtRecord, hitGroupHandle, shaderHandleSize);
 			memcpy(sbtRecordConstants, &materialConstants, sizeof(materialConstants));
-#endif
 		}
-#endif
 
-#if RUSH_RENDER_API != RUSH_RENDER_API_MTL
 		m_sbtBuffer = Gfx_CreateBuffer(
 		    GfxBufferFlags::Storage | GfxBufferFlags::RayTracing, u32(sbtData.size() / sbtRecordSize), sbtRecordSize, sbtData.data());
-#endif
-
-		GfxAccelerationStructureDesc blasDesc;
-		blasDesc.type         = GfxAccelerationStructureType::BottomLevel;
-		blasDesc.geometryCount = u32(geometries.size());
-		blasDesc.geometries   = geometries.data();
-		m_blas                = Gfx_CreateAccelerationStructure(blasDesc);
 	}
+
+	GfxAccelerationStructureDesc blasDesc;
+	blasDesc.type          = GfxAccelerationStructureType::BottomLevel;
+	blasDesc.geometryCount = u32(geometries.size());
+	blasDesc.geometries    = geometries.data();
+	m_blas                 = Gfx_CreateAccelerationStructure(blasDesc);
+
+	m_blasIsInline = inlineScene;
+}
+
+void ExamplePathTracer::rebuildAccelerationStructures()
+{
+	// Mode switch changes the BLAS layout (single vs per-segment); rebuild BLAS now, TLAS lazily in render().
+	m_tlas      = {};
+	m_sbtBuffer = {};
+	m_blas      = {};
+	createBottomLevelAccelerationStructure();
+	m_frameIndex = 0;
 }
 
 void ExamplePathTracer::resetCamera()
 {
-	float aspect = m_window->getAspect();
-	float fov = 1.0f;
-	m_camera = Camera(aspect, fov, 0.25f);
-	m_camera.lookAt(Vec3(m_boundingBox.m_max) + Vec3(2.0f), m_boundingBox.center());
+	m_camera = makeFramedCamera(m_boundingBox, outputAspect());
 	m_frameIndex = 0;
 }
 
@@ -1645,20 +1766,14 @@ void ExamplePathTracer::focusOnCursor()
 // Bump only on incompatible semantic changes or a Camera blob layout change.
 static constexpr u32 kConfigVersion = 1;
 
-std::string ExamplePathTracer::configFilePath() const
+const char* ExamplePathTracer::configModelName() const
 {
-	const char* model = (m_useProceduralScene || m_modelFilename.empty()) ? nullptr : m_modelFilename.c_str();
-	return sceneConfigPath("pathtracer", model);
+	return (m_useProceduralScene || m_modelFilename.empty()) ? nullptr : m_modelFilename.c_str();
 }
 
 void ExamplePathTracer::saveConfig()
 {
-	const std::string path = configFilePath();
-	ConfigRoot root{m_camera, m_settings};
-	if (Reflect::saveToFile(path.c_str(), kConfigVersion, root))
-	{
-		RUSH_LOG("Saved config to '%s'", path.c_str());
-	}
+	saveSceneConfig("pathtracer", configModelName(), kConfigVersion, m_camera, m_settings);
 }
 
 void ExamplePathTracer::loadConfig()
@@ -1666,7 +1781,7 @@ void ExamplePathTracer::loadConfig()
 	// Establish scene defaults first; the file overwrites whatever it carries.
 	if (m_useProceduralScene)
 	{
-		const float aspect = m_window->getAspect();
+		const float aspect = outputAspect();
 		const float fov    = 1.0f;
 		m_camera = Camera(aspect, fov, 0.25f);
 		const Vec3 center = m_boundingBox.center();
@@ -1677,15 +1792,21 @@ void ExamplePathTracer::loadConfig()
 		resetCamera();
 	}
 
-	const std::string path = configFilePath();
-	ConfigRoot root{m_camera, m_settings};
-	if (Reflect::loadFromFile(path.c_str(), kConfigVersion, root))
+	loadSceneConfig("pathtracer", configModelName(), kConfigVersion, m_camera, m_settings);
+
+	// Validate the loaded tracing mode against this device/build, then bring the acceleration
+	// structures in line with it (createGpuScene built them for the pre-load default mode).
+#if RUSH_RENDER_API == RUSH_RENDER_API_MTL
+	m_settings.m_tracingMode = int(TracingMode::RayQuery);
+#else
+	if (m_settings.m_tracingMode == int(TracingMode::RayQuery) && !m_rayQueryPipeline.valid())
 	{
-		RUSH_LOG("Loaded config from '%s'", path.c_str());
+		m_settings.m_tracingMode = int(TracingMode::RayTracingPipeline);
 	}
-	else
+#endif
+	if (m_blas.valid() && useInlineScene() != m_blasIsInline)
 	{
-		RUSH_LOG("No usable config at '%s' (using defaults)", path.c_str());
+		rebuildAccelerationStructures();
 	}
 
 	m_frameIndex = 0;

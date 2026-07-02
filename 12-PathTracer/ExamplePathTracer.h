@@ -147,6 +147,8 @@ private:
 		MaterialMode materialMode = MaterialMode::MetallicRoughness;
 	};
 
+	static_assert(sizeof(MaterialConstants) == 68, "MaterialConstants must stay tightly packed (scalar layout)");
+
 	std::vector<MaterialConstants> m_materials;
 	GfxOwn<GfxBuffer> m_defaultConstantBuffer;
 
@@ -186,12 +188,26 @@ private:
 	std::string m_startupError;
 	bool m_useProceduralScene = false;
 
+	// Headless render-to-PNG; active when m_headlessOutPath is set (--out).
+	std::string m_headlessOutPath;
+	u32         m_headlessSpp  = 1024;
+	Tuple2i     m_headlessSize = {1920, 1080};
+
 	std::mutex m_loadingMutex;
 
+	// Full RT pipeline (traceRayEXT + SBT) or inline ray-query compute (shared with Metal).
+	enum class TracingMode : u32
+	{
+		RayTracingPipeline = 0,
+		RayQuery           = 1,
+	};
+
 	GfxOwn<GfxRayTracingPipeline>    m_rtPipeline;
+	GfxOwn<GfxComputePipeline>       m_rayQueryPipeline;
 	GfxOwn<GfxAccelerationStructure> m_blas;
 	GfxOwn<GfxAccelerationStructure> m_tlas;
 	GfxOwn<GfxBuffer>                m_sbtBuffer;
+	bool                             m_blasIsInline = false;
 	GfxOwn<GfxTexture>               m_outputImage;
 	GfxOwn<GfxRenderPipeline>        m_blitTonemap;
 	GfxOwn<GfxTexture>               m_envmap;
@@ -223,6 +239,7 @@ private:
 		bool m_showFocusAssist = false;
 		float m_focusAssistFalloffPx = 4.0f;
 		float m_envmapRotationDegrees = 0.0;
+		int m_tracingMode = 0; // TracingMode; Vulkan-only, clamped to available backends on load
 
 		template <typename Ar> void describe(Ar& ar)
 		{
@@ -245,28 +262,31 @@ private:
 			ar.field("showFocusAssist", m_showFocusAssist);
 			ar.field("focusAssistFalloffPx", m_focusAssistFalloffPx);
 			ar.field("envmapRotationDegrees", m_envmapRotationDegrees);
+			ar.field("tracingMode", m_tracingMode);
 		}
 	};
 
 	Settings m_settings;
 
-	// Root of the serialized per-scene config.
-	struct ConfigRoot
-	{
-		Camera&   camera;
-		Settings& settings;
-		template <typename Ar> void describe(Ar& ar)
-		{
-			ar.field("camera", camera);
-			ar.field("settings", settings);
-		}
-	};
-
 	void loadingThreadFunction();
 	void createRayTracingScene(GfxContext* ctx);
 
+	// Inline single-geometry BLAS + material buffers (always on Metal; Vulkan ray-query mode).
+	bool useInlineScene() const;
+	void createBottomLevelAccelerationStructure();
+	void rebuildAccelerationStructures();
+
+	SceneConstants makeSceneConstants(Tuple2i outputSize, u32 frameIndex) const;
+
+	float computeExposure() const;
+
+	// The window's aspect when present, else the headless render size.
+	float outputAspect() const;
+
+	void renderHeadless(GfxContext* ctx);
+
 	void createGpuScene();
-	std::string configFilePath() const;
+	const char* configModelName() const; // model path for the config key, or null when procedural
 	void saveConfig();
 	void loadConfig();
 	void resetCamera();
@@ -274,5 +294,4 @@ private:
 	void loadEnvmap(const char* filename);
 
 	VirtualGamepad m_virtualGamepad;
-	int m_btnVertical = -1;
 };

@@ -72,8 +72,15 @@ struct PathTracerContext
 #define PT_VTX_UV(v)  float2((v).texcoord)
 #define PT_VTX_TAN(v) float4((v).tangent)
 
+// Inline material resolution (per-triangle index -> material table), shared with Vulkan ray query.
+#define PT_MATERIAL(ctx, i)          ((ctx).s0->materials[(i)])
+#define PT_MATERIAL_INDEX(ctx, p)    ((ctx).s0->materialIndices[(p)])
+#define PT_HAS_MATERIALS(ctx)        ((ctx).s0->materials != nullptr)
+#define PT_HAS_MATERIAL_INDICES(ctx) ((ctx).s0->materialIndices != nullptr)
+
 // Metal runs the whole path tracer inline in one kernel.
 #define PT_HAS_RENDER_LOOP
+#define PT_INLINE_TRACING
 
 #else // GLSL / Vulkan: resources are module globals (Common.glsl), context carries nothing.
 
@@ -85,7 +92,7 @@ struct PathTracerContext
 #define PT_SCENE(ctx, field)        (field)
 #define PT_INDEX(ctx, i)            (indexBuffer[(i)])
 #define PT_VERTEX(ctx, i)           (vertexBuffer[(i)])
-#define PT_TEXTURE(ctx, id, uv)     (texture(sampler2D(textureDescriptors[(id)], defaultSampler), (uv)))
+#define PT_TEXTURE(ctx, id, uv)     (texture(sampler2D(textureDescriptors[nonuniformEXT(id)], defaultSampler), (uv)))
 #define PT_ENVMAP(ctx, uv)          (texture(sampler2D(envmapTexture, defaultSampler), (uv)))
 #define PT_ENVDIST(ctx, i)          (envmapDistributionBuffer[(i)])
 #define PT_ENVDIST_VALID(ctx)       (true)
@@ -103,6 +110,17 @@ struct PathTracerContext
 #ifdef PT_CONFIG_SBT_RAYGEN
 #define PT_HAS_RENDER_LOOP
 layout(location = 0) rayPayloadEXT PtPayload sbtPayload;
+#endif
+
+// The Vulkan ray-query compute shader traces inline, mirroring the Metal kernel: it drives
+// the render loop and resolves materials from the module-global material buffers below.
+#ifdef PT_CONFIG_RAYQUERY
+#define PT_HAS_RENDER_LOOP
+#define PT_INLINE_TRACING
+#define PT_MATERIAL(ctx, i)          (materials[(i)])
+#define PT_MATERIAL_INDEX(ctx, p)    (materialIndices[(p)])
+#define PT_HAS_MATERIALS(ctx)        (true)
+#define PT_HAS_MATERIAL_INDICES(ctx) (true)
 #endif
 
 #endif

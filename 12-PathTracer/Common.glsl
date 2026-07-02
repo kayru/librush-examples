@@ -5,10 +5,16 @@
 
 #ifndef __cplusplus
 
+// Inline tracing (ray query compute) indexes the bindless texture array with a per-thread
+// material id, which is not dynamically uniform; nonuniformEXT is required for correct sampling.
+#extension GL_EXT_nonuniform_qualifier : require
+
+#extension GL_EXT_scalar_block_layout : require
+
 #include "ShaderShared.glsl"
 
 // global resources
-// Binding layout (set=0):
+// Binding layout (set=0), SBT ray-tracing-pipeline configs (rgen/rchit/rmiss):
 //  0 SceneConstants
 //  1 defaultSampler
 //  2 envmapTexture
@@ -17,9 +23,10 @@
 //  5 vertexBuffer
 //  6 envmapDistributionBuffer
 //  7 focusFeedbackBuffer
-//  8 TLAS (Vulkan)
-// Metal argument buffers follow the same ordering; when Metal-only material buffers
-// are bound, they occupy slots 7/8, focusFeedback is 9, and TLAS shifts to 10.
+//  8 TLAS
+// Inline configs (Vulkan ray query, PT_CONFIG_RAYQUERY) resolve materials from buffers rather
+// than the SBT, so materials + material indices sit at 7/8, focusFeedback shifts to 9, TLAS to 10.
+// Metal argument buffers follow the same inline ordering (materials 7, indices 8, focus 9, TLAS 10).
 // Binding layout (set=1): texture array at binding 0.
 
 layout(set=0, binding=0)
@@ -89,25 +96,10 @@ buffer EnvmapDistributionBuffer
 	EnvmapCell envmapDistributionBuffer[];
 };
 
-// click-to-focus: cursor pixel writes its primary-hit depth here
-layout(set = 0, binding = 7, std430)
-buffer FocusFeedbackBuffer
-{
-	float focusFeedback[];
-};
-
 vec3 getPosition(Vertex v) { return vec3(v.position[0], v.position[1], v.position[2]); }
 vec3 getNormal(Vertex v) { return vec3(v.normal[0], v.normal[1], v.normal[2]); }
 vec2 getTexcoord(Vertex v) { return vec2(v.texcoord[0], v.texcoord[1]); }
 vec4 getTangent(Vertex v) { return vec4(v.tangent[0], v.tangent[1], v.tangent[2], v.tangent[3]); }
-
-layout(set=0, binding=8)
-uniform accelerationStructureEXT TLAS;
-
-layout(set=1, binding = 0)
-uniform texture2D textureDescriptors[PT_MAX_TEXTURES];
-
-// common types and functions
 
 struct MaterialConstants
 {
@@ -123,6 +115,49 @@ struct MaterialConstants
 	float reflectance;
 	uint materialMode;
 };
+
+#ifdef PT_CONFIG_RAYQUERY
+
+layout(set=0, binding=7, scalar)
+buffer MaterialBuffer
+{
+	MaterialConstants materials[];
+};
+
+layout(set=0, binding=8, std430)
+buffer MaterialIndexBuffer
+{
+	uint materialIndices[];
+};
+
+// click-to-focus: cursor pixel writes its primary-hit depth here
+layout(set=0, binding=9, std430)
+buffer FocusFeedbackBuffer
+{
+	float focusFeedback[];
+};
+
+layout(set=0, binding=10)
+uniform accelerationStructureEXT TLAS;
+
+#else
+
+// click-to-focus: cursor pixel writes its primary-hit depth here
+layout(set=0, binding=7, std430)
+buffer FocusFeedbackBuffer
+{
+	float focusFeedback[];
+};
+
+layout(set=0, binding=8)
+uniform accelerationStructureEXT TLAS;
+
+#endif
+
+layout(set=1, binding = 0)
+uniform texture2D textureDescriptors[PT_MAX_TEXTURES];
+
+// common types and functions
 
 #include "PathTracerContext.glsl"
 #include "PathTracerCore.glsl"

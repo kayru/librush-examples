@@ -1,0 +1,23 @@
+#version 460
+#extension GL_EXT_ray_query : enable
+
+#define PT_CONFIG_RAYQUERY
+#include "Common.glsl"
+
+// Inline ray-query path tracer. The whole render loop (ptRenderPixel), material resolution
+// and shading are shared with the Metal kernel via PathTracerCore.glsl; only the intersection
+// primitive differs (rayQueryEXT here, metal::intersector on Metal).
+
+layout(local_size_x = 8, local_size_y = 8) in;
+
+void main()
+{
+	ivec2 pixelIndex = ivec2(gl_GlobalInvocationID.xy);
+	if (pixelIndex.x >= outputSize.x || pixelIndex.y >= outputSize.y)
+	{
+		return;
+	}
+
+	PathTracerContext ctx;
+	ptRenderPixel(ctx, pixelIndex);
+}
