@@ -30,7 +30,7 @@ namespace
 
 		char* end = nullptr;
 		long parsed = std::strtol(value, &end, 10);
-		if (end == value || parsed <= 0)
+		if (end == value || parsed < 0)
 		{
 			return defaultValue;
 		}

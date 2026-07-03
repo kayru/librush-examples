@@ -105,6 +105,7 @@ private:
 
 		Tuple2i focusPickPixel = {-1, -1}; // cursor pixel; x < 0 = no pick
 		float focalPlaneFalloffPx = 4.0f;
+		u32 normalMapBounceLimit = 5; // apply normal maps only on bounces <= this (perf toggle)
 	};
 
 	Mat4 m_worldTransform = Mat4::identity();
@@ -240,6 +241,8 @@ private:
 		float m_focusAssistFalloffPx = 4.0f;
 		float m_envmapRotationDegrees = 0.0;
 		int m_tracingMode = int(TracingMode::RayQuery); // Vulkan-only, clamped to available backends on load
+		bool m_useRussianRoulette = true; // perf: terminate low-throughput paths (unbiased)
+		int m_normalMapBounceLimit = 5; // perf: apply normal maps only on bounces <= this (5 = all)
 
 		template <typename Ar> void describe(Ar& ar)
 		{
@@ -263,6 +266,8 @@ private:
 			ar.field("focusAssistFalloffPx", m_focusAssistFalloffPx);
 			ar.field("envmapRotationDegrees", m_envmapRotationDegrees);
 			ar.field("tracingMode", m_tracingMode);
+			ar.field("useRussianRoulette", m_useRussianRoulette);
+			ar.field("normalMapBounceLimit", m_normalMapBounceLimit);
 		}
 	};
 

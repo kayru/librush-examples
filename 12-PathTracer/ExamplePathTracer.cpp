@@ -324,6 +324,8 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 		if (getArgU32(g_appCfg.argc, g_appCfg.argv, "spp", nullptr, v) && v > 0) { m_headlessSpp = v; }
 		if (getArgU32(g_appCfg.argc, g_appCfg.argv, "w", nullptr, v) && v > 0) { m_headlessSize.x = int(v); }
 		if (getArgU32(g_appCfg.argc, g_appCfg.argv, "h", nullptr, v) && v > 0) { m_headlessSize.y = int(v); }
+		if (getArgU32(g_appCfg.argc, g_appCfg.argv, "rr", nullptr, v)) { m_settings.m_useRussianRoulette = v != 0; }
+		if (getArgU32(g_appCfg.argc, g_appCfg.argv, "nmbounce", nullptr, v)) { m_settings.m_normalMapBounceLimit = int(v); }
 		// Default to ray query unless --tracing=pipeline is given (ignores the saved config mode).
 		std::string mode;
 		getArgString(g_appCfg.argc, g_appCfg.argv, "tracing", nullptr, mode);
@@ -537,6 +539,10 @@ void ExamplePathTracer::onUpdate()
 				}
 			}
 #endif
+			ImGui::Separator();
+			renderSettingsChanged |= ImGui::Checkbox("Russian roulette", &m_settings.m_useRussianRoulette);
+			// Normal maps only on bounces <= limit; lower = faster, softer indirect detail (5 = all).
+			renderSettingsChanged |= ImGui::SliderInt("Normal map max bounce", &m_settings.m_normalMapBounceLimit, 0, 5);
 			if (ImGui::Button("Reset accumulation"))
 			{
 				m_outputImage.reset();
@@ -709,6 +715,8 @@ ExamplePathTracer::SceneConstants ExamplePathTracer::makeSceneConstants(Tuple2i 
 	constants.flags |= m_settings.m_debugDisableAccumulation ? PT_FLAG_DEBUG_DISABLE_ACCUMULATION : 0;
 	constants.flags |= m_settings.m_debugHitMask ? PT_FLAG_DEBUG_HIT_MASK : 0;
 	constants.flags |= m_settings.m_showFocusAssist ? PT_FLAG_DEBUG_FOCAL_PLANE : 0;
+	constants.flags |= m_settings.m_useRussianRoulette ? PT_FLAG_USE_RUSSIAN_ROULETTE : 0;
+	constants.normalMapBounceLimit = (u32)m_settings.m_normalMapBounceLimit;
 	constants.debugVisMode = (u32)m_settings.m_debugVisMode;
 	constants.focusPickPixel = m_focusPickRequested ? m_focusPickPixel : Tuple2i{-1, -1};
 	constants.outputSize = outputSize;

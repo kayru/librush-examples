@@ -7,9 +7,11 @@
 // Caller resolves material + index base (firstIndex + primId*3 for SBT geometry,
 // primId*3 for inline backends).
 SHADER_INLINE void fillPayload(PathTracerContext ctx, PtHit hit, uint indexBase,
-	MaterialConstants material, INOUT(PtPayload) pl)
+	MaterialConstants material, uint bounceIndex, INOUT(PtPayload) pl)
 {
 	pl.hitT = hit.t;
+
+	bool applyNormalMap = bounceIndex <= PT_SCENE(ctx, normalMapBounceLimit);
 
 	vec3 bary = vec3(1.0f - hit.bary.x - hit.bary.y, hit.bary.x, hit.bary.y);
 
@@ -77,7 +79,8 @@ SHADER_INLINE void fillPayload(PathTracerContext ctx, PtHit hit, uint indexBase,
 		hasTangent = true;
 	}
 
-	bool useNormalMapping = (PT_SCENE(ctx, flags) & PT_FLAG_USE_NORMAL_MAPPING) != 0u
+	bool useNormalMapping = applyNormalMap
+		&& (PT_SCENE(ctx, flags) & PT_FLAG_USE_NORMAL_MAPPING) != 0u
 		&& material.normalTextureId != 0u
 		&& material.normalTextureId < PT_MAX_TEXTURES;
 	if (useNormalMapping && hasTangent && hasBitangent)
@@ -230,7 +233,7 @@ SHADER_INLINE PtHit toPtHit(intersection_result<triangle_data, instancing> res)
 	return hit;
 }
 
-SHADER_INLINE bool ptTraceFill(PathTracerContext ctx, PtRay r, INOUT(PtPayload) pl)
+SHADER_INLINE bool ptTraceFill(PathTracerContext ctx, PtRay r, uint bounceIndex, INOUT(PtPayload) pl)
 {
 	intersector<triangle_data, instancing> it;
 	it.assume_geometry_type(geometry_type::triangle);
@@ -247,7 +250,7 @@ SHADER_INLINE bool ptTraceFill(PathTracerContext ctx, PtRay r, INOUT(PtPayload) 
 	{
 		return false;
 	}
-	fillPayload(ctx, hit, hit.primId * 3u, resolveMaterial(ctx, hit.primId), pl);
+	fillPayload(ctx, hit, hit.primId * 3u, resolveMaterial(ctx, hit.primId), bounceIndex, pl);
 	return true;
 }
 
@@ -270,7 +273,7 @@ SHADER_INLINE bool ptTraceShadow(PathTracerContext ctx, PtRay r)
 
 // Inline ray query: same intersection contract as the Metal intersector above, expressed with
 // GL_EXT_ray_query. All geometry is opaque, so traversal auto-commits and proceed does no work.
-bool ptTraceFill(PathTracerContext ctx, PtRay r, INOUT(PtPayload) pl)
+bool ptTraceFill(PathTracerContext ctx, PtRay r, uint bounceIndex, INOUT(PtPayload) pl)
 {
 	rayQueryEXT rq;
 	rayQueryInitializeEXT(rq, TLAS, gl_RayFlagsOpaqueEXT, 0xFFu, r.origin, r.minT, r.direction, r.maxT);
@@ -289,7 +292,7 @@ bool ptTraceFill(PathTracerContext ctx, PtRay r, INOUT(PtPayload) pl)
 	hit.frontFacing = rayQueryGetIntersectionFrontFaceEXT(rq, true);
 
 	// Single-geometry BLAS: primId is the global triangle index (matches the Metal kernel).
-	fillPayload(ctx, hit, hit.primId * 3u, resolveMaterial(ctx, hit.primId), pl);
+	fillPayload(ctx, hit, hit.primId * 3u, resolveMaterial(ctx, hit.primId), bounceIndex, pl);
 	return true;
 }
 
@@ -305,9 +308,10 @@ bool ptTraceShadow(PathTracerContext ctx, PtRay r)
 
 #elif defined(PT_CONFIG_SBT_RAYGEN)
 
-bool ptTraceFill(PathTracerContext ctx, PtRay r, INOUT(PtPayload) pl)
+bool ptTraceFill(PathTracerContext ctx, PtRay r, uint bounceIndex, INOUT(PtPayload) pl)
 {
 	sbtPayload.hitT = 0.0;
+	sbtPayload.bounceIndex = bounceIndex;
 	traceRayEXT(TLAS, gl_RayFlagsOpaqueEXT, 0xFFu, 0u, 1u, 0u,
 		r.origin, r.minT, r.direction, r.maxT, 0);
 	pl = sbtPayload;
@@ -337,8 +341,9 @@ SHADER_INLINE void ptRenderPixel(PathTracerContext ctx, ivec2 pixelIndex)
 	const bool useDirectLighting = true;
 	const bool useIndirectSpecular = true;
 	const bool useRoughnessBias = true;
-	const bool useRussianRoulette = true;
 	const bool visNormal = false;
+
+	bool useRussianRoulette = (PT_SCENE(ctx, flags) & PT_FLAG_USE_RUSSIAN_ROULETTE) != 0u;
 
 	ivec2 outputSize = PT_SCENE(ctx, outputSize);
 	vec2 pixelUV = vec2(pixelIndex) / vec2(outputSize);
@@ -384,7 +389,7 @@ SHADER_INLINE void ptRenderPixel(PathTracerContext ctx, ivec2 pixelIndex)
 	if (debugSimple || debugHitMask || debugVisEnabled)
 	{
 		PtPayload payload;
-		bool isHit = ptTraceFill(ctx, primaryRay, payload);
+		bool isHit = ptTraceFill(ctx, primaryRay, 0u, payload);
 		if (debugHitMask)
 		{
 			vec3 maskColor = isHit ? vec3(1.0f, 0.0f, 0.0f) : vec3(0.0f);
@@ -441,7 +446,7 @@ SHADER_INLINE void ptRenderPixel(PathTracerContext ctx, ivec2 pixelIndex)
 		}
 
 		PtPayload payload;
-		bool isHit = ptTraceFill(ctx, primaryRay, payload);
+		bool isHit = ptTraceFill(ctx, primaryRay, i, payload);
 
 		if (useDebugFurnace && i > 0u)
 		{

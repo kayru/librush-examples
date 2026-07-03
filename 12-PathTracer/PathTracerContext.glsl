@@ -44,6 +44,7 @@ struct PtPayload
 	vec3  tangent;
 	vec3  bitangent;
 	vec2  texcoord;
+	uint  bounceIndex; // SBT path: carries the bounce number from raygen to the hit shader
 };
 
 #ifdef __METAL_VERSION__

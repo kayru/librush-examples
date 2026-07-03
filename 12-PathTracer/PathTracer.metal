@@ -36,6 +36,7 @@ struct SceneConstants
 
 	int2 focusPickPixel; // cursor pixel; x < 0 = no pick
 	float focalPlaneFalloffPx;
+	uint normalMapBounceLimit;
 };
 
 struct MaterialConstants

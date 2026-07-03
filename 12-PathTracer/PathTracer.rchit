@@ -24,5 +24,5 @@ void main()
 	hit.frontFacing = gl_HitKindEXT != 255u;
 
 	uint indexBase = materialConstants.firstIndex + gl_PrimitiveID * 3u;
-	fillPayload(ctx, hit, indexBase, materialConstants, payload);
+	fillPayload(ctx, hit, indexBase, materialConstants, payload.bounceIndex, payload);
 }

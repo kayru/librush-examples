@@ -12,6 +12,7 @@
 #define PT_FLAG_DEBUG_DISABLE_ACCUMULATION (1u << 5u)
 #define PT_FLAG_DEBUG_HIT_MASK             (1u << 6u)
 #define PT_FLAG_DEBUG_FOCAL_PLANE          (1u << 7u)
+#define PT_FLAG_USE_RUSSIAN_ROULETTE       (1u << 8u)
 
 #define PT_DEBUG_VIS_NONE              0u
 #define PT_DEBUG_VIS_ALBEDO           1u
