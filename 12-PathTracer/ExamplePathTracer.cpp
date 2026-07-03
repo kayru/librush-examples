@@ -171,7 +171,7 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 			{
 				GfxComputePipelineDesc rqDesc;
 				rqDesc.cs = cs.get();
-				rqDesc.workGroupSize = {8, 8, 1};
+				rqDesc.workGroupSize = {PT_RAYQUERY_TILE_X, PT_RAYQUERY_TILE_Y, 1};
 				rqDesc.bindings.descriptorSets[0].constantBuffers = 1; // scene constants
 				rqDesc.bindings.descriptorSets[0].samplers = 1; // default sampler
 				rqDesc.bindings.descriptorSets[0].textures = 1; // envmap
@@ -808,7 +808,7 @@ void ExamplePathTracer::renderHeadless(GfxContext* ctx)
 		if (rayQuery)
 		{
 			Gfx_SetComputePipeline(ctx, m_rayQueryPipeline);
-			Gfx_Dispatch(ctx, (width + 7u) / 8u, (height + 7u) / 8u, 1u);
+			Gfx_Dispatch(ctx, divUp(width, PT_RAYQUERY_TILE_X), divUp(height, PT_RAYQUERY_TILE_Y), 1u);
 		}
 		else
 		{
@@ -937,7 +937,7 @@ void ExamplePathTracer::render()
 		if (inlineScene)
 		{
 			Gfx_SetComputePipeline(ctx, m_rayQueryPipeline);
-			Gfx_Dispatch(ctx, (outputImageDesc.width + 7u) / 8u, (outputImageDesc.height + 7u) / 8u, 1u);
+			Gfx_Dispatch(ctx, divUp(outputImageDesc.width, PT_RAYQUERY_TILE_X), divUp(outputImageDesc.height, PT_RAYQUERY_TILE_Y), 1u);
 		}
 		else
 		{

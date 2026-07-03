@@ -8,7 +8,7 @@
 // and shading are shared with the Metal kernel via PathTracerCore.glsl; only the intersection
 // primitive differs (rayQueryEXT here, metal::intersector on Metal).
 
-layout(local_size_x = 8, local_size_y = 8) in;
+layout(local_size_x = PT_RAYQUERY_TILE_X, local_size_y = PT_RAYQUERY_TILE_Y) in;
 
 void main()
 {

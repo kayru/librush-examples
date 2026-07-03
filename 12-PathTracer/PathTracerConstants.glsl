@@ -29,4 +29,8 @@
 
 #define PT_MAX_TEXTURES 1024
 
+// Ray-query compute tile. 8x4 = 32 = one warp; ~1.5x faster than a 2-warp group here.
+#define PT_RAYQUERY_TILE_X 8
+#define PT_RAYQUERY_TILE_Y 4
+
 #endif // INCLUDED_PATH_TRACER_CONSTANTS
