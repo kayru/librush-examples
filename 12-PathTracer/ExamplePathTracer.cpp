@@ -868,8 +868,9 @@ void ExamplePathTracer::renderHeadless(GfxContext* ctx)
 	stbi_write_png(m_headlessOutPath.c_str(), int(width), int(height), 4, rgba.data(), int(width * 4));
 	RUSH_LOG("HEADLESS: wrote %s (%s, %ux%u, %u spp)", m_headlessOutPath.c_str(),
 		rayQuery ? "rayquery" : "pipeline", width, height, m_headlessSpp);
-	RUSH_LOG("HEADLESS: render took %.3f s (%.3f ms/spp)", renderSeconds,
-		m_headlessSpp ? (renderSeconds * 1000.0 / m_headlessSpp) : 0.0);
+	const double totalPaths = double(width) * double(height) * double(m_headlessSpp);
+	const double mpathsPerSec = renderSeconds > 0.0 ? totalPaths / renderSeconds / 1.0e6 : 0.0;
+	RUSH_LOG("HEADLESS: render took %.3f s  (%.0f Mpaths/s)", renderSeconds, mpathsPerSec);
 }
 
 void ExamplePathTracer::render()
