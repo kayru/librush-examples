@@ -324,11 +324,12 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 		if (getArgU32(g_appCfg.argc, g_appCfg.argv, "spp", nullptr, v) && v > 0) { m_headlessSpp = v; }
 		if (getArgU32(g_appCfg.argc, g_appCfg.argv, "w", nullptr, v) && v > 0) { m_headlessSize.x = int(v); }
 		if (getArgU32(g_appCfg.argc, g_appCfg.argv, "h", nullptr, v) && v > 0) { m_headlessSize.y = int(v); }
-		// Default to the RT pipeline unless --tracing=rayquery is given (ignore any saved config mode).
+		// Default to ray query unless --tracing=pipeline is given (ignores the saved config mode).
 		std::string mode;
 		getArgString(g_appCfg.argc, g_appCfg.argv, "tracing", nullptr, mode);
-		const bool rq = (mode == "rayquery" || mode == "rq");
-		m_settings.m_tracingMode = int(rq ? TracingMode::RayQuery : TracingMode::RayTracingPipeline);
+		const bool wantPipeline = (mode == "pipeline" || mode == "rt");
+		const bool useRayQuery = !wantPipeline && m_rayQueryPipeline.valid();
+		m_settings.m_tracingMode = int(useRayQuery ? TracingMode::RayQuery : TracingMode::RayTracingPipeline);
 	}
 
 	m_cameraMan = new CameraManipulator();

@@ -239,7 +239,7 @@ private:
 		bool m_showFocusAssist = false;
 		float m_focusAssistFalloffPx = 4.0f;
 		float m_envmapRotationDegrees = 0.0;
-		int m_tracingMode = 0; // TracingMode; Vulkan-only, clamped to available backends on load
+		int m_tracingMode = int(TracingMode::RayQuery); // Vulkan-only, clamped to available backends on load
 
 		template <typename Ar> void describe(Ar& ar)
 		{

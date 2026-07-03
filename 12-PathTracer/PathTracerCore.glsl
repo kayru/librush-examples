@@ -149,21 +149,20 @@ SHADER_INLINE LightSample sampleEnvmap(PathTracerContext ctx, vec3 envmapDir)
 	return r;
 }
 
-SHADER_INLINE vec3 envMapPixelIndexToDirection(PathTracerContext ctx, uint idx, vec2 jitter)
+SHADER_INLINE vec2 envMapPixelIndexToTexcoord(PathTracerContext ctx, uint idx, vec2 jitter)
 {
 	ivec2 envmapSize = PT_SCENE(ctx, envmapSize);
 	uint x = idx % uint(envmapSize.x);
 	uint y = idx / uint(envmapSize.x);
-	vec2 uv = (vec2(float(x), float(y)) + jitter) / vec2(envmapSize);
-	return latLongTexcoordToCartesian(uv);
+	return (vec2(float(x), float(y)) + jitter) / vec2(envmapSize);
 }
 
-SHADER_INLINE vec3 importanceSampleSkyLightDir(PathTracerContext ctx, INOUT(uint) randomSeed)
+SHADER_INLINE vec2 importanceSampleSkyLightTexcoord(PathTracerContext ctx, INOUT(uint) randomSeed)
 {
 	ivec2 envmapSize = PT_SCENE(ctx, envmapSize);
 	if (envmapSize.x <= 0 || envmapSize.y <= 0 || !PT_ENVDIST_VALID(ctx))
 	{
-		return vec3(0.0f, 1.0f, 0.0f);
+		return cartesianToLatLongTexcoord(vec3(0.0f, 1.0f, 0.0f));
 	}
 
 	uint texelCount = uint(envmapSize.x * envmapSize.y);
@@ -171,16 +170,19 @@ SHADER_INLINE vec3 importanceSampleSkyLightDir(PathTracerContext ctx, INOUT(uint
 	EnvmapCell entry = PT_ENVDIST(ctx, i);
 	vec2 jitter = randomFloat2(randomSeed);
 
-	if (randomFloat(randomSeed) <= entry.p)
-	{
-		return envMapPixelIndexToDirection(ctx, i, jitter);
-	}
-	return envMapPixelIndexToDirection(ctx, entry.i, jitter);
+	uint chosen = (randomFloat(randomSeed) <= entry.p) ? i : entry.i;
+	return envMapPixelIndexToTexcoord(ctx, chosen, jitter);
 }
 
 SHADER_INLINE LightSample importanceSampleEnvmap(PathTracerContext ctx, INOUT(uint) randomSeed)
 {
-	return sampleEnvmap(ctx, importanceSampleSkyLightDir(ctx, randomSeed));
+	vec2 uv = importanceSampleSkyLightTexcoord(ctx, randomSeed);
+	vec4 s = PT_ENVMAP(ctx, uv);
+	LightSample r;
+	r.w = envmapToWorld(ctx, latLongTexcoordToCartesian(uv));
+	r.value = s.xyz;
+	r.pdfW = s.w;
+	return r;
 }
 
 // Inline configs (Metal kernel, Vulkan ray query) resolve the material from the per-triangle
@@ -335,6 +337,7 @@ SHADER_INLINE void ptRenderPixel(PathTracerContext ctx, ivec2 pixelIndex)
 	const bool useDirectLighting = true;
 	const bool useIndirectSpecular = true;
 	const bool useRoughnessBias = true;
+	const bool useRussianRoulette = true;
 	const bool visNormal = false;
 
 	ivec2 outputSize = PT_SCENE(ctx, outputSize);
@@ -419,6 +422,24 @@ SHADER_INLINE void ptRenderPixel(PathTracerContext ctx, ivec2 pixelIndex)
 
 	for (uint i = 0u; i <= maxPathLength; ++i)
 	{
+		// Terminal bounce: only a miss contributes, so trace occlusion-only and skip the fill.
+		if (i == maxPathLength && !useDebugFurnace)
+		{
+			if (!ptTraceShadow(ctx, primaryRay))
+			{
+				if (useEnvmap)
+				{
+					LightSample ls = sampleEnvmap(ctx, worldToEnvmap(ctx, primaryRay.direction));
+					result += throughput * ls.value * powerHeuristic(scatterPdfW, ls.pdfW);
+				}
+				else
+				{
+					result += throughput * getSkyColor(primaryRay.direction);
+				}
+			}
+			break;
+		}
+
 		PtPayload payload;
 		bool isHit = ptTraceFill(ctx, primaryRay, payload);
 
@@ -489,10 +510,6 @@ SHADER_INLINE void ptRenderPixel(PathTracerContext ctx, ivec2 pixelIndex)
 		vec3 diffuseColor = surf.diffuseColor;
 		vec3 specularColor = surf.specularColor;
 		float linearRoughness = surf.linearRoughness;
-		if (i == maxPathLength)
-		{
-			break;
-		}
 
 		if (useDirectLighting && !useDebugFurnace && (!useDebugReflections || i > 0u))
 		{
@@ -592,6 +609,16 @@ SHADER_INLINE void ptRenderPixel(PathTracerContext ctx, ivec2 pixelIndex)
 
 			primaryRay.direction = safeNormalize(N + mapToUniformSphere(reflectionSampleUV));
 			scatterPdfW = 1.0f / M_PI;
+		}
+
+		if (useRussianRoulette && i >= 2u)
+		{
+			float survival = clamp(max3(throughput), 0.05f, 1.0f);
+			if (randomFloat(randomSeed) > survival)
+			{
+				break;
+			}
+			throughput /= survival;
 		}
 	}
 
