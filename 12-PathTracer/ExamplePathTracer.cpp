@@ -776,6 +776,7 @@ void ExamplePathTracer::renderHeadless(GfxContext* ctx)
 	rebuildAccelerationStructures();
 	createRayTracingScene(ctx);
 
+	Timer renderTimer;
 	for (u32 frame = 0; frame < m_headlessSpp; ++frame)
 	{
 		SceneConstants constants = makeSceneConstants(size, frame);
@@ -829,7 +830,9 @@ void ExamplePathTracer::renderHeadless(GfxContext* ctx)
 	GfxImageRegion fullRegion;
 	Gfx_AddImageBarrier(ctx, m_outputImage, GfxResourceState_TransferSrc);
 	Gfx_CopyTextureToBuffer(ctx, m_outputImage, fullRegion, staging);
-	Gfx_Finish();
+	Gfx_Finish(); // blocks until the GPU has finished all traced frames
+
+	const double renderSeconds = renderTimer.time();
 
 	GfxMappedBuffer mapped = Gfx_MapBuffer(staging);
 	if (!mapped.data)
@@ -864,6 +867,8 @@ void ExamplePathTracer::renderHeadless(GfxContext* ctx)
 	stbi_write_png(m_headlessOutPath.c_str(), int(width), int(height), 4, rgba.data(), int(width * 4));
 	RUSH_LOG("HEADLESS: wrote %s (%s, %ux%u, %u spp)", m_headlessOutPath.c_str(),
 		rayQuery ? "rayquery" : "pipeline", width, height, m_headlessSpp);
+	RUSH_LOG("HEADLESS: render took %.3f s (%.3f ms/spp)", renderSeconds,
+		m_headlessSpp ? (renderSeconds * 1000.0 / m_headlessSpp) : 0.0);
 }
 
 void ExamplePathTracer::render()
