@@ -616,7 +616,7 @@ SHADER_INLINE void ptRenderPixel(PathTracerContext ctx, ivec2 pixelIndex)
 			scatterPdfW = 1.0f / M_PI;
 		}
 
-		if (useRussianRoulette && i >= 2u)
+		if (useRussianRoulette && i >= 1u)
 		{
 			float survival = clamp(max3(throughput), 0.05f, 1.0f);
 			if (randomFloat(randomSeed) > survival)
