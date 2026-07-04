@@ -581,7 +581,11 @@ SHADER_INLINE void ptRenderPixel(PathTracerContext ctx, ivec2 pixelIndex)
 			reflectionSampleUV = base - floor(base);
 		}
 
-		float specularProbability = useIndirectSpecular ? clamp(payload.metalness, 0.1f, 0.9f) : 0.0f;
+		// Select the scatter lobe by its actual energy (unbiased) rather than raw metalness; this
+		// stops over-sampling the weak specular lobe on diffuse surfaces, cutting firefly variance.
+		float specLum = max3(specularColor);
+		float diffLum = max3(diffuseColor);
+		float specularProbability = useIndirectSpecular ? clamp(specLum / max(specLum + diffLum, 1e-4f), 0.05f, 0.95f) : 0.0f;
 		bool isSpecular = randomFloat(randomSeed) <= specularProbability;
 
 		if (isSpecular)
