@@ -106,6 +106,12 @@ private:
 		Tuple2i focusPickPixel = {-1, -1}; // cursor pixel; x < 0 = no pick
 		float focalPlaneFalloffPx = 4.0f;
 		u32 normalMapBounceLimit = 5; // apply normal maps only on bounces <= this (perf toggle)
+
+		// Single rectangular area light (PT_FLAG_USE_AREA_LIGHT): point(u,v) = origin + u*edgeU + v*edgeV.
+		Vec4 areaLightOrigin = Vec4(0.0f);
+		Vec4 areaLightEdgeU = Vec4(0.0f);
+		Vec4 areaLightEdgeV = Vec4(0.0f);
+		Vec4 areaLightEmission = Vec4(0.0f);
 	};
 
 	Mat4 m_worldTransform = Mat4::identity();
@@ -137,6 +143,7 @@ private:
 	{
 		Vec4 albedoFactor = Vec4(1.0f);
 		Vec4 specularFactor = Vec4(1.0f);
+		Vec4 emissiveFactor = Vec4(0.0f); // xyz = emitted radiance (area-light surfaces)
 		u32 albedoTextureId = 0;
 		u32 specularTextureId = 0;
 		u32 normalTextureId = 0;
@@ -148,7 +155,7 @@ private:
 		MaterialMode materialMode = MaterialMode::MetallicRoughness;
 	};
 
-	static_assert(sizeof(MaterialConstants) == 68, "MaterialConstants must stay tightly packed (scalar layout)");
+	static_assert(sizeof(MaterialConstants) == 84, "MaterialConstants must stay tightly packed (scalar layout)");
 
 	std::vector<MaterialConstants> m_materials;
 	GfxOwn<GfxBuffer> m_defaultConstantBuffer;
@@ -188,6 +195,13 @@ private:
 	bool m_showUI = true;
 	std::string m_startupError;
 	bool m_useProceduralScene = false;
+
+	// Scene-owned rectangular area light (self-lit procedural scenes, e.g. Cornell Box).
+	bool m_useAreaLight = false;
+	Vec3 m_areaLightOrigin = Vec3(0.0f);
+	Vec3 m_areaLightEdgeU = Vec3(0.0f);
+	Vec3 m_areaLightEdgeV = Vec3(0.0f);
+	Vec3 m_areaLightEmission = Vec3(0.0f);
 
 	// Headless render-to-PNG; active when m_headlessOutPath is set (--out).
 	std::string m_headlessOutPath;

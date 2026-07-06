@@ -691,7 +691,7 @@ bool ExampleModelViewer::loadModelNative(const char* filename)
 bool ExampleModelViewer::buildProceduralModel()
 {
 	ProceduralSceneData data;
-	buildProceduralScene(data);
+	buildProceduralScene(data, ProceduralScene::BoxOnPlane);
 	if (data.vertices.empty() || data.indices.empty())
 	{
 		return false;

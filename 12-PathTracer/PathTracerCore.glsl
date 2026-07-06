@@ -54,6 +54,7 @@ SHADER_INLINE void fillPayload(PathTracerContext ctx, PtHit hit, uint indexBase,
 			specularSample.xyz * material.specularFactor.xyz, pl.metalness);
 	}
 
+	pl.emission = material.emissiveFactor.xyz;
 	pl.reflectance = material.reflectance;
 	pl.shadingNormal = normal;
 	pl.normal = normal;
@@ -188,6 +189,56 @@ SHADER_INLINE LightSample importanceSampleEnvmap(PathTracerContext ctx, INOUT(ui
 	return r;
 }
 
+// Single rectangular area light (Cornell-style ceiling emitter). The emitter geometry carries the
+// same radiance as a material, so BSDF-sampled paths that hit it and light-sampled NEE agree under MIS.
+
+struct AreaLightSample
+{
+	vec3  wi;       // shading point -> sampled light point
+	float dist;
+	float pdfW;     // solid-angle pdf
+	vec3  emission;
+	bool  valid;
+};
+
+SHADER_INLINE vec3 areaLightGeoNormal(PathTracerContext ctx)
+{
+	return normalize(cross(PT_SCENE(ctx, areaLightEdgeU).xyz, PT_SCENE(ctx, areaLightEdgeV).xyz));
+}
+
+SHADER_INLINE float areaLightArea(PathTracerContext ctx)
+{
+	return length(cross(PT_SCENE(ctx, areaLightEdgeU).xyz, PT_SCENE(ctx, areaLightEdgeV).xyz));
+}
+
+// Solid-angle pdf of reaching the light along `dir` at distance `dist` (two-sided emitter).
+SHADER_INLINE float areaLightPdfW(PathTracerContext ctx, vec3 dir, float dist)
+{
+	float area = areaLightArea(ctx);
+	float cosL = abs(dot(areaLightGeoNormal(ctx), dir));
+	if (area <= 0.0f || cosL <= 1e-6f)
+	{
+		return 0.0f;
+	}
+	return (dist * dist) / (area * cosL);
+}
+
+SHADER_INLINE AreaLightSample sampleAreaLight(PathTracerContext ctx, vec3 shadePoint, INOUT(uint) seed)
+{
+	vec2 uv = randomFloat2(seed);
+	vec3 onLight = PT_SCENE(ctx, areaLightOrigin).xyz
+		+ uv.x * PT_SCENE(ctx, areaLightEdgeU).xyz
+		+ uv.y * PT_SCENE(ctx, areaLightEdgeV).xyz;
+	vec3 d = onLight - shadePoint;
+	AreaLightSample r;
+	r.dist = length(d);
+	r.wi = r.dist > 0.0f ? d / r.dist : vec3(0.0f, 1.0f, 0.0f);
+	r.pdfW = areaLightPdfW(ctx, r.wi, r.dist);
+	r.emission = PT_SCENE(ctx, areaLightEmission).xyz;
+	r.valid = r.pdfW > 0.0f;
+	return r;
+}
+
 // Inline configs (Metal kernel, Vulkan ray query) resolve the material from the per-triangle
 // index buffer via the PT_* macros; SBT configs get it from the hit-group shader record instead.
 #ifdef PT_INLINE_TRACING
@@ -196,6 +247,7 @@ SHADER_INLINE MaterialConstants resolveMaterial(PathTracerContext ctx, uint prim
 	MaterialConstants material;
 	material.albedoFactor = vec4(1.0f);
 	material.specularFactor = vec4(1.0f);
+	material.emissiveFactor = vec4(0.0f);
 	material.albedoTextureId = 0u;
 	material.specularTextureId = 0u;
 	material.normalTextureId = 0u;
@@ -376,6 +428,7 @@ SHADER_INLINE void ptRenderPixel(PathTracerContext ctx, ivec2 pixelIndex)
 	float scatterPdfW = 1e9f;
 	float roughnessBias = 0.0f;
 	bool useEnvmap = (PT_SCENE(ctx, flags) & PT_FLAG_USE_ENVMAP) != 0u;
+	bool useAreaLight = (PT_SCENE(ctx, flags) & PT_FLAG_USE_AREA_LIGHT) != 0u;
 	bool debugSimple = (PT_SCENE(ctx, flags) & PT_FLAG_DEBUG_SIMPLE_SHADING) != 0u;
 	bool debugHitMask = (PT_SCENE(ctx, flags) & PT_FLAG_DEBUG_HIT_MASK) != 0u;
 	uint debugVisMode = PT_SCENE(ctx, debugVisMode);
@@ -427,9 +480,21 @@ SHADER_INLINE void ptRenderPixel(PathTracerContext ctx, ivec2 pixelIndex)
 
 	for (uint i = 0u; i <= maxPathLength; ++i)
 	{
-		// Terminal bounce: only a miss contributes, so trace occlusion-only and skip the fill.
+		// Terminal bounce: only a miss (or a direct emitter hit) contributes.
 		if (i == maxPathLength && !useDebugFurnace)
 		{
+			if (useAreaLight)
+			{
+				// Closed box lit only by its emitter: a full trace is needed to catch a light hit;
+				// everything else (walls, escaped rays) contributes nothing at the terminal vertex.
+				PtPayload tpl;
+				if (ptTraceFill(ctx, primaryRay, i, tpl) && max3(tpl.emission) > 0.0f)
+				{
+					float lightPdfW = areaLightPdfW(ctx, primaryRay.direction, tpl.hitT);
+					result += throughput * tpl.emission * powerHeuristic(scatterPdfW, lightPdfW);
+				}
+				break;
+			}
 			if (!ptTraceShadow(ctx, primaryRay))
 			{
 				if (useEnvmap)
@@ -461,6 +526,12 @@ SHADER_INLINE void ptRenderPixel(PathTracerContext ctx, ivec2 pixelIndex)
 				payload.roughness = max(payload.roughness, roughnessBias);
 				roughnessBias = payload.roughness;
 			}
+			if (useAreaLight && max3(payload.emission) > 0.0f)
+			{
+				// BSDF-sampled ray landed on the emitter; MIS against the light-sampling estimator.
+				float lightPdfW = areaLightPdfW(ctx, primaryRay.direction, payload.hitT);
+				result += throughput * payload.emission * powerHeuristic(scatterPdfW, lightPdfW);
+			}
 			if (i == 0u)
 			{
 				float hitDepth = payload.hitT * dot(PT_SCENE(ctx, matView)[2].xyz, primaryRay.direction);
@@ -476,6 +547,11 @@ SHADER_INLINE void ptRenderPixel(PathTracerContext ctx, ivec2 pixelIndex)
 
 		if (!isHit)
 		{
+			if (useAreaLight)
+			{
+				// Emitter-only lighting: rays that escape the box carry no environment radiance.
+				break;
+			}
 			if (i == 0u && (PT_SCENE(ctx, flags) & PT_FLAG_USE_NEUTRAL_BACKGROUND) != 0u)
 			{
 				result = vec3(0.25f);
@@ -518,54 +594,97 @@ SHADER_INLINE void ptRenderPixel(PathTracerContext ctx, ivec2 pixelIndex)
 
 		if (useDirectLighting && !useDebugFurnace && (!useDebugReflections || i > 0u))
 		{
-			vec3 L = vec3(0.0f, 0.0f, 1.0f);
-			vec3 lightColor = vec3(0.0f);
-			float lightPdfW = 0.0f;
-
-			if (useEnvmap)
+			if (useAreaLight)
 			{
-				LightSample ls = importanceSampleEnvmap(ctx, randomSeed);
-				L = ls.w;
-				lightColor = ls.value;
-				lightPdfW = ls.pdfW;
+				// Next-event estimation to the rectangular emitter, MIS-weighted against BSDF sampling.
+				vec3 shadePoint = primaryRay.origin + primaryRay.direction * payload.hitT;
+				shadePoint += payload.geoNormal * max3(abs(shadePoint)) * 1e-4f;
+
+				AreaLightSample als = sampleAreaLight(ctx, shadePoint, randomSeed);
+				float NoL = dot(N, als.wi);
+				if (als.valid && NoL > 0.0f)
+				{
+					PtRay shadowRay;
+					shadowRay.origin = shadePoint;
+					shadowRay.direction = als.wi;
+					shadowRay.minT = 0.0f;
+					shadowRay.maxT = als.dist * (1.0f - 1e-3f); // stop short of the light surface
+
+					if (!ptTraceShadow(ctx, shadowRay))
+					{
+						vec3 L = als.wi;
+						vec3 H = normalize(V + L);
+						float NoH = max(0.0f, dot(N, H));
+						float LoH = max(0.0f, dot(L, H));
+						float VoH = max(0.0f, dot(V, H));
+
+						// Diffuse lobe: BRDF diffuseColor/PI; sampling pdf 1/PI matches the scatter path.
+						float diffusePdfW = 1.0f / M_PI;
+						vec3 diffuseFcos = diffuseColor * (1.0f / M_PI) * NoL;
+						result += throughput * als.emission * diffuseFcos
+							* powerHeuristic(als.pdfW, diffusePdfW) / als.pdfW;
+
+						// Specular lobe: f*cos = F * G1(NoL) * pdf_spec, matching the VNDF scatter weight.
+						float sD = D_GGX(linearRoughness, NoH);
+						float specPdfW = VoH > 0.0f ? sD * NoH / (4.0f * VoH) : 0.0f;
+						vec3 sF = F_Schlick(specularColor, 1.0f, LoH);
+						vec3 specFcos = sF * G1_Smith(linearRoughness, NoL) * specPdfW;
+						result += throughput * als.emission * specFcos
+							* powerHeuristic(als.pdfW, specPdfW) / als.pdfW;
+					}
+				}
 			}
 			else
 			{
-				L = getSunDirection();
-				lightColor = getSunColor();
-				lightPdfW = 1.0f;
-			}
+				vec3 L = vec3(0.0f, 0.0f, 1.0f);
+				vec3 lightColor = vec3(0.0f);
+				float lightPdfW = 0.0f;
 
-			PtRay shadowRay;
-			shadowRay.origin = primaryRay.origin + primaryRay.direction * payload.hitT;
-			shadowRay.origin += payload.geoNormal * max3(abs(shadowRay.origin)) * 1e-4f;
-			shadowRay.direction = L;
-			shadowRay.minT = 0.0f;
-			shadowRay.maxT = 1e9f;
+				if (useEnvmap)
+				{
+					LightSample ls = importanceSampleEnvmap(ctx, randomSeed);
+					L = ls.w;
+					lightColor = ls.value;
+					lightPdfW = ls.pdfW;
+				}
+				else
+				{
+					L = getSunDirection();
+					lightColor = getSunColor();
+					lightPdfW = 1.0f;
+				}
 
-			float NoL = dot(N, L);
-			if (NoL > 0.0f && lightPdfW > 0.0f && !ptTraceShadow(ctx, shadowRay))
-			{
-				vec3 H = normalize(V + L);
-				float NoH = max(0.0f, dot(N, H));
-				float LoH = max(0.0f, dot(L, H));
-				float VoH = max(0.0f, dot(V, H));
+				PtRay shadowRay;
+				shadowRay.origin = primaryRay.origin + primaryRay.direction * payload.hitT;
+				shadowRay.origin += payload.geoNormal * max3(abs(shadowRay.origin)) * 1e-4f;
+				shadowRay.direction = L;
+				shadowRay.minT = 0.0f;
+				shadowRay.maxT = 1e9f;
 
-				float sD = D_GGX(linearRoughness, NoH);
-				float sG = G1_Smith(linearRoughness, NoL);
-				vec3 sF = F_Schlick(specularColor, 1.0f, LoH);
+				float NoL = dot(N, L);
+				if (NoL > 0.0f && lightPdfW > 0.0f && !ptTraceShadow(ctx, shadowRay))
+				{
+					vec3 H = normalize(V + L);
+					float NoH = max(0.0f, dot(N, H));
+					float LoH = max(0.0f, dot(L, H));
+					float VoH = max(0.0f, dot(V, H));
 
-				float denom = 4.0f * VoH;
-				float brdfPdfW = denom > 0.0f ? sD * NoH / denom : 0.0f;
-				vec3 brdf = sD * sG * sF;
+					float sD = D_GGX(linearRoughness, NoH);
+					float sG = G1_Smith(linearRoughness, NoL);
+					vec3 sF = F_Schlick(specularColor, 1.0f, LoH);
 
-				float misWeight = useEnvmap ? powerHeuristic(lightPdfW, brdfPdfW) : 1.0f;
-				result += throughput * lightColor * brdf * misWeight / (lightPdfW * 2.0f);
+					float denom = 4.0f * VoH;
+					float brdfPdfW = denom > 0.0f ? sD * NoH / denom : 0.0f;
+					vec3 brdf = sD * sG * sF;
 
-				float diffusePdfW = 1.0f / M_PI;
-				vec3 diffuseBrdf = diffuseColor * NoL;
-				misWeight = useEnvmap ? powerHeuristic(lightPdfW, diffusePdfW) : 1.0f;
-				result += throughput * lightColor * diffuseBrdf * misWeight / (lightPdfW * 2.0f);
+					float misWeight = useEnvmap ? powerHeuristic(lightPdfW, brdfPdfW) : 1.0f;
+					result += throughput * lightColor * brdf * misWeight / (lightPdfW * 2.0f);
+
+					float diffusePdfW = 1.0f / M_PI;
+					vec3 diffuseBrdf = diffuseColor * NoL;
+					misWeight = useEnvmap ? powerHeuristic(lightPdfW, diffusePdfW) : 1.0f;
+					result += throughput * lightColor * diffuseBrdf * misWeight / (lightPdfW * 2.0f);
+				}
 			}
 		}
 

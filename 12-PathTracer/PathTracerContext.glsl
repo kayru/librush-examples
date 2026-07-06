@@ -35,6 +35,7 @@ struct PtPayload
 {
 	float hitT;
 	vec3  baseColor;
+	vec3  emission;
 	float metalness;
 	float roughness;
 	float reflectance;

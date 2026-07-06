@@ -142,6 +142,7 @@ struct ProceduralSceneVertex
 struct ProceduralSceneMaterial
 {
 	Vec4        baseColor = Vec4(1.0f);
+	Vec3        emissive = Vec3(0.0f); // emitted radiance; nonzero on area-light surfaces
 	std::string diffuseTextureName; // empty when untextured
 };
 
@@ -159,9 +160,21 @@ struct ProceduralSceneData
 	std::vector<ProceduralSceneSegment> segments;
 	std::vector<ProceduralSceneMaterial> materials;
 	Box3 bounds = Box3(Vec3(0.0f), Vec3(0.0f));
+
+	bool hasAreaLight = false;
+	Vec3 lightOrigin = Vec3(0.0f);
+	Vec3 lightEdgeU = Vec3(0.0f);
+	Vec3 lightEdgeV = Vec3(0.0f);
+	Vec3 lightEmission = Vec3(0.0f);
 };
 
-void buildProceduralScene(ProceduralSceneData& out);
+enum class ProceduralScene : u32
+{
+	CornellBox, // authentic self-lit Cornell Box (default)
+	BoxOnPlane, // simple diffuse cube on a ground plane
+};
+
+void buildProceduralScene(ProceduralSceneData& out, ProceduralScene kind = ProceduralScene::CornellBox);
 
 // Loads a Wavefront OBJ into the neutral scene representation (X-mirrored to engine convention,
 // one segment per material run, raw material ids). Returns false on load failure.

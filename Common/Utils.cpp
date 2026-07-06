@@ -454,13 +454,102 @@ TexturedQuad2D makeFullScreenQuad()
 	return q;
 }
 
-void buildProceduralScene(ProceduralSceneData& out)
+static void buildCornellBoxScene(ProceduralSceneData& out)
 {
-	out.vertices.clear();
-	out.indices.clear();
-	out.segments.clear();
-	out.materials.clear();
+	// Authentic Cornell Box: Cornell University Program of Computer Graphics reference geometry,
+	// original coordinates in millimetres scaled to metres. Camera looks down +z through the open
+	// front; red wall at +x, green wall at x=0, lit by the ceiling panel just below the ceiling.
+	const float s = 0.01f; // mm -> m
 
+	// Reflectances: the measured spectra converted to linear RGB (as used by pbrt/Mitsuba Cornell).
+	const Vec4 white = Vec4(0.725f, 0.710f, 0.680f, 1.0f);
+	const Vec4 red   = Vec4(0.630f, 0.065f, 0.050f, 1.0f);
+	const Vec4 green = Vec4(0.140f, 0.450f, 0.091f, 1.0f);
+	const Vec3 emission = Vec3(18.4f, 15.6f, 8.0f); // warm ceiling-light radiance
+
+	enum Material : u32 { MatWhite = 0, MatRed, MatGreen, MatLight, MaterialCount };
+	out.materials.resize(MaterialCount);
+	out.materials[MatWhite].baseColor = white;
+	out.materials[MatRed].baseColor   = red;
+	out.materials[MatGreen].baseColor = green;
+	out.materials[MatLight].baseColor = white;
+	out.materials[MatLight].emissive  = emission;
+
+	const float kW = 556.0f; // box width (mm); mirror plane for the engine X convention (cf. loadObjScene)
+
+	// Quad from four points (mm). X is mirrored to engine convention and positions scaled to metres;
+	// the renderer faces shading normals to the ray, so the flipped winding needs no re-ordering.
+	auto addQuad = [&out, s, kW](const Vec3& a, const Vec3& b, const Vec3& c, const Vec3& d, u32 material)
+	{
+		const Vec3 p0 = Vec3(kW - a.x, a.y, a.z) * s;
+		const Vec3 p1 = Vec3(kW - b.x, b.y, b.z) * s;
+		const Vec3 p2 = Vec3(kW - c.x, c.y, c.z) * s;
+		const Vec3 p3 = Vec3(kW - d.x, d.y, d.z) * s;
+		const Vec3 normal = normalize(cross(p1 - p0, p2 - p0));
+		const Vec3 tangent = normalize(p1 - p0);
+		const Vec3 bitangent = cross(normal, tangent);
+
+		const u32 baseIndex = u32(out.vertices.size());
+		ProceduralSceneVertex verts[4];
+		verts[0] = { p0, normal, Vec2(0.0f, 0.0f), tangent, bitangent };
+		verts[1] = { p1, normal, Vec2(1.0f, 0.0f), tangent, bitangent };
+		verts[2] = { p2, normal, Vec2(1.0f, 1.0f), tangent, bitangent };
+		verts[3] = { p3, normal, Vec2(0.0f, 1.0f), tangent, bitangent };
+		out.vertices.insert(out.vertices.end(), std::begin(verts), std::end(verts));
+
+		const u32 idx[6] = { baseIndex, baseIndex + 1u, baseIndex + 2u, baseIndex, baseIndex + 2u, baseIndex + 3u };
+		out.indices.insert(out.indices.end(), std::begin(idx), std::end(idx));
+
+		if (out.segments.empty() || out.segments.back().material != material)
+		{
+			ProceduralSceneSegment segment;
+			segment.material = material;
+			segment.indexOffset = u32(out.indices.size()) - 6;
+			segment.indexCount = 6;
+			out.segments.push_back(segment);
+		}
+		else
+		{
+			out.segments.back().indexCount += 6;
+		}
+	};
+
+	// Room shell.
+	addQuad(Vec3(552.8f, 0.0f, 0.0f), Vec3(0.0f, 0.0f, 0.0f), Vec3(0.0f, 0.0f, 559.2f), Vec3(549.6f, 0.0f, 559.2f), MatWhite);          // floor
+	addQuad(Vec3(556.0f, 548.8f, 0.0f), Vec3(556.0f, 548.8f, 559.2f), Vec3(0.0f, 548.8f, 559.2f), Vec3(0.0f, 548.8f, 0.0f), MatWhite);  // ceiling
+	addQuad(Vec3(549.6f, 0.0f, 559.2f), Vec3(0.0f, 0.0f, 559.2f), Vec3(0.0f, 548.8f, 559.2f), Vec3(556.0f, 548.8f, 559.2f), MatWhite);  // back wall
+	addQuad(Vec3(0.0f, 0.0f, 559.2f), Vec3(0.0f, 0.0f, 0.0f), Vec3(0.0f, 548.8f, 0.0f), Vec3(0.0f, 548.8f, 559.2f), MatGreen);          // right wall
+	addQuad(Vec3(552.8f, 0.0f, 0.0f), Vec3(549.6f, 0.0f, 559.2f), Vec3(556.0f, 548.8f, 559.2f), Vec3(556.0f, 548.8f, 0.0f), MatRed);    // left wall
+
+	// Short block.
+	addQuad(Vec3(130.0f, 165.0f, 65.0f), Vec3(82.0f, 165.0f, 225.0f), Vec3(240.0f, 165.0f, 272.0f), Vec3(290.0f, 165.0f, 114.0f), MatWhite);
+	addQuad(Vec3(290.0f, 0.0f, 114.0f), Vec3(290.0f, 165.0f, 114.0f), Vec3(240.0f, 165.0f, 272.0f), Vec3(240.0f, 0.0f, 272.0f), MatWhite);
+	addQuad(Vec3(130.0f, 0.0f, 65.0f), Vec3(130.0f, 165.0f, 65.0f), Vec3(290.0f, 165.0f, 114.0f), Vec3(290.0f, 0.0f, 114.0f), MatWhite);
+	addQuad(Vec3(82.0f, 0.0f, 225.0f), Vec3(82.0f, 165.0f, 225.0f), Vec3(130.0f, 165.0f, 65.0f), Vec3(130.0f, 0.0f, 65.0f), MatWhite);
+	addQuad(Vec3(240.0f, 0.0f, 272.0f), Vec3(240.0f, 165.0f, 272.0f), Vec3(82.0f, 165.0f, 225.0f), Vec3(82.0f, 0.0f, 225.0f), MatWhite);
+
+	// Tall block.
+	addQuad(Vec3(423.0f, 330.0f, 247.0f), Vec3(265.0f, 330.0f, 296.0f), Vec3(314.0f, 330.0f, 456.0f), Vec3(472.0f, 330.0f, 406.0f), MatWhite);
+	addQuad(Vec3(423.0f, 0.0f, 247.0f), Vec3(423.0f, 330.0f, 247.0f), Vec3(472.0f, 330.0f, 406.0f), Vec3(472.0f, 0.0f, 406.0f), MatWhite);
+	addQuad(Vec3(472.0f, 0.0f, 406.0f), Vec3(472.0f, 330.0f, 406.0f), Vec3(314.0f, 330.0f, 456.0f), Vec3(314.0f, 0.0f, 456.0f), MatWhite);
+	addQuad(Vec3(314.0f, 0.0f, 456.0f), Vec3(314.0f, 330.0f, 456.0f), Vec3(265.0f, 330.0f, 296.0f), Vec3(265.0f, 0.0f, 296.0f), MatWhite);
+	addQuad(Vec3(265.0f, 0.0f, 296.0f), Vec3(265.0f, 330.0f, 296.0f), Vec3(423.0f, 330.0f, 247.0f), Vec3(423.0f, 0.0f, 247.0f), MatWhite);
+
+	// Ceiling light panel, dropped 0.8mm below the ceiling to avoid coplanar z-fighting.
+	const float lightY = 548.0f;
+	addQuad(Vec3(343.0f, lightY, 227.0f), Vec3(343.0f, lightY, 332.0f), Vec3(213.0f, lightY, 332.0f), Vec3(213.0f, lightY, 227.0f), MatLight);
+
+	// Analytic area light matching the emitter panel (used by next-event estimation).
+	out.hasAreaLight  = true;
+	out.lightOrigin   = Vec3(213.0f, lightY, 227.0f) * s;
+	out.lightEdgeU    = Vec3(130.0f, 0.0f, 0.0f) * s; // -> x 213..343
+	out.lightEdgeV    = Vec3(0.0f, 0.0f, 105.0f) * s; // -> z 227..332
+	out.lightEmission = emission;
+}
+
+// Simple diffuse cube on a large ground plane; lit by the envmap/sun (no emitters).
+static void buildBoxOnPlaneScene(ProceduralSceneData& out)
+{
 	ProceduralSceneMaterial planeMaterial;
 	planeMaterial.baseColor = Vec4(0.7f, 0.7f, 0.7f, 1.0f);
 	out.materials.push_back(planeMaterial);
@@ -549,6 +638,22 @@ void buildProceduralScene(ProceduralSceneData& out)
 	        Vec3(c.x + hs, c.y - hs, c.z + hs),
 	        Vec3(c.x - hs, c.y - hs, c.z + hs),
 	        Vec3(0.0f, -1.0f, 0.0f), Vec3(1.0f, 0.0f, 0.0f), 1);
+}
+
+void buildProceduralScene(ProceduralSceneData& out, ProceduralScene kind)
+{
+	out = ProceduralSceneData{};
+
+	switch (kind)
+	{
+	case ProceduralScene::BoxOnPlane:
+		buildBoxOnPlaneScene(out);
+		break;
+	case ProceduralScene::CornellBox:
+	default:
+		buildCornellBoxScene(out);
+		break;
+	}
 
 	if (!out.vertices.empty())
 	{

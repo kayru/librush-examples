@@ -54,6 +54,12 @@ uniform SceneConstants
 	ivec2 focusPickPixel; // cursor pixel; x < 0 = no pick
 	float focalPlaneFalloffPx;
 	uint normalMapBounceLimit;
+
+	// Single rectangular area light (PT_FLAG_USE_AREA_LIGHT): point(u,v) = origin + u*edgeU + v*edgeV.
+	vec4 areaLightOrigin;   // xyz corner
+	vec4 areaLightEdgeU;    // xyz first edge
+	vec4 areaLightEdgeV;    // xyz second edge
+	vec4 areaLightEmission; // xyz emitted radiance
 };
 
 layout(set=0, binding=1)
@@ -106,6 +112,7 @@ struct MaterialConstants
 {
 	vec4 albedoFactor;
 	vec4 specularFactor;
+	vec4 emissiveFactor;
 	uint albedoTextureId;
 	uint specularTextureId;
 	uint normalTextureId;

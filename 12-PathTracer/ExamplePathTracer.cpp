@@ -255,8 +255,14 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 	}
 	else
 	{
+		// --scene selects the procedural scene: cornell (default) or boxplane.
+		std::string sceneArg;
+		getArgString(g_appCfg.argc, g_appCfg.argv, "scene", nullptr, sceneArg);
+		const bool boxOnPlane = (sceneArg == "boxplane" || sceneArg == "box" || sceneArg == "plane");
+		const ProceduralScene sceneKind = boxOnPlane ? ProceduralScene::BoxOnPlane : ProceduralScene::CornellBox;
+
 		ProceduralSceneData procedural;
-		buildProceduralScene(procedural);
+		buildProceduralScene(procedural, sceneKind);
 
 		m_vertices.clear();
 		m_vertices.reserve(procedural.vertices.size());
@@ -288,6 +294,7 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 		{
 			MaterialConstants constants;
 			constants.albedoFactor = mat.baseColor;
+			constants.emissiveFactor = Vec4(mat.emissive);
 			constants.albedoTextureId = m_defaultWhiteTextureId;
 			constants.specularTextureId = m_defaultWhiteTextureId;
 			constants.normalTextureId = 0;
@@ -296,6 +303,16 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 			constants.reflectance = 0.08f;
 			constants.materialMode = MaterialMode::MetallicRoughness;
 			m_materials.push_back(constants);
+		}
+
+		m_useAreaLight = procedural.hasAreaLight;
+		m_areaLightOrigin = procedural.lightOrigin;
+		m_areaLightEdgeU = procedural.lightEdgeU;
+		m_areaLightEdgeV = procedural.lightEdgeV;
+		m_areaLightEmission = procedural.lightEmission;
+		if (m_useAreaLight)
+		{
+			m_settings.m_useEnvmap = false; // self-lit box: the emitter is the only light
 		}
 
 		m_boundingBox = procedural.bounds;
@@ -307,7 +324,7 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 		m_haveNormalMaps = false;
 		m_valid = true;
 		m_useProceduralScene = true;
-		m_statusString = "Procedural scene (cube + plane)";
+		m_statusString = boxOnPlane ? "Box on plane (procedural)" : "Cornell Box (procedural)";
 
 		std::string envFilename = std::string(Platform_GetExecutableDirectory()) + "/envmap.hdr";
 		loadEnvmap(envFilename.c_str());
@@ -716,6 +733,11 @@ ExamplePathTracer::SceneConstants ExamplePathTracer::makeSceneConstants(Tuple2i 
 	constants.flags |= m_settings.m_debugHitMask ? PT_FLAG_DEBUG_HIT_MASK : 0;
 	constants.flags |= m_settings.m_showFocusAssist ? PT_FLAG_DEBUG_FOCAL_PLANE : 0;
 	constants.flags |= m_settings.m_useRussianRoulette ? PT_FLAG_USE_RUSSIAN_ROULETTE : 0;
+	constants.flags |= m_useAreaLight ? PT_FLAG_USE_AREA_LIGHT : 0;
+	constants.areaLightOrigin = Vec4(m_areaLightOrigin);
+	constants.areaLightEdgeU = Vec4(m_areaLightEdgeU);
+	constants.areaLightEdgeV = Vec4(m_areaLightEdgeV);
+	constants.areaLightEmission = Vec4(m_areaLightEmission);
 	constants.normalMapBounceLimit = (u32)m_settings.m_normalMapBounceLimit;
 	constants.debugVisMode = (u32)m_settings.m_debugVisMode;
 	constants.focusPickPixel = m_focusPickRequested ? m_focusPickPixel : Tuple2i{-1, -1};
@@ -1794,7 +1816,18 @@ void ExamplePathTracer::saveConfig()
 void ExamplePathTracer::loadConfig()
 {
 	// Establish scene defaults first; the file overwrites whatever it carries.
-	if (m_useProceduralScene)
+	if (m_useProceduralScene && m_useAreaLight)
+	{
+		// Cornell Box: canonical head-on view through the open front face.
+		const float aspect = outputAspect();
+		const float fov    = 0.686f; // ~39.3 deg vertical
+		m_camera = Camera(aspect, fov, 0.05f);
+		const Vec3 center = m_boundingBox.center();
+		const Vec3 dim    = m_boundingBox.dimensions();
+		const Vec3 eye(center.x, center.y, m_boundingBox.m_min.z - dim.y * 1.5f);
+		m_camera.lookAt(eye, center);
+	}
+	else if (m_useProceduralScene)
 	{
 		const float aspect = outputAspect();
 		const float fov    = 1.0f;

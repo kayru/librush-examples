@@ -37,12 +37,19 @@ struct SceneConstants
 	int2 focusPickPixel; // cursor pixel; x < 0 = no pick
 	float focalPlaneFalloffPx;
 	uint normalMapBounceLimit;
+
+	// Single rectangular area light (PT_FLAG_USE_AREA_LIGHT): point(u,v) = origin + u*edgeU + v*edgeV.
+	float4 areaLightOrigin;   // xyz corner
+	float4 areaLightEdgeU;    // xyz first edge
+	float4 areaLightEdgeV;    // xyz second edge
+	float4 areaLightEmission; // xyz emitted radiance
 };
 
 struct MaterialConstants
 {
 	packed_float4 albedoFactor;
 	packed_float4 specularFactor;
+	packed_float4 emissiveFactor;
 	uint albedoTextureId;
 	uint specularTextureId;
 	uint normalTextureId;
