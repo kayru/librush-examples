@@ -355,7 +355,7 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 	loadConfig();
 	if (m_settings.m_samplerMode < 0 || m_settings.m_samplerMode >= int(PT_SAMPLER_COUNT))
 	{
-		m_settings.m_samplerMode = int(PT_SAMPLER_LCG); // guard against a stale saved value
+		m_settings.m_samplerMode = int(PT_SAMPLER_SOBOL); // guard against a stale saved value
 	}
 
 	// Headless render-to-PNG (applied after loadConfig so command-line wins over the saved config):

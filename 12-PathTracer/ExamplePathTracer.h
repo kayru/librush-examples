@@ -263,7 +263,7 @@ private:
 		int m_tracingMode = int(TracingMode::RayQuery); // Vulkan-only, clamped to available backends on load
 		bool m_useRussianRoulette = true; // perf: terminate low-throughput paths (unbiased)
 		int m_normalMapBounceLimit = 5; // perf: apply normal maps only on bounces <= this (5 = all)
-		int m_samplerMode = int(PT_SAMPLER_LCG); // PT_SAMPLER_* sample generator
+		int m_samplerMode = int(PT_SAMPLER_SOBOL); // PT_SAMPLER_* sample generator (Owen-scrambled Sobol default)
 		int m_maxSamplesPerPixel = 0; // stop accumulating past this spp (0 = unlimited)
 		float m_maxRenderTimeSec = 0.0f; // stop accumulating past this GPU render time (0 = unlimited)
 

@@ -31,8 +31,8 @@
 
 // Sample generators (constants.samplerMode). Both unbiased; Sobol is a multi-dimensional
 // low-discrepancy sequence (per-pixel digital XOR shift) that converges faster than the LCG baseline.
-#define PT_SAMPLER_LCG   0u // baseline per-pixel white-noise LCG (default)
-#define PT_SAMPLER_SOBOL 1u
+#define PT_SAMPLER_LCG   0u // baseline per-pixel white-noise LCG
+#define PT_SAMPLER_SOBOL 1u // Owen-scrambled Sobol (default)
 #define PT_SAMPLER_COUNT 2u
 
 // Number of leading path dimensions with direct Sobol direction numbers; deeper dimensions use the
