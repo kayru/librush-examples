@@ -479,7 +479,10 @@ void ExamplePathTracer::onUpdate()
 	TimingScope timingScope(m_stats.cpuTotal);
 
 	m_stats.gpuTotal.add(Gfx_Stats().lastFrameGpuTime);
-	m_totalGpuRenderTime += Gfx_Stats().lastFrameGpuTime;
+	if (m_accumulating)
+	{
+		m_totalGpuRenderTime += Gfx_Stats().lastFrameGpuTime;
+	}
 
 	Gfx_ResetStats();
 
@@ -597,17 +600,20 @@ void ExamplePathTracer::onUpdate()
 			renderSettingsChanged |= ImGui::Checkbox("Russian roulette", &m_settings.m_useRussianRoulette);
 			// Normal maps only on bounces <= limit; lower = faster, softer indirect detail (5 = all).
 			renderSettingsChanged |= ImGui::SliderInt("Normal map max bounce", &m_settings.m_normalMapBounceLimit, 0, 5);
+			// Accumulation limits (0 = unlimited); reaching either freezes the image, raising one resumes.
+			ImGui::DragInt("Max samples/pixel", &m_settings.m_maxSamplesPerPixel, 1.0f, 0, 65536);
+			ImGui::DragFloat("Max render time (sec)", &m_settings.m_maxRenderTimeSec, 0.1f, 0.0f, 3600.0f, "%.1f");
 			if (ImGui::Button("Reset accumulation"))
 			{
 				m_outputImage.reset();
-				m_frameIndex = 0;
+				resetAccumulation();
 			}
 		}
 		ImGui::End();
 
 		if (renderSettingsChanged)
 		{
-			m_frameIndex = 0;
+			resetAccumulation();
 		}
 	}
 
@@ -645,22 +651,22 @@ void ExamplePathTracer::onUpdate()
 			else if (e.code == Key_1)
 			{
 				m_settings.m_useEnvmap = !m_settings.m_useEnvmap;
-				m_frameIndex = 0;
+				resetAccumulation();
 			}
 			else if (e.code == Key_2)
 			{
 				m_settings.m_useNeutralBackground = !m_settings.m_useNeutralBackground;
-				m_frameIndex = 0;
+				resetAccumulation();
 			}
 			else if (e.code == Key_3)
 			{
 				m_settings.m_debugSimpleShading = !m_settings.m_debugSimpleShading;
-				m_frameIndex = 0;
+				resetAccumulation();
 			}
 			else if (e.code == Key_4)
 			{
 				m_settings.m_debugDisableAccumulation = !m_settings.m_debugDisableAccumulation;
-				m_frameIndex = 0;
+				resetAccumulation();
 			}
 			break;
 		case WindowEventType_Scroll:
@@ -693,8 +699,7 @@ void ExamplePathTracer::onUpdate()
 		|| m_camera.getAspect() != oldCamera.getAspect()
 		|| m_camera.getFov() != oldCamera.getFov())
 	{
-		m_frameIndex = 0;
-		m_totalGpuRenderTime = 0;
+		resetAccumulation();
 	}
 	if (m_settings.m_debugDisableAccumulation)
 	{
@@ -703,10 +708,9 @@ void ExamplePathTracer::onUpdate()
 
 	m_windowEvents.clear();
 
+	// render() decides whether to trace a new sample (accumulation may be complete) and advances
+	// m_frameIndex / m_accumulating accordingly, so the decision stays consistent with a resize reset.
 	render();
-
-	m_frameIndex++;
-
 }
 
 void ExamplePathTracer::createRayTracingScene(GfxContext* ctx)
@@ -1003,8 +1007,14 @@ void ExamplePathTracer::render()
 			framebufferSize, GfxFormat_RGBA32_Float, GfxUsageFlags::StorageImage_ShaderResource);
 
 		m_outputImage = Gfx_CreateTexture(outputImageDesc);
-		m_frameIndex = 0;
+		resetAccumulation();
 	}
+
+	// Decide after any resize reset above, so a fresh image always renders at least one sample. A
+	// pending focus pick still traces (its depth readback needs the frame) even once accumulation is done.
+	const bool accumulate = !accumulationComplete();
+	m_accumulating = accumulate;
+	const bool trace = accumulate || m_focusPickRequested;
 
 	SceneConstants constants = makeSceneConstants(outputImageDesc.getSize2D(), m_frameIndex);
 
@@ -1013,7 +1023,7 @@ void ExamplePathTracer::render()
 	Gfx_UpdateBuffer(ctx, m_sceneConstantBuffer, &constants, sizeof(constants));
 
 	const bool rtReady = (m_rtPipeline.valid() || m_rayQueryPipeline.valid()) && m_materialDescriptorSet.valid();
-	if (m_valid && rtReady)
+	if (m_valid && rtReady && trace)
 	{
 		GfxMarkerScope markerFrame(ctx, "Model");
 
@@ -1078,7 +1088,7 @@ void ExamplePathTracer::render()
 				if (depth > 0.0f) // <= 0 = background
 				{
 					m_settings.m_focusDistance = depth;
-					m_frameIndex = 0;
+					resetAccumulation();
 				}
 			}
 			Gfx_UnmapBuffer(mapped);
@@ -1130,11 +1140,12 @@ void ExamplePathTracer::render()
 		    "GPU time: %.2f ms\n"
 		    "CPU time: %.2f ms\n"
 		    "Total render time: %.2f sec\n"
-		    "Samples per pixel: %d\n",
+		    "Samples per pixel: %d%s\n",
 		    m_stats.gpuTotal.get() * 1000.0f,
 		    m_stats.cpuTotal.get() * 1000.0f,
 		    m_totalGpuRenderTime,
-		    m_frameIndex);
+		    m_frameIndex,
+		    accumulationComplete() ? " (complete)" : "");
 
 		m_font->draw(m_prim, safeOrigin + Vec2(10.0f, 30.0f), timingString);
 
@@ -1149,6 +1160,11 @@ void ExamplePathTracer::render()
 	}
 
 	Gfx_EndPass(ctx);
+
+	if (accumulate)
+	{
+		m_frameIndex++;
+	}
 }
 
 void ExamplePathTracer::loadingThreadFunction()
@@ -1846,13 +1862,36 @@ void ExamplePathTracer::rebuildAccelerationStructures()
 	m_sbtBuffer = {};
 	m_blas      = {};
 	createBottomLevelAccelerationStructure();
+	resetAccumulation();
+}
+
+void ExamplePathTracer::resetAccumulation()
+{
 	m_frameIndex = 0;
+	m_totalGpuRenderTime = 0;
+}
+
+bool ExamplePathTracer::accumulationComplete() const
+{
+	if (m_settings.m_debugDisableAccumulation)
+	{
+		return false; // live single-sample preview ignores accumulation limits
+	}
+	if (m_settings.m_maxSamplesPerPixel > 0 && int(m_frameIndex) >= m_settings.m_maxSamplesPerPixel)
+	{
+		return true;
+	}
+	if (m_settings.m_maxRenderTimeSec > 0.0f && m_totalGpuRenderTime >= double(m_settings.m_maxRenderTimeSec))
+	{
+		return true;
+	}
+	return false;
 }
 
 void ExamplePathTracer::resetCamera()
 {
 	m_camera = makeFramedCamera(m_boundingBox, outputAspect());
-	m_frameIndex = 0;
+	resetAccumulation();
 }
 
 void ExamplePathTracer::focusOnCursor()
@@ -1947,7 +1986,7 @@ void ExamplePathTracer::loadConfig()
 		rebuildAccelerationStructures();
 	}
 
-	m_frameIndex = 0;
+	resetAccumulation();
 }
 
 bool ExamplePathTracer::loadModel(const char* filename)

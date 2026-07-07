@@ -194,6 +194,7 @@ private:
 
 	bool m_loadingThreadShouldExit = false;
 	u32 m_frameIndex = 0;
+	bool m_accumulating = true; // did the last frame trace a new sample (drives render-time accounting)
 	bool m_showUI = true;
 	std::string m_startupError;
 	bool m_useProceduralScene = false;
@@ -261,6 +262,8 @@ private:
 		bool m_useRussianRoulette = true; // perf: terminate low-throughput paths (unbiased)
 		int m_normalMapBounceLimit = 5; // perf: apply normal maps only on bounces <= this (5 = all)
 		int m_samplerMode = int(PT_SAMPLER_LCG); // PT_SAMPLER_* sample generator
+		int m_maxSamplesPerPixel = 0; // stop accumulating past this spp (0 = unlimited)
+		float m_maxRenderTimeSec = 0.0f; // stop accumulating past this GPU render time (0 = unlimited)
 
 		template <typename Ar> void describe(Ar& ar)
 		{
@@ -287,6 +290,8 @@ private:
 			ar.field("useRussianRoulette", m_useRussianRoulette);
 			ar.field("normalMapBounceLimit", m_normalMapBounceLimit);
 			ar.field("samplerMode", m_samplerMode);
+			ar.field("maxSamplesPerPixel", m_maxSamplesPerPixel);
+			ar.field("maxRenderTimeSec", m_maxRenderTimeSec);
 		}
 	};
 
@@ -316,6 +321,9 @@ private:
 	void loadConfig();
 	void resetCamera();
 	void focusOnCursor();
+
+	void resetAccumulation(); // restart accumulation: sample count and render-time accumulator
+	bool accumulationComplete() const; // true once a configured spp / render-time limit is hit
 	void loadEnvmap(const char* filename);
 
 	VirtualGamepad m_virtualGamepad;
