@@ -44,10 +44,9 @@ SHADER_INLINE uint reverseBits32(uint x)
 // Unlike a digital XOR shift, this permutes the binary digits nonlinearly, so it breaks up the Sobol
 // net's structured error and poor high-dimensional projections instead of merely translating them --
 // which is what removes the low-frequency splotches a plain shift leaves at low sample counts.
-SHADER_INLINE uint owenScramble(uint x, uint seed)
+SHADER_INLINE uint owenScrambleFromReversed(uint xReversed, uint seed)
 {
-	x = reverseBits32(x);
-	x += seed;
+	uint x = xReversed + seed;
 	x ^= x * 0x6c50b47cu;
 	x ^= x * 0xb82f1e52u;
 	x ^= x * 0xc7afe638u;
@@ -55,22 +54,22 @@ SHADER_INLINE uint owenScramble(uint x, uint seed)
 	return reverseBits32(x);
 }
 
-// Sobol sample for dimension d (d < PT_QMC_DIMS): XOR the direction numbers for the set bits of i.
-SHADER_INLINE uint sobolSampleRaw(PathTracerContext ctx, uint d, uint i)
+SHADER_INLINE uint owenScramble(uint x, uint seed)
 {
-	uint x = 0u;
-	uint base = d * 32u;
-	uint k = 0u;
-	while (i != 0u)
+	return owenScrambleFromReversed(reverseBits32(x), seed);
+}
+
+SHADER_INLINE uint sobolSampleReversed(PathTracerContext ctx, uint d, uint i)
+{
+	if (d == 0u)
 	{
-		if ((i & 1u) != 0u)
-		{
-			x ^= PT_SOBOL(ctx, base + k);
-		}
-		i >>= 1u;
-		k += 1u;
+		return i; // dim 0's Sobol value is reverseBits32(i), so its reversed form is i
 	}
-	return x;
+	uint base = d * PT_SOBOL_STRIDE;
+	return PT_SOBOL(ctx, base +   0u + ( i         & 0xffu))
+	     ^ PT_SOBOL(ctx, base + 256u + ((i >>  8u) & 0xffu))
+	     ^ PT_SOBOL(ctx, base + 512u + ((i >> 16u) & 0xffu))
+	     ^ PT_SOBOL(ctx, base + 768u + ((i >> 24u) & 0xffu));
 }
 
 // One Owen-scrambled Sobol scalar for dimension d. sobolIndex is the per-pixel Owen-scrambled sample
@@ -78,8 +77,8 @@ SHADER_INLINE uint sobolSampleRaw(PathTracerContext ctx, uint d, uint i)
 // Owen-scrambled per (pixel, dim). Both scrambles stay unbiased.
 SHADER_INLINE float sobolScalar(PathTracerContext ctx, uint d, uint sobolIndex, uint pixelSeed)
 {
-	uint x = sobolSampleRaw(ctx, d, sobolIndex);
-	x = owenScramble(x, hashCombine(pixelSeed, d + 0x9e3779b9u));
+	uint xReversed = sobolSampleReversed(ctx, d, sobolIndex);
+	uint x = owenScrambleFromReversed(xReversed, hashCombine(pixelSeed, d + 0x9e3779b9u));
 	return uintToFloat01(x);
 }
 

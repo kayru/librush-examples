@@ -752,9 +752,17 @@ float ExamplePathTracer::outputAspect() const
 	return m_window ? m_window->getAspect() : (float(m_headlessSize.x) / float(m_headlessSize.y));
 }
 
-// Sobol direction numbers (Joe & Kuo new-joe-kuo-6.21201) for the first PT_QMC_DIMS dimensions.
-// Uploaded as a uint buffer where [dim*32 + bit] is dimension d's bit-k direction number. Distinct
-// direction numbers per dimension are what make the high-dimensional estimator unbiased.
+static u32 reverseBits32Host(u32 x)
+{
+	x = ((x & 0xaaaaaaaau) >> 1u) | ((x & 0x55555555u) << 1u);
+	x = ((x & 0xccccccccu) >> 2u) | ((x & 0x33333333u) << 2u);
+	x = ((x & 0xf0f0f0f0u) >> 4u) | ((x & 0x0f0f0f0fu) << 4u);
+	x = ((x & 0xff00ff00u) >> 8u) | ((x & 0x00ff00ffu) << 8u);
+	return (x >> 16u) | (x << 16u);
+}
+
+// Build the Sobol lookup tables from Joe & Kuo direction numbers (new-joe-kuo-6.21201) for the first
+// PT_QMC_DIMS dimensions. Distinct direction numbers per dimension keep the estimator unbiased.
 void ExamplePathTracer::createSobolBuffer()
 {
 	const u32 kDims = PT_QMC_DIMS;
@@ -773,26 +781,46 @@ void ExamplePathTracer::createSobolBuffer()
 		{7,32,{1,3,7,5,13,19,59}}, {7,37,{1,1,3,9,7,11,23}}, {7,41,{1,3,3,13,25,13,13}},
 		{7,42,{1,1,5,11,23,27,11}},
 	};
-	std::vector<u32> data(kDims * kBits, 0u);
+	std::vector<u32> V(kDims * kBits, 0u);
 	for (u32 dim = 0; dim < kDims; ++dim)
 	{
-		u32* V = &data[dim * kBits];
+		u32* Vd = &V[dim * kBits];
 		if (dim == 0)
 		{
-			for (u32 k = 0; k < kBits; ++k) { V[k] = 1u << (31u - k); }
+			for (u32 k = 0; k < kBits; ++k) { Vd[k] = 1u << (31u - k); }
 		}
 		else
 		{
 			const JK& e = jk[dim - 1];
-			for (u32 k = 1; k <= e.s; ++k) { V[k - 1] = e.m[k - 1] << (31u - (k - 1)); }
+			for (u32 k = 1; k <= e.s; ++k) { Vd[k - 1] = e.m[k - 1] << (31u - (k - 1)); }
 			for (u32 k = e.s + 1; k <= kBits; ++k)
 			{
-				u32 val = V[k - e.s - 1] ^ (V[k - e.s - 1] >> e.s);
+				u32 val = Vd[k - e.s - 1] ^ (Vd[k - e.s - 1] >> e.s);
 				for (u32 j = 1; j < e.s; ++j)
 				{
-					if ((e.a >> (e.s - 1 - j)) & 1u) { val ^= V[k - j - 1]; }
+					if ((e.a >> (e.s - 1 - j)) & 1u) { val ^= Vd[k - j - 1]; }
 				}
-				V[k - 1] = val;
+				Vd[k - 1] = val;
+			}
+		}
+	}
+
+	// Per-byte tables (4 lookups/scalar, not a set-bit loop), stored bit-reversed for owenScrambleFromReversed.
+	std::vector<u32> data(kDims * PT_SOBOL_STRIDE, 0u);
+	for (u32 dim = 0; dim < kDims; ++dim)
+	{
+		const u32* Vd = &V[dim * kBits];
+		for (u32 byte = 0; byte < 4u; ++byte)
+		{
+			u32* tbl = &data[dim * PT_SOBOL_STRIDE + byte * 256u];
+			for (u32 v = 0; v < 256u; ++v)
+			{
+				u32 x = 0u;
+				for (u32 j = 0; j < 8u; ++j)
+				{
+					if ((v >> j) & 1u) { x ^= Vd[byte * 8u + j]; }
+				}
+				tbl[v] = reverseBits32Host(x);
 			}
 		}
 	}
