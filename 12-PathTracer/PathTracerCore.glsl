@@ -401,7 +401,7 @@ SHADER_INLINE void ptRenderPixel(PathTracerContext ctx, ivec2 pixelIndex)
 	vec2 pixelUV = vec2(pixelIndex) / vec2(outputSize);
 
 	SamplerState smp = samplerInit(ctx, uvec2(pixelIndex),
-		PT_SCENE(ctx, frameIndex), PT_SCENE(ctx, samplerMode));
+		PT_SCENE(ctx, frameIndex) + PT_SCENE(ctx, sampleFrameOffset), PT_SCENE(ctx, samplerMode));
 	vec2 pixelJitter = (samplerNext2D(ctx, smp) - 0.5f) / vec2(outputSize);
 
 	vec3 result = vec3(0.0f);

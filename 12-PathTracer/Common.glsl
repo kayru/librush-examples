@@ -63,6 +63,7 @@ uniform SceneConstants
 	vec4 areaLightEmission; // xyz emitted radiance
 
 	uint samplerMode;       // PT_SAMPLER_*
+	uint sampleFrameOffset; // added to the sampler seed only (not accumulation); decorrelates references
 };
 
 layout(set=0, binding=1)

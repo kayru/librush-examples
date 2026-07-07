@@ -45,6 +45,7 @@ struct SceneConstants
 	float4 areaLightEmission; // xyz emitted radiance
 
 	uint samplerMode;
+	uint sampleFrameOffset;
 };
 
 struct MaterialConstants

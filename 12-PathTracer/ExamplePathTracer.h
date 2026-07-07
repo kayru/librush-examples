@@ -114,6 +114,7 @@ private:
 		Vec4 areaLightEmission = Vec4(0.0f);
 
 		u32 samplerMode = 0;
+		u32 sampleFrameOffset = 0;
 	};
 
 	Mat4 m_worldTransform = Mat4::identity();
@@ -210,6 +211,7 @@ private:
 	std::string m_headlessOutPath;
 	u32         m_headlessSpp  = 1024;
 	Tuple2i     m_headlessSize = {1920, 1080};
+	u32         m_headlessSampleOffset = 0; // --seedoffset: shifts sampler seed to decorrelate a reference render
 
 	std::mutex m_loadingMutex;
 

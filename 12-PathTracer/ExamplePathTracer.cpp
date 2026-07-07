@@ -368,6 +368,7 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 		if (getArgU32(g_appCfg.argc, g_appCfg.argv, "h", nullptr, v) && v > 0) { m_headlessSize.y = int(v); }
 		if (getArgU32(g_appCfg.argc, g_appCfg.argv, "rr", nullptr, v)) { m_settings.m_useRussianRoulette = v != 0; }
 		if (getArgU32(g_appCfg.argc, g_appCfg.argv, "nmbounce", nullptr, v)) { m_settings.m_normalMapBounceLimit = int(v); }
+		if (getArgU32(g_appCfg.argc, g_appCfg.argv, "seedoffset", nullptr, v)) { m_headlessSampleOffset = v; }
 		// --sampler=lcg|sobol (or a numeric PT_SAMPLER_* index).
 		std::string samplerArg;
 		if (getArgString(g_appCfg.argc, g_appCfg.argv, "sampler", nullptr, samplerArg))
@@ -829,6 +830,7 @@ ExamplePathTracer::SceneConstants ExamplePathTracer::makeSceneConstants(Tuple2i 
 	constants.areaLightEmission = Vec4(m_areaLightEmission);
 	constants.normalMapBounceLimit = (u32)m_settings.m_normalMapBounceLimit;
 	constants.samplerMode = (u32)m_settings.m_samplerMode;
+	constants.sampleFrameOffset = m_headlessSampleOffset;
 	constants.debugVisMode = (u32)m_settings.m_debugVisMode;
 	constants.focusPickPixel = m_focusPickRequested ? m_focusPickPixel : Tuple2i{-1, -1};
 	constants.outputSize = outputSize;
