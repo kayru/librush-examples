@@ -161,7 +161,7 @@ SHADER_INLINE vec2 envMapPixelIndexToTexcoord(PathTracerContext ctx, uint idx, v
 	return (vec2(float(x), float(y)) + jitter) / vec2(envmapSize);
 }
 
-SHADER_INLINE vec2 importanceSampleSkyLightTexcoord(PathTracerContext ctx, INOUT(uint) randomSeed)
+SHADER_INLINE vec2 importanceSampleSkyLightTexcoord(PathTracerContext ctx, INOUT(SamplerState) smp)
 {
 	ivec2 envmapSize = PT_SCENE(ctx, envmapSize);
 	if (envmapSize.x <= 0 || envmapSize.y <= 0 || !PT_ENVDIST_VALID(ctx))
@@ -170,17 +170,17 @@ SHADER_INLINE vec2 importanceSampleSkyLightTexcoord(PathTracerContext ctx, INOUT
 	}
 
 	uint texelCount = uint(envmapSize.x * envmapSize.y);
-	uint i = randomUint32(randomSeed) % texelCount;
+	uint i = samplerNextUint(smp) % texelCount;
 	EnvmapCell entry = PT_ENVDIST(ctx, i);
-	vec2 jitter = randomFloat2(randomSeed);
+	vec2 jitter = samplerNext2D(ctx, smp);
 
-	uint chosen = (randomFloat(randomSeed) <= entry.p) ? i : entry.i;
+	uint chosen = (samplerNext1D(ctx, smp) <= entry.p) ? i : entry.i;
 	return envMapPixelIndexToTexcoord(ctx, chosen, jitter);
 }
 
-SHADER_INLINE LightSample importanceSampleEnvmap(PathTracerContext ctx, INOUT(uint) randomSeed)
+SHADER_INLINE LightSample importanceSampleEnvmap(PathTracerContext ctx, INOUT(SamplerState) smp)
 {
-	vec2 uv = importanceSampleSkyLightTexcoord(ctx, randomSeed);
+	vec2 uv = importanceSampleSkyLightTexcoord(ctx, smp);
 	vec4 s = PT_ENVMAP(ctx, uv);
 	LightSample r;
 	r.w = envmapToWorld(ctx, latLongTexcoordToCartesian(uv));
@@ -223,9 +223,9 @@ SHADER_INLINE float areaLightPdfW(PathTracerContext ctx, vec3 dir, float dist)
 	return (dist * dist) / (area * cosL);
 }
 
-SHADER_INLINE AreaLightSample sampleAreaLight(PathTracerContext ctx, vec3 shadePoint, INOUT(uint) seed)
+SHADER_INLINE AreaLightSample sampleAreaLight(PathTracerContext ctx, vec3 shadePoint, INOUT(SamplerState) smp)
 {
-	vec2 uv = randomFloat2(seed);
+	vec2 uv = samplerNext2D(ctx, smp);
 	vec3 onLight = PT_SCENE(ctx, areaLightOrigin).xyz
 		+ uv.x * PT_SCENE(ctx, areaLightEdgeU).xyz
 		+ uv.y * PT_SCENE(ctx, areaLightEdgeV).xyz;
@@ -400,10 +400,9 @@ SHADER_INLINE void ptRenderPixel(PathTracerContext ctx, ivec2 pixelIndex)
 	ivec2 outputSize = PT_SCENE(ctx, outputSize);
 	vec2 pixelUV = vec2(pixelIndex) / vec2(outputSize);
 
-	uint pixelLinearIndex = uint(pixelIndex.x + pixelIndex.y * outputSize.x);
-	uint pixelRandomSeed = hashFnv1(pixelLinearIndex + pixelLinearIndex * 1294974679u);
-	uint randomSeed = hashFnv1(pixelRandomSeed + PT_SCENE(ctx, frameIndex));
-	vec2 pixelJitter = (randomFloat2(randomSeed) - 0.5f) / vec2(outputSize);
+	SamplerState smp = samplerInit(ctx, uvec2(pixelIndex),
+		PT_SCENE(ctx, frameIndex), PT_SCENE(ctx, samplerMode));
+	vec2 pixelJitter = (samplerNext2D(ctx, smp) - 0.5f) / vec2(outputSize);
 
 	vec3 result = vec3(0.0f);
 	vec3 throughput = vec3(1.0f);
@@ -418,7 +417,7 @@ SHADER_INLINE void ptRenderPixel(PathTracerContext ctx, ivec2 pixelIndex)
 	{
 		float denom = dot(PT_SCENE(ctx, matView)[2].xyz, primaryRay.direction);
 		vec3 focusPoint = primaryRay.origin + primaryRay.direction * (PT_SCENE(ctx, focusDistance) / denom);
-		vec2 apertureSample = sampleUniformDisk(randomSeed) * 0.5f;
+		vec2 apertureSample = sampleConcentricDisk(samplerNext2D(ctx, smp)) * 0.5f;
 		primaryRay.origin += (PT_SCENE(ctx, matView)[0].xyz * apertureSample.x
 			+ PT_SCENE(ctx, matView)[1].xyz * apertureSample.y) * PT_SCENE(ctx, apertureSize);
 		primaryRay.direction = normalize(focusPoint - primaryRay.origin);
@@ -600,7 +599,7 @@ SHADER_INLINE void ptRenderPixel(PathTracerContext ctx, ivec2 pixelIndex)
 				vec3 shadePoint = primaryRay.origin + primaryRay.direction * payload.hitT;
 				shadePoint += payload.geoNormal * max3(abs(shadePoint)) * 1e-4f;
 
-				AreaLightSample als = sampleAreaLight(ctx, shadePoint, randomSeed);
+				AreaLightSample als = sampleAreaLight(ctx, shadePoint, smp);
 				float NoL = dot(N, als.wi);
 				if (als.valid && NoL > 0.0f)
 				{
@@ -642,7 +641,7 @@ SHADER_INLINE void ptRenderPixel(PathTracerContext ctx, ivec2 pixelIndex)
 
 				if (useEnvmap)
 				{
-					LightSample ls = importanceSampleEnvmap(ctx, randomSeed);
+					LightSample ls = importanceSampleEnvmap(ctx, smp);
 					L = ls.w;
 					lightColor = ls.value;
 					lightPdfW = ls.pdfW;
@@ -692,20 +691,14 @@ SHADER_INLINE void ptRenderPixel(PathTracerContext ctx, ivec2 pixelIndex)
 		primaryRay.origin = primaryRay.origin + primaryRay.direction * payload.hitT;
 		primaryRay.origin += payload.geoNormal * max3(abs(primaryRay.origin)) * 1e-4f;
 
-		vec2 reflectionSampleUV = randomFloat2(randomSeed);
-		if (i == 0u)
-		{
-			uint pixelRandomSeedState = pixelRandomSeed;
-			vec2 base = Halton23(int(PT_SCENE(ctx, frameIndex))) + randomFloat2(pixelRandomSeedState);
-			reflectionSampleUV = base - floor(base);
-		}
+		vec2 reflectionSampleUV = samplerNext2D(ctx, smp);
 
 		// Select the scatter lobe by its actual energy (unbiased) rather than raw metalness; this
 		// stops over-sampling the weak specular lobe on diffuse surfaces, cutting firefly variance.
 		float specLum = max3(specularColor);
 		float diffLum = max3(diffuseColor);
 		float specularProbability = useIndirectSpecular ? clamp(specLum / max(specLum + diffLum, 1e-4f), 0.05f, 0.95f) : 0.0f;
-		bool isSpecular = randomFloat(randomSeed) <= specularProbability;
+		bool isSpecular = samplerNext1D(ctx, smp) <= specularProbability;
 
 		if (isSpecular)
 		{
@@ -742,7 +735,7 @@ SHADER_INLINE void ptRenderPixel(PathTracerContext ctx, ivec2 pixelIndex)
 		if (useRussianRoulette && i >= 1u)
 		{
 			float survival = clamp(max3(throughput), 0.05f, 1.0f);
-			if (randomFloat(randomSeed) > survival)
+			if (samplerNext1D(ctx, smp) > survival)
 			{
 				break;
 			}

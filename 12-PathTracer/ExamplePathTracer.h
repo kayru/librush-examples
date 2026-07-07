@@ -112,6 +112,8 @@ private:
 		Vec4 areaLightEdgeU = Vec4(0.0f);
 		Vec4 areaLightEdgeV = Vec4(0.0f);
 		Vec4 areaLightEmission = Vec4(0.0f);
+
+		u32 samplerMode = 0;
 	};
 
 	Mat4 m_worldTransform = Mat4::identity();
@@ -227,6 +229,7 @@ private:
 	GfxOwn<GfxRenderPipeline>        m_blitTonemap;
 	GfxOwn<GfxTexture>               m_envmap;
 	GfxOwn<GfxBuffer>                m_envmapDistribution;
+	GfxOwn<GfxBuffer>                m_sobolBuffer;
 
 	// click-to-focus: shader writes the cursor pixel's depth here, read back same frame
 	GfxOwn<GfxBuffer> m_focusFeedbackBuffer;
@@ -257,6 +260,7 @@ private:
 		int m_tracingMode = int(TracingMode::RayQuery); // Vulkan-only, clamped to available backends on load
 		bool m_useRussianRoulette = true; // perf: terminate low-throughput paths (unbiased)
 		int m_normalMapBounceLimit = 5; // perf: apply normal maps only on bounces <= this (5 = all)
+		int m_samplerMode = int(PT_SAMPLER_LCG); // PT_SAMPLER_* sample generator
 
 		template <typename Ar> void describe(Ar& ar)
 		{
@@ -282,6 +286,7 @@ private:
 			ar.field("tracingMode", m_tracingMode);
 			ar.field("useRussianRoulette", m_useRussianRoulette);
 			ar.field("normalMapBounceLimit", m_normalMapBounceLimit);
+			ar.field("samplerMode", m_samplerMode);
 		}
 	};
 
@@ -305,6 +310,7 @@ private:
 	void renderHeadless(GfxContext* ctx);
 
 	void createGpuScene();
+	void createSobolBuffer();
 	const char* configModelName() const; // model path for the config key, or null when procedural
 	void saveConfig();
 	void loadConfig();

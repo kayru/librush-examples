@@ -12,6 +12,7 @@
 	#define vec3 float3
 	#define vec4 float4
 	#define ivec2 int2
+	#define uvec2 uint2
 	#define mat3 float3x3
 	#define mat4 float4x4
 	#define inversesqrt rsqrt
@@ -50,19 +51,6 @@ SHADER_INLINE vec3 safeNormalize(vec3 v)
 	return l == 0.0f ? v : v / l;
 }
 
-SHADER_INLINE uint randomUint16(INOUT(uint) seed)
-{
-	seed = 214013u * seed + 2531011u;
-	return (seed ^ (seed >> 16));
-}
-
-SHADER_INLINE uint randomUint32(INOUT(uint) seed)
-{
-	uint a = randomUint16(seed) << 16;
-	uint b = randomUint16(seed) & 0xffffu;
-	return a | b;
-}
-
 SHADER_INLINE float randomFloat(INOUT(uint) seed)
 {
 	seed = 214013u * seed + 2531011u;
@@ -96,38 +84,6 @@ SHADER_INLINE vec3 mapToUniformSphere(vec2 uv)
 	float x = r * cos(phi);
 	float y = r * sin(phi);
 	return vec3(x, y, z);
-}
-
-SHADER_INLINE vec2 sampleUniformDisk(INOUT(uint) seed)
-{
-	for (;;)
-	{
-		vec2 v;
-		v.x = randomFloat(seed) * 2.0f - 1.0f;
-		v.y = randomFloat(seed) * 2.0f - 1.0f;
-		if (dot(v, v) <= 1.0f)
-		{
-			return v;
-		}
-	}
-}
-
-SHADER_INLINE float Halton(int b, int i)
-{
-	float r = 0.0f;
-	float f = 1.0f;
-	while (i > 0)
-	{
-		f = f / float(b);
-		r = r + f * float(i % b);
-		i = int(floor(float(i) / float(b)));
-	}
-	return r;
-}
-
-SHADER_INLINE vec2 Halton23(int i)
-{
-	return vec2(Halton(2, i), Halton(3, i));
 }
 
 SHADER_INLINE float powerHeuristic(float f, float g)

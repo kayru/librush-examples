@@ -17,7 +17,9 @@
 #include <stb_image_write.h>
 #include <cgltf.h>
 #include <algorithm>
+#include <cctype>
 #include <chrono>
+#include <cmath>
 #include <cstring>
 #include <stdio.h>
 #include <utility>
@@ -29,6 +31,23 @@
 #include <imgui.h>
 
 static AppConfig g_appCfg;
+
+// Sample-generator names, indexed by PT_SAMPLER_*. Shared by the UI combo and --sampler= parsing.
+static const char* g_samplerNames[] = {"LCG", "Sobol"};
+static_assert(RUSH_COUNTOF(g_samplerNames) == PT_SAMPLER_COUNT, "sampler name table out of sync");
+
+static bool samplerModeFromName(const std::string& name, int& outMode)
+{
+	for (int i = 0; i < int(PT_SAMPLER_COUNT); ++i)
+	{
+		std::string lhs = name, rhs = g_samplerNames[i];
+		std::transform(lhs.begin(), lhs.end(), lhs.begin(), ::tolower);
+		std::transform(rhs.begin(), rhs.end(), rhs.begin(), ::tolower);
+		rhs.erase(std::remove(rhs.begin(), rhs.end(), ' '), rhs.end());
+		if (lhs == rhs) { outMode = i; return true; }
+	}
+	return false;
+}
 
 int main(int argc, char** argv)
 {
@@ -117,7 +136,9 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 		bd.debugName   = "FocusFeedback";
 		m_focusFeedbackBuffer = Gfx_CreateBuffer(bd);
 	}
-	
+
+	createSobolBuffer();
+
 	if (rtAvailable && m_startupError.empty())
 	{
 		GfxRayTracingPipelineDesc pipelineDesc;
@@ -145,10 +166,10 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 		pipelineDesc.bindings.descriptorSets[0].rwImages = 1; // output image
 #if RUSH_RENDER_API == RUSH_RENDER_API_MTL
 	// Metal argument buffer layout is sequential; extra material buffers shift later bindings.
-	// set=0 bindings: 0 cb,1 sampler,2 envmap,3 output,4 ib,5 vb,6 envmap dist,7 material,8 material index,9 focus feedback,10 TLAS.
-	pipelineDesc.bindings.descriptorSets[0].rwBuffers = 6; // IB + VB + envmap distribution + materials + material indices + focus feedback
+	// set=0 bindings: 0 cb,1 sampler,2 envmap,3 output,4 ib,5 vb,6 envmap dist,7 material,8 material index,9 focus,10 sobol,11 TLAS.
+	pipelineDesc.bindings.descriptorSets[0].rwBuffers = 7; // IB + VB + envmap dist + materials + material indices + focus + sobol
 #else
-	pipelineDesc.bindings.descriptorSets[0].rwBuffers = 4; // IB + VB + envmap distribution + focus feedback
+	pipelineDesc.bindings.descriptorSets[0].rwBuffers = 5; // IB + VB + envmap distribution + focus feedback + sobol
 #endif
 		pipelineDesc.bindings.descriptorSets[0].accelerationStructures = 1; // TLAS
 		pipelineDesc.bindings.descriptorSets[1] = materialDescriptorSetDesc;
@@ -176,8 +197,8 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 				rqDesc.bindings.descriptorSets[0].samplers = 1; // default sampler
 				rqDesc.bindings.descriptorSets[0].textures = 1; // envmap
 				rqDesc.bindings.descriptorSets[0].rwImages = 1; // output image
-				// IB + VB + envmap distribution + materials + material indices + focus feedback
-				rqDesc.bindings.descriptorSets[0].rwBuffers = 6;
+				// IB + VB + envmap dist + materials + material indices + focus + sobol
+				rqDesc.bindings.descriptorSets[0].rwBuffers = 7;
 				rqDesc.bindings.descriptorSets[0].accelerationStructures = 1; // TLAS
 				rqDesc.bindings.descriptorSets[1] = materialDescriptorSetDesc;
 				m_rayQueryPipeline = Gfx_CreateComputePipeline(rqDesc);
@@ -332,6 +353,10 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 	}
 
 	loadConfig();
+	if (m_settings.m_samplerMode < 0 || m_settings.m_samplerMode >= int(PT_SAMPLER_COUNT))
+	{
+		m_settings.m_samplerMode = int(PT_SAMPLER_LCG); // guard against a stale saved value
+	}
 
 	// Headless render-to-PNG (applied after loadConfig so command-line wins over the saved config):
 	//   --out=<png> [--spp=N] [--tracing=rayquery|pipeline] [--w=W] [--h=H]
@@ -343,6 +368,14 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 		if (getArgU32(g_appCfg.argc, g_appCfg.argv, "h", nullptr, v) && v > 0) { m_headlessSize.y = int(v); }
 		if (getArgU32(g_appCfg.argc, g_appCfg.argv, "rr", nullptr, v)) { m_settings.m_useRussianRoulette = v != 0; }
 		if (getArgU32(g_appCfg.argc, g_appCfg.argv, "nmbounce", nullptr, v)) { m_settings.m_normalMapBounceLimit = int(v); }
+		// --sampler=lcg|sobol (or a numeric PT_SAMPLER_* index).
+		std::string samplerArg;
+		if (getArgString(g_appCfg.argc, g_appCfg.argv, "sampler", nullptr, samplerArg))
+		{
+			int mode = 0;
+			if (samplerModeFromName(samplerArg, mode)) { m_settings.m_samplerMode = mode; }
+			else if (getArgU32(g_appCfg.argc, g_appCfg.argv, "sampler", nullptr, v) && v < PT_SAMPLER_COUNT) { m_settings.m_samplerMode = int(v); }
+		}
 		// Default to ray query unless --tracing=pipeline is given (ignores the saved config mode).
 		std::string mode;
 		getArgString(g_appCfg.argc, g_appCfg.argv, "tracing", nullptr, mode);
@@ -557,6 +590,10 @@ void ExamplePathTracer::onUpdate()
 			}
 #endif
 			ImGui::Separator();
+			if (ImGuiExt::Combo("Sampler", &m_settings.m_samplerMode, g_samplerNames, int(RUSH_COUNTOF(g_samplerNames))))
+			{
+				renderSettingsChanged = true;
+			}
 			renderSettingsChanged |= ImGui::Checkbox("Russian roulette", &m_settings.m_useRussianRoulette);
 			// Normal maps only on bounces <= limit; lower = faster, softer indirect detail (5 = all).
 			renderSettingsChanged |= ImGui::SliderInt("Normal map max bounce", &m_settings.m_normalMapBounceLimit, 0, 5);
@@ -710,6 +747,54 @@ float ExamplePathTracer::outputAspect() const
 	return m_window ? m_window->getAspect() : (float(m_headlessSize.x) / float(m_headlessSize.y));
 }
 
+// Sobol direction numbers (Joe & Kuo new-joe-kuo-6.21201) for the first PT_QMC_DIMS dimensions.
+// Uploaded as a uint buffer where [dim*32 + bit] is dimension d's bit-k direction number. Distinct
+// direction numbers per dimension are what make the high-dimensional estimator unbiased.
+void ExamplePathTracer::createSobolBuffer()
+{
+	const u32 kDims = PT_QMC_DIMS;
+	const u32 kBits = 32u;
+
+	// Per dimension >= 1: (degree s, polynomial coeff a, initial direction numbers m_1..m_s).
+	struct JK { u32 s; u32 a; u32 m[8]; };
+	static const JK jk[] = {
+		{1,0,{1}}, {2,1,{1,3}}, {3,1,{1,3,1}}, {3,2,{1,1,1}}, {4,1,{1,1,3,3}}, {4,4,{1,3,5,13}},
+		{5,2,{1,1,5,5,17}}, {5,4,{1,1,5,5,5}}, {5,7,{1,1,7,11,19}}, {5,11,{1,1,5,1,1}},
+		{5,13,{1,1,1,3,11}}, {5,14,{1,3,5,5,31}}, {6,1,{1,3,3,9,7,49}}, {6,13,{1,1,1,15,21,21}},
+		{6,16,{1,3,1,13,27,49}}, {6,19,{1,1,1,15,7,5}}, {6,22,{1,3,1,15,13,25}}, {6,25,{1,1,5,5,19,61}},
+		{7,1,{1,3,7,11,23,15,103}}, {7,4,{1,3,7,13,13,15,69}}, {7,7,{1,1,3,13,7,35,63}},
+		{7,8,{1,3,5,9,1,25,53}}, {7,14,{1,3,1,13,9,35,107}}, {7,19,{1,3,1,5,27,61,31}},
+		{7,21,{1,1,5,11,19,41,61}}, {7,28,{1,3,5,3,3,13,69}}, {7,31,{1,1,7,13,1,19,1}},
+		{7,32,{1,3,7,5,13,19,59}}, {7,37,{1,1,3,9,7,11,23}}, {7,41,{1,3,3,13,25,13,13}},
+		{7,42,{1,1,5,11,23,27,11}},
+	};
+	std::vector<u32> data(kDims * kBits, 0u);
+	for (u32 dim = 0; dim < kDims; ++dim)
+	{
+		u32* V = &data[dim * kBits];
+		if (dim == 0)
+		{
+			for (u32 k = 0; k < kBits; ++k) { V[k] = 1u << (31u - k); }
+		}
+		else
+		{
+			const JK& e = jk[dim - 1];
+			for (u32 k = 1; k <= e.s; ++k) { V[k - 1] = e.m[k - 1] << (31u - (k - 1)); }
+			for (u32 k = e.s + 1; k <= kBits; ++k)
+			{
+				u32 val = V[k - e.s - 1] ^ (V[k - e.s - 1] >> e.s);
+				for (u32 j = 1; j < e.s; ++j)
+				{
+					if ((e.a >> (e.s - 1 - j)) & 1u) { val ^= V[k - j - 1]; }
+				}
+				V[k - 1] = val;
+			}
+		}
+	}
+
+	m_sobolBuffer = Gfx_CreateBuffer(GfxBufferFlags::Storage, u32(data.size()), sizeof(u32), data.data());
+}
+
 ExamplePathTracer::SceneConstants ExamplePathTracer::makeSceneConstants(Tuple2i outputSize, u32 frameIndex) const
 {
 	Mat4 matView = m_camera.buildViewMatrix();
@@ -739,6 +824,7 @@ ExamplePathTracer::SceneConstants ExamplePathTracer::makeSceneConstants(Tuple2i 
 	constants.areaLightEdgeV = Vec4(m_areaLightEdgeV);
 	constants.areaLightEmission = Vec4(m_areaLightEmission);
 	constants.normalMapBounceLimit = (u32)m_settings.m_normalMapBounceLimit;
+	constants.samplerMode = (u32)m_settings.m_samplerMode;
 	constants.debugVisMode = (u32)m_settings.m_debugVisMode;
 	constants.focusPickPixel = m_focusPickRequested ? m_focusPickPixel : Tuple2i{-1, -1};
 	constants.outputSize = outputSize;
@@ -825,10 +911,12 @@ void ExamplePathTracer::renderHeadless(GfxContext* ctx)
 			if (m_materialBuffer.valid()) { Gfx_SetStorageBuffer(ctx, 3, m_materialBuffer); }
 			if (m_materialIndexBuffer.valid()) { Gfx_SetStorageBuffer(ctx, 4, m_materialIndexBuffer); }
 			Gfx_SetStorageBuffer(ctx, 5, m_focusFeedbackBuffer);
+			Gfx_SetStorageBuffer(ctx, 6, m_sobolBuffer);
 		}
 		else
 		{
 			Gfx_SetStorageBuffer(ctx, 3, m_focusFeedbackBuffer);
+			Gfx_SetStorageBuffer(ctx, 4, m_sobolBuffer);
 		}
 		Gfx_SetDescriptors(ctx, 1, m_materialDescriptorSet);
 		Gfx_SetAccelerationStructure(ctx, 0, m_tlas);
@@ -955,10 +1043,12 @@ void ExamplePathTracer::render()
 				Gfx_SetStorageBuffer(ctx, 4, m_materialIndexBuffer);
 			}
 			Gfx_SetStorageBuffer(ctx, 5, m_focusFeedbackBuffer);
+			Gfx_SetStorageBuffer(ctx, 6, m_sobolBuffer);
 		}
 		else
 		{
 			Gfx_SetStorageBuffer(ctx, 3, m_focusFeedbackBuffer);
+			Gfx_SetStorageBuffer(ctx, 4, m_sobolBuffer);
 		}
 		Gfx_SetDescriptors(ctx, 1, m_materialDescriptorSet);
 		Gfx_SetAccelerationStructure(ctx, 0, m_tlas);

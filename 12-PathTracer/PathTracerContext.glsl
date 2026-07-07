@@ -67,6 +67,7 @@ struct PathTracerContext
 #define PT_OUTPUT_READ(ctx, px)     ((ctx).s0->outputImage.read(uint2(px)).xyz)
 #define PT_OUTPUT_WRITE(ctx, px, v) ((ctx).s0->outputImage.write(float4((v), 1.0f), uint2(px)))
 #define PT_FOCUS_WRITE(ctx, val)    ((ctx).s0->focusFeedback[0] = (val))
+#define PT_SOBOL(ctx, i)            ((ctx).s0->sobolMatrices[(i)])
 
 // Vertex members are packed; bridge to aligned vecs.
 #define PT_VTX_POS(v) float3((v).position)
@@ -101,6 +102,7 @@ struct PathTracerContext
 #define PT_OUTPUT_READ(ctx, px)     (imageLoad(outputImage, ivec2(px)).rgb)
 #define PT_OUTPUT_WRITE(ctx, px, v) imageStore(outputImage, ivec2(px), vec4((v), 1.0))
 #define PT_FOCUS_WRITE(ctx, val)    focusFeedback[0] = (val)
+#define PT_SOBOL(ctx, i)            (sobolBuffer[(i)])
 
 // Vertex members are float[N] with accessors in Common.glsl.
 #define PT_VTX_POS(v) getPosition(v)

@@ -43,6 +43,8 @@ struct SceneConstants
 	float4 areaLightEdgeU;    // xyz first edge
 	float4 areaLightEdgeV;    // xyz second edge
 	float4 areaLightEmission; // xyz emitted radiance
+
+	uint samplerMode;
 };
 
 struct MaterialConstants
@@ -87,7 +89,8 @@ struct PathTracerSet0
 	device MaterialConstants* materials [[id(7)]];
 	device uint* materialIndices [[id(8)]];
 	device float* focusFeedback [[id(9)]];
-	instance_acceleration_structure tlas [[id(10)]];
+	device uint* sobolMatrices [[id(10)]];
+	instance_acceleration_structure tlas [[id(11)]];
 };
 
 struct PathTracerSet1
@@ -96,6 +99,7 @@ struct PathTracerSet1
 };
 
 #include "PathTracerContext.glsl"
+#include "PathTracerSampling.glsl"
 #include "PathTracerCore.glsl"
 
 kernel void main0(constant PathTracerSet0& set0 [[buffer(0)]],

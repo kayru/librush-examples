@@ -29,6 +29,17 @@
 #define PT_MATERIAL_MODE_PBR_METALLIC_ROUGHNESS  0u
 #define PT_MATERIAL_MODE_PBR_SPECULAR_GLOSSINESS 1u
 
+// Sample generators (constants.samplerMode). Both unbiased; Sobol is a multi-dimensional
+// low-discrepancy sequence (per-pixel digital XOR shift) that converges faster than the LCG baseline.
+#define PT_SAMPLER_LCG   0u // baseline per-pixel white-noise LCG (default)
+#define PT_SAMPLER_SOBOL 1u
+#define PT_SAMPLER_COUNT 2u
+
+// Number of leading path dimensions with direct Sobol direction numbers; deeper dimensions use the
+// cheap LCG stream. Covers pixel AA, DoF and the first couple of bounces, where the low-discrepancy
+// sequence delivers essentially all its benefit; the tail bounces gain little and are cheaper on LCG.
+#define PT_QMC_DIMS 12u
+
 #define PT_MAX_TEXTURES 1024
 
 // Ray-query compute tile. 8x4 = 32 = one warp; ~1.5x faster than a 2-warp group here.

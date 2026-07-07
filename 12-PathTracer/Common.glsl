@@ -23,10 +23,11 @@
 //  5 vertexBuffer
 //  6 envmapDistributionBuffer
 //  7 focusFeedbackBuffer
-//  8 TLAS
-// Inline configs (Vulkan ray query, PT_CONFIG_RAYQUERY) resolve materials from buffers rather
-// than the SBT, so materials + material indices sit at 7/8, focusFeedback shifts to 9, TLAS to 10.
-// Metal argument buffers follow the same inline ordering (materials 7, indices 8, focus 9, TLAS 10).
+//  8 sobolBuffer
+//  9 TLAS
+// Inline configs (Vulkan ray query, PT_CONFIG_RAYQUERY) resolve materials from buffers rather than
+// the SBT, so materials + material indices sit at 7/8, focus shifts to 9, sobol to 10, TLAS to 11.
+// Metal argument buffers follow the same inline ordering (materials 7, indices 8, focus 9, sobol 10, TLAS 11).
 // Binding layout (set=1): texture array at binding 0.
 
 layout(set=0, binding=0)
@@ -60,6 +61,8 @@ uniform SceneConstants
 	vec4 areaLightEdgeU;    // xyz first edge
 	vec4 areaLightEdgeV;    // xyz second edge
 	vec4 areaLightEmission; // xyz emitted radiance
+
+	uint samplerMode;       // PT_SAMPLER_*
 };
 
 layout(set=0, binding=1)
@@ -145,7 +148,13 @@ buffer FocusFeedbackBuffer
 	float focusFeedback[];
 };
 
-layout(set=0, binding=10)
+layout(set=0, binding=10, std430)
+buffer SobolBuffer
+{
+	uint sobolBuffer[];
+};
+
+layout(set=0, binding=11)
 uniform accelerationStructureEXT TLAS;
 
 #else
@@ -157,7 +166,13 @@ buffer FocusFeedbackBuffer
 	float focusFeedback[];
 };
 
-layout(set=0, binding=8)
+layout(set=0, binding=8, std430)
+buffer SobolBuffer
+{
+	uint sobolBuffer[];
+};
+
+layout(set=0, binding=9)
 uniform accelerationStructureEXT TLAS;
 
 #endif
@@ -168,6 +183,7 @@ uniform texture2D textureDescriptors[PT_MAX_TEXTURES];
 // common types and functions
 
 #include "PathTracerContext.glsl"
+#include "PathTracerSampling.glsl"
 #include "PathTracerCore.glsl"
 
 #endif // __cplusplus
