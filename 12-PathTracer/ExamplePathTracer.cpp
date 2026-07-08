@@ -547,6 +547,18 @@ void ExamplePathTracer::onUpdate()
 			renderSettingsChanged |= ImGuiExt::SliderFloat("Focus assist falloff (px)", &m_settings.m_focusAssistFalloffPx, 0.5f, 64.0f, ImGuiExt::LabelMode::Above, "%.1f", ImGuiSliderFlags_Logarithmic);
 		}
 		renderSettingsChanged |= ImGuiExt::SliderFloat("Envmap rotation (deg)", &m_settings.m_envmapRotationDegrees, 0.0f, 360.0f);
+		const float prevWorldScale = m_settings.m_worldScale;
+		if (ImGuiExt::SliderFloat("World scale", &m_settings.m_worldScale, 0.001f, 1000.0f, ImGuiExt::LabelMode::Above, "%.3f", ImGuiSliderFlags_Logarithmic))
+		{
+			// Geometry scales about the origin; scale the camera the same way so the framing is unchanged.
+			const float ratio = m_settings.m_worldScale / prevWorldScale;
+			const Vec3 camPos = m_camera.getPosition() * ratio;
+			m_camera.lookAt(camPos, camPos + m_camera.getForward());
+			m_settings.m_focusDistance *= ratio;
+			m_cameraScale *= ratio;
+			m_tlas = {}; // rebuild the TLAS instance transform with the new scale
+			renderSettingsChanged = true;
+		}
 		ImGuiExt::SliderFloat("Exposure EV100", &m_settings.m_exposureEV100, -10.0f, 10.0f);
 		ImGuiExt::SliderFloat("Gamma", &m_settings.m_gamma, 0.25f, 3.0f);
 		Vec3 camPos = m_camera.getPosition();
@@ -727,7 +739,7 @@ void ExamplePathTracer::createRayTracingScene(GfxContext* ctx)
 		    tlasDesc.instanceCount, (u32)sizeof(GfxRayTracingInstanceDesc));
 	}
 	{
-		Mat4 transform = m_worldTransform.transposed();
+		Mat4 transform = (m_worldTransform * Mat4::scale(Vec3(m_settings.m_worldScale))).transposed();
 		auto instanceData = Gfx_BeginUpdateBuffer<GfxRayTracingInstanceDesc>(ctx, m_rtInstanceBuffer.get(), tlasDesc.instanceCount);
 		instanceData[0].init();
 		memcpy(instanceData[0].transform, &transform, sizeof(float) * 12);
@@ -852,9 +864,11 @@ ExamplePathTracer::SceneConstants ExamplePathTracer::makeSceneConstants(Tuple2i 
 	constants.flags |= m_settings.m_showFocusAssist ? PT_FLAG_DEBUG_FOCAL_PLANE : 0;
 	constants.flags |= m_settings.m_useRussianRoulette ? PT_FLAG_USE_RUSSIAN_ROULETTE : 0;
 	constants.flags |= m_useAreaLight ? PT_FLAG_USE_AREA_LIGHT : 0;
-	constants.areaLightOrigin = Vec4(m_areaLightOrigin);
-	constants.areaLightEdgeU = Vec4(m_areaLightEdgeU);
-	constants.areaLightEdgeV = Vec4(m_areaLightEdgeV);
+	// Light lives in world space; scale it with the geometry (emission is radiance, scale-invariant).
+	const float worldScale = m_settings.m_worldScale;
+	constants.areaLightOrigin = Vec4(m_areaLightOrigin * worldScale);
+	constants.areaLightEdgeU = Vec4(m_areaLightEdgeU * worldScale);
+	constants.areaLightEdgeV = Vec4(m_areaLightEdgeV * worldScale);
 	constants.areaLightEmission = Vec4(m_areaLightEmission);
 	constants.normalMapBounceLimit = (u32)m_settings.m_normalMapBounceLimit;
 	constants.samplerMode = (u32)m_settings.m_samplerMode;
@@ -1920,7 +1934,10 @@ bool ExamplePathTracer::accumulationComplete() const
 
 void ExamplePathTracer::resetCamera()
 {
-	m_camera = makeFramedCamera(m_boundingBox, outputAspect());
+	Box3 bounds = m_boundingBox;
+	bounds.m_min *= m_settings.m_worldScale;
+	bounds.m_max *= m_settings.m_worldScale;
+	m_camera = makeFramedCamera(bounds, outputAspect());
 	resetAccumulation();
 }
 

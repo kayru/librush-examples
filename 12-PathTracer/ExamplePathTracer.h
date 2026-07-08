@@ -266,6 +266,7 @@ private:
 		int m_samplerMode = int(PT_SAMPLER_SOBOL); // PT_SAMPLER_* sample generator (Owen-scrambled Sobol default)
 		int m_maxSamplesPerPixel = 0; // stop accumulating past this spp (0 = unlimited)
 		float m_maxRenderTimeSec = 0.0f; // stop accumulating past this GPU render time (0 = unlimited)
+		float m_worldScale = 1.0f; // uniform scale of the scene about the origin (camera units are meters)
 
 		template <typename Ar> void describe(Ar& ar)
 		{
@@ -294,6 +295,7 @@ private:
 			ar.field("samplerMode", m_samplerMode);
 			ar.field("maxSamplesPerPixel", m_maxSamplesPerPixel);
 			ar.field("maxRenderTimeSec", m_maxRenderTimeSec);
+			ar.field("worldScale", m_worldScale);
 		}
 	};
 
