@@ -70,18 +70,25 @@ struct TimingScope
 
 template <typename T> static void writeContainer(DataStream& stream, const std::vector<T>& data)
 {
-	u32 count = (u32)data.size();
+	const u32 count = (u32)data.size();
 	stream.writeT(count);
-	stream.write(data.data(), count * (u32)sizeof(T));
+	stream.write(data.data(), u64(count) * sizeof(T));
 }
 
-template <typename T> static void readContainer(DataStream& stream, std::vector<T>& data)
+// Returns false (leaving the container empty) when the stream does not hold `count` elements,
+// so a corrupt count can neither over-allocate nor silently yield zero-filled elements.
+template <typename T> static bool readContainer(DataStream& stream, std::vector<T>& data)
 {
 	u32 count = 0;
 	stream.readT(count);
 	data.clear();
+	const u64 byteSize = u64(count) * sizeof(T);
+	if (stream.tell() + byteSize > stream.length())
+	{
+		return false;
+	}
 	data.resize(count);
-	stream.read(data.data(), count * (u32)sizeof(T));
+	return stream.read(data.data(), byteSize) == byteSize;
 }
 
 inline std::string directoryFromFilename(const std::string& filename)
@@ -144,6 +151,8 @@ struct ProceduralSceneMaterial
 	Vec4        baseColor = Vec4(1.0f);
 	Vec3        emissive = Vec3(0.0f); // emitted radiance; nonzero on area-light surfaces
 	std::string diffuseTextureName; // empty when untextured
+	std::string roughnessTextureName; // grayscale roughness (native models)
+	std::string normalTextureName;
 };
 
 struct ProceduralSceneSegment
@@ -179,5 +188,11 @@ void buildProceduralScene(ProceduralSceneData& out, ProceduralScene kind = Proce
 // Loads a Wavefront OBJ into the neutral scene representation (X-mirrored to engine convention,
 // one segment per material run, raw material ids). Returns false on load failure.
 bool loadObjScene(const char* filename, ProceduralSceneData& out);
+
+// Loads a native .model into the neutral scene representation (texture paths resolved + normalized).
+bool loadModelScene(const char* filename, ProceduralSceneData& out);
+
+// Dispatches to the loader matching the file extension (.obj or .model; glTF is app-specific).
+bool loadSceneFromFile(const char* filename, ProceduralSceneData& out);
 
 } // namespace Rush

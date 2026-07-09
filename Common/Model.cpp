@@ -31,10 +31,22 @@ bool Model::read(const char* filename)
 	}
 
 	stream.readT(bounds);
-	readContainer(stream, materials);
-	readContainer(stream, segments);
-	readContainer(stream, vertices);
-	readContainer(stream, indices);
+	if (!readContainer(stream, materials)
+	    || !readContainer(stream, segments)
+	    || !readContainer(stream, vertices)
+	    || !readContainer(stream, indices))
+	{
+		Log::error("Model file '%s' is truncated or corrupt", filename);
+		return false;
+	}
+
+	// Texture names come straight from the file; enforce termination before anyone runs strlen.
+	for (OfflineMaterial& mat : materials)
+	{
+		mat.albedoTexture[OfflineMaterial::MaxStringLength]    = 0;
+		mat.normalTexture[OfflineMaterial::MaxStringLength]    = 0;
+		mat.roughnessTexture[OfflineMaterial::MaxStringLength] = 0;
+	}
 
 	return true;
 }

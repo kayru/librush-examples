@@ -26,7 +26,6 @@
 
 #include <Common/ImGuiImpl.h>
 #include <Common/ImGuiExt.h>
-#include <Common/Model.h>
 #include <Common/SceneConfig.h>
 #include <Common/Utils.h>
 #include <imgui.h>
@@ -260,6 +259,16 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 		}
 	}
 
+	{
+		std::string envFilename = std::string(Platform_GetExecutableDirectory()) + "/envmap.hdr";
+		std::string envArg;
+		if (getArgString(g_appCfg.argc, g_appCfg.argv, "env", nullptr, envArg))
+		{
+			envFilename = envArg;
+		}
+		loadEnvmap(envFilename.c_str());
+	}
+
 	const char* modelFilename = nullptr;
 	if (getPositionalArg(g_appCfg.argc, g_appCfg.argv, 0, modelFilename))
 	{
@@ -271,16 +280,6 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 		{
 			RUSH_LOG("Could not load model from '%s'\n", modelFilename);
 		}
-
-
-		std::string envFilename = std::string(Platform_GetExecutableDirectory()) + "/envmap.hdr";
-		std::string envArg;
-		if (getArgString(g_appCfg.argc, g_appCfg.argv, "env", nullptr, envArg))
-		{
-			envFilename = envArg;
-		}
-
-		loadEnvmap(envFilename.c_str());
 
 		Vec3  center       = m_boundingBox.center();
 		Vec3  dimensions   = m_boundingBox.dimensions();
@@ -300,71 +299,15 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 		ProceduralSceneData procedural;
 		buildProceduralScene(procedural, sceneKind);
 
-		m_vertices.clear();
-		m_vertices.reserve(procedural.vertices.size());
-		for (const auto& v : procedural.vertices)
-		{
-			Vertex dst;
-			dst.position = v.position;
-			dst.normal = v.normal;
-			dst.texcoord = v.texcoord;
-			dst.tangent = Vec4(v.tangent, 1.0f);
-			m_vertices.push_back(dst);
-		}
-
-		m_indices = procedural.indices;
-		m_segments.clear();
-		m_segments.reserve(procedural.segments.size());
-		for (const auto& seg : procedural.segments)
-		{
-			MeshSegment outSeg;
-			outSeg.material = seg.material;
-			outSeg.indexOffset = seg.indexOffset;
-			outSeg.indexCount = seg.indexCount;
-			m_segments.push_back(outSeg);
-		}
-
-		m_materials.clear();
-		m_materials.reserve(procedural.materials.size());
-		for (const auto& mat : procedural.materials)
-		{
-			MaterialConstants constants;
-			constants.albedoFactor = mat.baseColor;
-			constants.emissiveFactor = Vec4(mat.emissive);
-			constants.albedoTextureId = m_defaultWhiteTextureId;
-			constants.specularTextureId = m_defaultWhiteTextureId;
-			constants.normalTextureId = 0;
-			constants.metallicFactor = 0.0f;
-			constants.roughnessFactor = 1.0f;
-			constants.reflectance = 0.08f;
-			constants.materialMode = MaterialMode::MetallicRoughness;
-			m_materials.push_back(constants);
-		}
-
-		m_useAreaLight = procedural.hasAreaLight;
-		m_areaLightOrigin = procedural.lightOrigin;
-		m_areaLightEdgeU = procedural.lightEdgeU;
-		m_areaLightEdgeV = procedural.lightEdgeV;
-		m_areaLightEmission = procedural.lightEmission;
+		loadSceneData(std::move(procedural));
 		if (m_useAreaLight)
 		{
 			m_settings.m_useEnvmap = false; // self-lit box: the emitter is the only light
 		}
 
-		m_boundingBox = procedural.bounds;
-		m_vertexCount = u32(m_vertices.size());
-		m_indexCount = u32(m_indices.size());
-		m_haveNormals = true;
-		m_haveTexcoords = true;
-		m_haveTangents = true;
-		m_haveNormalMaps = false;
 		m_valid = true;
 		m_useProceduralScene = true;
 		m_statusString = boxOnPlane ? "Box on plane (procedural)" : "Cornell Box (procedural)";
-
-		std::string envFilename = std::string(Platform_GetExecutableDirectory()) + "/envmap.hdr";
-		loadEnvmap(envFilename.c_str());
-		createGpuScene();
 	}
 
 	loadConfig();
@@ -994,7 +937,7 @@ void ExamplePathTracer::renderHeadless(GfxContext* ctx)
 #else
 		if (rayQuery)
 		{
-			Gfx_SetComputePipeline(ctx, activeRayQueryPipeline());
+			Gfx_SetComputePipeline(ctx, activeRayQueryPipeline(constants));
 			Gfx_Dispatch(ctx, divUp(width, PT_RAYQUERY_TILE_X), divUp(height, PT_RAYQUERY_TILE_Y), 1u);
 		}
 		else
@@ -1132,7 +1075,7 @@ void ExamplePathTracer::render()
 #else
 		if (inlineScene)
 		{
-			Gfx_SetComputePipeline(ctx, activeRayQueryPipeline());
+			Gfx_SetComputePipeline(ctx, activeRayQueryPipeline(constants));
 			Gfx_Dispatch(ctx, divUp(outputImageDesc.width, PT_RAYQUERY_TILE_X), divUp(outputImageDesc.height, PT_RAYQUERY_TILE_Y), 1u);
 		}
 		else
@@ -1656,100 +1599,28 @@ bool ExamplePathTracer::loadModelGLTF(const char* filename)
 	return true;
 }
 
-bool ExamplePathTracer::loadModelObj(const char* filename)
+void ExamplePathTracer::loadSceneData(ProceduralSceneData&& data)
 {
-	ProceduralSceneData data;
-	if (!loadObjScene(filename, data))
-	{
-		return false;
-	}
-
-	RUSH_LOG("Converting mesh from OBJ");
-
+	m_materials.clear();
+	m_materials.reserve(data.materials.size());
+	m_haveNormalMaps = false;
 	for (const auto& mat : data.materials)
 	{
 		MaterialConstants constants;
-		constants.albedoFactor    = mat.baseColor;
+		constants.albedoFactor = mat.baseColor;
+		constants.emissiveFactor = Vec4(mat.emissive);
 		constants.albedoTextureId = mat.diffuseTextureName.empty()
 		    ? m_defaultWhiteTextureId
-		    : enqueueLoadTexture(mat.diffuseTextureName, GfxFormat::GfxFormat_RGBA8_sRGB);
-		m_materials.push_back(constants);
-	}
-
-	if (data.materials.empty())
-	{
-		MaterialConstants constants;
-		constants.albedoTextureId = m_defaultWhiteTextureId;
-		m_materials.push_back(constants);
-	}
-
-	m_vertices.reserve(data.vertices.size());
-	for (const auto& v : data.vertices)
-	{
-		Vertex dst;
-		dst.position = v.position;
-		dst.normal   = v.normal;
-		dst.texcoord = v.texcoord;
-		dst.tangent  = Vec4(v.tangent, 0.0f);
-		m_vertices.push_back(dst);
-	}
-
-	m_indices = data.indices;
-
-	m_segments.reserve(data.segments.size());
-	for (const auto& seg : data.segments)
-	{
-		MeshSegment outSeg;
-		outSeg.material    = u32(max(0, int(seg.material))); // untextured runs (raw -1) map to material 0
-		outSeg.indexOffset = seg.indexOffset;
-		outSeg.indexCount  = seg.indexCount;
-		m_segments.push_back(outSeg);
-	}
-
-	m_boundingBox = data.bounds;
-	m_vertexCount = (u32)m_vertices.size();
-	m_indexCount  = (u32)m_indices.size();
-
-	createGpuScene();
-
-	return true;
-}
-
-bool ExamplePathTracer::loadModelNative(const char* filename)
-{
-	Model model;
-	if (!model.read(filename))
-	{
-		return false;
-	}
-
-	RUSH_LOG("Converting mesh from native model");
-
-	const std::string directory = directoryFromFilename(filename);
-
-	const auto texturePath = [&](const char* relativePath) {
-		std::string path = directory + relativePath;
-		fixDirectorySeparatorsInplace(path);
-		return path;
-	};
-
-	m_materials.reserve(model.materials.size());
-	for (const auto& mat : model.materials)
-	{
-		MaterialConstants constants;
-		constants.albedoFactor = Vec4(mat.baseColor.xyz(), 1.0f);
-		constants.albedoTextureId = mat.albedoTexture[0]
-			? enqueueLoadTexture(texturePath(mat.albedoTexture), GfxFormat_RGBA8_sRGB)
-			: m_defaultWhiteTextureId;
-		if (mat.roughnessTexture[0])
+		    : enqueueLoadTexture(mat.diffuseTextureName, GfxFormat_RGBA8_sRGB);
+		if (!mat.roughnessTextureName.empty())
 		{
 			// Grayscale roughness: shader reads roughness from .y (metalness stays metallicFactor * .z).
-			constants.specularTextureId = enqueueLoadTexture(texturePath(mat.roughnessTexture), GfxFormat_RGBA8_Unorm);
+			constants.specularTextureId = enqueueLoadTexture(mat.roughnessTextureName, GfxFormat_RGBA8_Unorm);
 		}
-		if (mat.normalTexture[0])
+		if (!mat.normalTextureName.empty())
 		{
 			m_haveNormalMaps = true;
-			constants.normalTextureId = enqueueLoadTexture(texturePath(mat.normalTexture), GfxFormat_RGBA8_Unorm);
+			constants.normalTextureId = enqueueLoadTexture(mat.normalTextureName, GfxFormat_RGBA8_Unorm);
 		}
 		m_materials.push_back(constants);
 	}
@@ -1761,12 +1632,9 @@ bool ExamplePathTracer::loadModelNative(const char* filename)
 		m_materials.push_back(constants);
 	}
 
-	m_haveNormals = true;
-	m_haveTangents = true;
-	m_haveTexcoords = true;
-
-	m_vertices.reserve(model.vertices.size());
-	for (const auto& v : model.vertices)
+	m_vertices.clear();
+	m_vertices.reserve(data.vertices.size());
+	for (const auto& v : data.vertices)
 	{
 		Vertex dst;
 		dst.position = v.position;
@@ -1777,25 +1645,33 @@ bool ExamplePathTracer::loadModelNative(const char* filename)
 		m_vertices.push_back(dst);
 	}
 
-	m_indices = std::move(model.indices);
+	m_indices = std::move(data.indices);
 
-	m_segments.reserve(model.segments.size());
-	for (const auto& seg : model.segments)
+	m_segments.clear();
+	m_segments.reserve(data.segments.size());
+	for (const auto& seg : data.segments)
 	{
 		MeshSegment outSeg;
-		outSeg.material = seg.material;
+		outSeg.material    = u32(max(0, int(seg.material))); // untextured OBJ runs (raw -1) map to material 0
 		outSeg.indexOffset = seg.indexOffset;
-		outSeg.indexCount = seg.indexCount;
+		outSeg.indexCount  = seg.indexCount;
 		m_segments.push_back(outSeg);
 	}
 
-	m_boundingBox = model.bounds;
+	m_useAreaLight = data.hasAreaLight;
+	m_areaLightOrigin = data.lightOrigin;
+	m_areaLightEdgeU = data.lightEdgeU;
+	m_areaLightEdgeV = data.lightEdgeV;
+	m_areaLightEmission = data.lightEmission;
+
+	m_boundingBox = data.bounds;
 	m_vertexCount = (u32)m_vertices.size();
-	m_indexCount = (u32)m_indices.size();
+	m_indexCount  = (u32)m_indices.size();
+	m_haveNormals = true;
+	m_haveTexcoords = true;
+	m_haveTangents = true;
 
 	createGpuScene();
-
-	return true;
 }
 
 void ExamplePathTracer::createGpuScene()
@@ -1935,21 +1811,16 @@ bool ExamplePathTracer::useInlineScene() const
 #endif
 }
 
-bool ExamplePathTracer::canUseFastPath() const
+bool ExamplePathTracer::canUseFastPath(const SceneConstants& constants) const
 {
-	return !m_settings.m_useEnvmap
-	    && !m_useAreaLight
-	    && !m_settings.m_debugSimpleShading
-	    && !m_settings.m_debugHitMask
-	    && m_settings.m_debugVisMode == 0
-	    && !m_settings.m_showFocusAssist
-	    && !m_settings.m_debugDisableAccumulation
-	    && m_settings.m_useRussianRoulette;
+	return (constants.flags & ~PT_FAST_KERNEL_FLAGS) == 0
+	    && (constants.flags & PT_FLAG_USE_RUSSIAN_ROULETTE) != 0
+	    && constants.debugVisMode == PT_DEBUG_VIS_NONE;
 }
 
-GfxComputePipeline ExamplePathTracer::activeRayQueryPipeline() const
+GfxComputePipeline ExamplePathTracer::activeRayQueryPipeline(const SceneConstants& constants) const
 {
-	return canUseFastPath() || !m_rayQueryDevPipeline.valid()
+	return canUseFastPath(constants) || !m_rayQueryDevPipeline.valid()
 	    ? m_rayQueryPipeline.get() : m_rayQueryDevPipeline.get();
 }
 
@@ -2179,21 +2050,19 @@ bool ExamplePathTracer::loadModel(const char* filename)
 {
 	RUSH_LOG("Loading model '%s'", filename);
 
-	if (endsWith(filename, ".obj"))
-	{
-		return loadModelObj(filename);
-	}
 	if (endsWith(filename, ".gltf"))
 	{
 		return loadModelGLTF(filename);
 	}
-	if (endsWith(filename, ".model"))
+
+	ProceduralSceneData data;
+	if (!loadSceneFromFile(filename, data))
 	{
-		return loadModelNative(filename);
+		return false;
 	}
 
-	RUSH_LOG_ERROR("Unsupported model file extension.");
-	return false;
+	loadSceneData(std::move(data));
+	return true;
 }
 
 // Discrete probability distribution sampling based on alias method

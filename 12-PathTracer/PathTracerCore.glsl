@@ -468,6 +468,7 @@ SHADER_INLINE void ptRenderPixel(PathTracerContext ctx, ivec2 pixelIndex)
 	bool showFocalPlane = (PT_SCENE(ctx, flags) & PT_FLAG_DEBUG_FOCAL_PLANE) != 0u;
 	bool skipAccum = (PT_SCENE(ctx, flags) & PT_FLAG_DEBUG_DISABLE_ACCUMULATION) != 0u;
 #else
+	// Baked config; must match PT_FAST_KERNEL_FLAGS (PathTracerConstants.glsl).
 	const bool useEnvmap = false;
 	const bool useAreaLight = false;
 	const bool debugSimple = false;

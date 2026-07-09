@@ -35,9 +35,8 @@ private:
 	void render();
 
 	bool loadModel(const char* filename);
-	bool loadModelObj(const char* filename);
 	bool loadModelGLTF(const char* filename);
-	bool loadModelNative(const char* filename);
+	void loadSceneData(ProceduralSceneData&& data); // shared neutral-scene -> GPU conversion
 
 	u32 enqueueLoadTexture(const std::string& filename, GfxFormat format);
 
@@ -316,9 +315,9 @@ private:
 	// Inline single-geometry BLAS + material buffers (always on Metal; Vulkan ray-query mode).
 	bool useInlineScene() const;
 
-	// True when settings match the default kernel's baked config; anything else needs PT_DEV_FEATURES.
-	bool canUseFastPath() const;
-	GfxComputePipeline activeRayQueryPipeline() const;
+	// True when the frame's flags match the default kernel's baked config (PT_DEV_ONLY_FLAGS).
+	bool canUseFastPath(const SceneConstants& constants) const;
+	GfxComputePipeline activeRayQueryPipeline(const SceneConstants& constants) const;
 	void createBottomLevelAccelerationStructure();
 	void rebuildAccelerationStructures();
 

@@ -15,7 +15,6 @@
 #include <Common/SceneConfig.h>
 #include <Common/Utils.h>
 
-#include <Common/Model.h>
 
 #include <chrono>
 #include <stdio.h>
@@ -236,14 +235,7 @@ void ExampleModelViewer::onUpdate()
 			for (u32 i : textureData->patchList)
 			{
 				m_materials[i].albedoTexture = textureData->albedoTexture.get();
-				GfxSampler sampler = m_samplerStates.anisotropicWrap.get();
-				Gfx_UpdateDescriptorSet(m_materials[i].descriptorSet,
-					&m_materials[i].constantBuffer,
-					&sampler,
-					&m_materials[i].albedoTexture,
-					nullptr, // storage images
-					nullptr  // storage buffers
-				);
+				updateMaterialDescriptorSet(m_materials[i]);
 			}
 		}
 	}
@@ -467,13 +459,27 @@ void ExampleModelViewer::enqueueLoadTexture(const std::string& filename, u32 mat
 	}
 }
 
-bool ExampleModelViewer::loadModelObj(const char* filename)
+void ExampleModelViewer::updateMaterialDescriptorSet(Material& material)
 {
-	ProceduralSceneData data;
-	if (!loadObjScene(filename, data))
+	if (!material.descriptorSet.valid())
 	{
-		return false;
+		material.descriptorSet = Gfx_CreateDescriptorSet(m_materialDescriptorSetDesc);
 	}
+	GfxSampler sampler = m_samplerStates.anisotropicWrap.get();
+	Gfx_UpdateDescriptorSet(material.descriptorSet,
+		&material.constantBuffer,
+		&sampler,
+		&material.albedoTexture,
+		nullptr, // storage images
+		nullptr  // storage buffers
+	);
+}
+
+bool ExampleModelViewer::loadSceneData(const ProceduralSceneData& data)
+{
+	m_materials.clear();
+	m_segments.clear();
+	m_materialConstantBuffers.clear();
 
 	const GfxBufferDesc materialCbDesc(GfxBufferFlags::Constant, GfxFormat_Unknown, 1, sizeof(MaterialConstants));
 	for (const auto& mat : data.materials)
@@ -481,7 +487,7 @@ bool ExampleModelViewer::loadModelObj(const char* filename)
 		MaterialConstants constants;
 		constants.baseColor = mat.baseColor;
 
-		u32 materialId = u32(m_materials.size());
+		const u32 materialId = u32(m_materials.size());
 
 		Material material;
 		if (!mat.diffuseTextureName.empty())
@@ -506,15 +512,7 @@ bool ExampleModelViewer::loadModelObj(const char* filename)
 			}
 		}
 
-		material.descriptorSet = Gfx_CreateDescriptorSet(m_materialDescriptorSetDesc);
-		GfxSampler sampler = m_samplerStates.anisotropicWrap.get();
-		Gfx_UpdateDescriptorSet(material.descriptorSet,
-			&material.constantBuffer,
-			&sampler,
-			&material.albedoTexture,
-			nullptr, // storage images
-			nullptr  // storage buffers
-		);
+		updateMaterialDescriptorSet(material);
 
 		m_materials.push_back(std::move(material));
 	}
@@ -525,16 +523,7 @@ bool ExampleModelViewer::loadModelObj(const char* filename)
 		m_defaultConstantBuffer = Gfx_CreateBuffer(materialCbDesc, &constants);
 		m_defaultMaterial.constantBuffer = m_defaultConstantBuffer.get();
 		m_defaultMaterial.albedoTexture = m_defaultWhiteTexture.get();
-
-		m_defaultMaterial.descriptorSet = Gfx_CreateDescriptorSet(m_materialDescriptorSetDesc);
-		GfxSampler sampler = m_samplerStates.anisotropicWrap.get();
-		Gfx_UpdateDescriptorSet(m_defaultMaterial.descriptorSet,
-			&m_defaultMaterial.constantBuffer,
-			&sampler,
-			&m_defaultMaterial.albedoTexture,
-			nullptr, // storage images
-			nullptr  // storage buffers
-		);
+		updateMaterialDescriptorSet(m_defaultMaterial);
 	}
 
 	RUSH_LOG("Converting mesh");
@@ -550,21 +539,12 @@ bool ExampleModelViewer::loadModelObj(const char* filename)
 		vertices.push_back(dst);
 	}
 
-	std::vector<u32> indices = data.indices;
-
-	m_segments.reserve(data.segments.size());
-	for (const auto& seg : data.segments)
-	{
-		MeshSegment outSeg;
-		outSeg.material    = seg.material; // raw id preserved; 0xFFFFFFFF falls back to the default material
-		outSeg.indexOffset = seg.indexOffset;
-		outSeg.indexCount  = seg.indexCount;
-		m_segments.push_back(outSeg);
-	}
+	// Raw material ids preserved; 0xFFFFFFFF falls back to the default material at draw time.
+	m_segments = data.segments;
 
 	m_boundingBox = data.bounds;
 	m_vertexCount = (u32)vertices.size();
-	m_indexCount  = (u32)indices.size();
+	m_indexCount  = (u32)data.indices.size();
 
 	RUSH_LOG("Uploading mesh to GPU");
 
@@ -572,122 +552,9 @@ bool ExampleModelViewer::loadModelObj(const char* filename)
 	m_vertexBuffer = Gfx_CreateBuffer(vbDesc, vertices.data());
 
 	GfxBufferDesc ibDesc(GfxBufferFlags::Index, GfxFormat_R32_Uint, m_indexCount, 4);
-	m_indexBuffer = Gfx_CreateBuffer(ibDesc, indices.data());
+	m_indexBuffer = Gfx_CreateBuffer(ibDesc, data.indices.data());
 
-	return true;
-}
-
-bool ExampleModelViewer::loadModelNative(const char* filename)
-{
-	Model model;
-
-	if (!model.read(filename))
-	{
-		return false;
-	}
-
-	std::string directory = directoryFromFilename(filename);
-
-	const GfxBufferDesc materialCbDesc(GfxBufferFlags::Constant, GfxFormat_Unknown, 1, sizeof(MaterialConstants));
-	for (const auto& offlineMaterial : model.materials)
-	{
-		MaterialConstants constants;
-		constants.baseColor.x = offlineMaterial.baseColor.x;
-		constants.baseColor.y = offlineMaterial.baseColor.y;
-		constants.baseColor.z = offlineMaterial.baseColor.z;
-		constants.baseColor.w = 1.0f;
-
-		u32 materialId = u32(m_materials.size());
-
-		Material material;
-		if (offlineMaterial.albedoTexture[0])
-		{
-			std::string path = directory + offlineMaterial.albedoTexture;
-			fixDirectorySeparatorsInplace(path);
-			enqueueLoadTexture(path, materialId);
-		}
-
-		material.albedoTexture = m_defaultWhiteTexture.get();
-
-		{
-			u64  constantHash = hashFnv1a64(&constants, sizeof(constants));
-			auto it           = m_materialConstantBuffers.find(constantHash);
-			if (it == m_materialConstantBuffers.end())
-			{
-				GfxOwn<GfxBuffer> cb = Gfx_CreateBuffer(materialCbDesc, &constants);
-				material.constantBuffer = cb.get();
-				m_materialConstantBuffers[constantHash] = std::move(cb);
-			}
-			else
-			{
-				material.constantBuffer = it->second.get();
-			}
-		}
-
-		m_materials.push_back(std::move(material));
-	}
-
-	{
-		MaterialConstants constants;
-		constants.baseColor = Vec4(1.0f);
-		m_defaultConstantBuffer = Gfx_CreateBuffer(materialCbDesc, &constants);
-		m_defaultMaterial.constantBuffer = m_defaultConstantBuffer.get();
-		m_defaultMaterial.albedoTexture = m_defaultWhiteTexture.get();
-
-		m_defaultMaterial.descriptorSet = Gfx_CreateDescriptorSet(m_materialDescriptorSetDesc);
-		GfxSampler sampler = m_samplerStates.anisotropicWrap.get();
-		Gfx_UpdateDescriptorSet(m_defaultMaterial.descriptorSet,
-			&m_defaultMaterial.constantBuffer,
-			&sampler,
-			&m_defaultMaterial.albedoTexture,
-			nullptr, // storage images
-			nullptr  // storage buffers
-		);
-	}
-
-	m_segments.reserve(model.segments.size());
-	for (const auto& offlineSegment : model.segments)
-	{
-		MeshSegment segment;
-		segment.indexCount  = offlineSegment.indexCount;
-		segment.indexOffset = offlineSegment.indexOffset;
-		segment.material    = offlineSegment.material;
-		m_segments.push_back(segment);
-	}
-
-	RUSH_LOG("Converting mesh");
-
-	m_vertexCount = u32(model.vertices.size());
-	m_indexCount  = u32(model.indices.size());
-
-	m_boundingBox.expandInit();
-
-	std::vector<Vertex> vertices;
-	vertices.reserve(m_vertexCount);
-
-	for (u32 i = 0; i < m_vertexCount; ++i)
-	{
-		const auto& vSrc = model.vertices[i];
-		Vertex      vDst;
-
-		vDst.position = vSrc.position;
-		vDst.normal   = vSrc.normal;
-		vDst.texcoord = vSrc.texcoord;
-
-		m_boundingBox.expand(vSrc.position);
-
-		vertices.push_back(vDst);
-	}
-
-	RUSH_LOG("Uploading mesh to GPU");
-
-	GfxBufferDesc vbDesc(GfxBufferFlags::Vertex, GfxFormat_Unknown, m_vertexCount, sizeof(Vertex));
-	m_vertexBuffer = Gfx_CreateBuffer(vbDesc, vertices.data());
-
-	GfxBufferDesc ibDesc(GfxBufferFlags::Index, GfxFormat_R32_Uint, m_indexCount, 4);
-	m_indexBuffer = Gfx_CreateBuffer(ibDesc, model.indices.data());
-
-	return true;
+	return m_vertexBuffer.valid() && m_indexBuffer.valid();
 }
 
 bool ExampleModelViewer::buildProceduralModel()
@@ -699,99 +566,7 @@ bool ExampleModelViewer::buildProceduralModel()
 		return false;
 	}
 
-	m_materials.clear();
-	m_segments.clear();
-	m_materialConstantBuffers.clear();
-
-	const GfxBufferDesc materialCbDesc(GfxBufferFlags::Constant, GfxFormat_Unknown, 1, sizeof(MaterialConstants));
-	for (const auto& srcMaterial : data.materials)
-	{
-		MaterialConstants constants;
-		constants.baseColor = srcMaterial.baseColor;
-
-		Material material;
-		material.albedoTexture = m_defaultWhiteTexture.get();
-
-		{
-			u64  constantHash = hashFnv1a64(&constants, sizeof(constants));
-			auto it           = m_materialConstantBuffers.find(constantHash);
-			if (it == m_materialConstantBuffers.end())
-			{
-				GfxOwn<GfxBuffer> cb = Gfx_CreateBuffer(materialCbDesc, &constants);
-				material.constantBuffer = cb.get();
-				m_materialConstantBuffers[constantHash] = std::move(cb);
-			}
-			else
-			{
-				material.constantBuffer = it->second.get();
-			}
-		}
-
-		material.descriptorSet = Gfx_CreateDescriptorSet(m_materialDescriptorSetDesc);
-		GfxSampler sampler = m_samplerStates.anisotropicWrap.get();
-		Gfx_UpdateDescriptorSet(material.descriptorSet,
-			&material.constantBuffer,
-			&sampler,
-			&material.albedoTexture,
-			nullptr, // storage images
-			nullptr  // storage buffers
-		);
-
-		m_materials.push_back(std::move(material));
-	}
-
-	{
-		MaterialConstants constants;
-		constants.baseColor = Vec4(1.0f);
-		m_defaultConstantBuffer = Gfx_CreateBuffer(materialCbDesc, &constants);
-		m_defaultMaterial.constantBuffer = m_defaultConstantBuffer.get();
-		m_defaultMaterial.albedoTexture = m_defaultWhiteTexture.get();
-
-		m_defaultMaterial.descriptorSet = Gfx_CreateDescriptorSet(m_materialDescriptorSetDesc);
-		GfxSampler sampler = m_samplerStates.anisotropicWrap.get();
-		Gfx_UpdateDescriptorSet(m_defaultMaterial.descriptorSet,
-			&m_defaultMaterial.constantBuffer,
-			&sampler,
-			&m_defaultMaterial.albedoTexture,
-			nullptr, // storage images
-			nullptr  // storage buffers
-		);
-	}
-
-	m_segments.reserve(data.segments.size());
-	for (const auto& srcSegment : data.segments)
-	{
-		MeshSegment segment;
-		segment.material = srcSegment.material;
-		segment.indexOffset = srcSegment.indexOffset;
-		segment.indexCount = srcSegment.indexCount;
-		m_segments.push_back(segment);
-	}
-
-	m_vertexCount = u32(data.vertices.size());
-	m_indexCount = u32(data.indices.size());
-	m_boundingBox = data.bounds;
-
-	std::vector<Vertex> vertices;
-	vertices.reserve(m_vertexCount);
-	for (const auto& srcVertex : data.vertices)
-	{
-		Vertex v;
-		v.position = srcVertex.position;
-		v.normal = srcVertex.normal;
-		v.texcoord = srcVertex.texcoord;
-		vertices.push_back(v);
-	}
-
-	RUSH_LOG("Uploading procedural mesh to GPU");
-
-	GfxBufferDesc vbDesc(GfxBufferFlags::Vertex, GfxFormat_Unknown, m_vertexCount, sizeof(Vertex));
-	m_vertexBuffer = Gfx_CreateBuffer(vbDesc, vertices.data());
-
-	GfxBufferDesc ibDesc(GfxBufferFlags::Index, GfxFormat_R32_Uint, m_indexCount, 4);
-	m_indexBuffer = Gfx_CreateBuffer(ibDesc, data.indices.data());
-
-	return m_vertexBuffer.valid() && m_indexBuffer.valid();
+	return loadSceneData(data);
 }
 
 // Adding/removing/reordering Settings fields needs no bump (tagged format).
@@ -825,17 +600,11 @@ bool ExampleModelViewer::loadModel(const char* filename)
 {
 	RUSH_LOG("Loading model '%s'", filename);
 
-	if (endsWith(filename, ".obj"))
+	ProceduralSceneData data;
+	if (!loadSceneFromFile(filename, data))
 	{
-		return loadModelObj(filename);
-	}
-	else if (endsWith(filename, ".model"))
-	{
-		return loadModelNative(filename);
-	}
-	else
-	{
-		RUSH_LOG_ERROR("Unsupported model file extension.");
 		return false;
 	}
+
+	return loadSceneData(data);
 }

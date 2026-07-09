@@ -16,6 +16,11 @@
 #define PT_FLAG_USE_AREA_LIGHT             (1u << 9u)
 #define PT_FLAG_USE_TEXTURE_LOD            (1u << 10u)
 
+// Flags the fast kernel honors at runtime; any other flag needs the PT_DEV_FEATURES kernel
+// (fail-safe: a new flag routes to the dev kernel until explicitly whitelisted here).
+#define PT_FAST_KERNEL_FLAGS (PT_FLAG_USE_NEUTRAL_BACKGROUND | PT_FLAG_USE_DEPTH_OF_FIELD \
+	| PT_FLAG_USE_NORMAL_MAPPING | PT_FLAG_USE_RUSSIAN_ROULETTE | PT_FLAG_USE_TEXTURE_LOD)
+
 #define PT_DEBUG_VIS_NONE              0u
 #define PT_DEBUG_VIS_ALBEDO           1u
 #define PT_DEBUG_VIS_GEO_NORMAL       2u

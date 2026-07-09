@@ -1,4 +1,5 @@
 #include "Utils.h"
+#include "Model.h"
 
 #include <Rush/UtilFile.h>
 #include <Rush/UtilCamera.h>
@@ -724,8 +725,6 @@ bool loadObjScene(const char* filename, ProceduralSceneData& out)
 			v.position.y = mesh.positions[i * 3 + 1];
 			v.position.z = mesh.positions[i * 3 + 2];
 
-			out.bounds.expand(v.position);
-
 			if (haveTexcoords)
 			{
 				v.texcoord.x = mesh.texcoords[i * 2 + 0];
@@ -743,6 +742,7 @@ bool loadObjScene(const char* filename, ProceduralSceneData& out)
 			v.position.x = -v.position.x;
 			v.normal.x   = -v.normal.x;
 
+			out.bounds.expand(v.position);
 			out.vertices.push_back(v);
 		}
 
@@ -794,6 +794,93 @@ bool loadObjScene(const char* filename, ProceduralSceneData& out)
 	}
 
 	return true;
+}
+
+bool loadModelScene(const char* filename, ProceduralSceneData& out)
+{
+	Model model;
+	if (!model.read(filename))
+	{
+		return false;
+	}
+
+	const std::string directory = directoryFromFilename(filename);
+	const auto texturePath = [&](const char* name) {
+		std::string path = directory + name;
+		fixDirectorySeparatorsInplace(path);
+		return path;
+	};
+
+	out.materials.reserve(model.materials.size());
+	for (const auto& mat : model.materials)
+	{
+		ProceduralSceneMaterial outMat;
+		outMat.baseColor = Vec4(mat.baseColor.xyz(), 1.0f);
+		if (mat.albedoTexture[0])
+		{
+			outMat.diffuseTextureName = texturePath(mat.albedoTexture);
+		}
+		if (mat.roughnessTexture[0])
+		{
+			outMat.roughnessTextureName = texturePath(mat.roughnessTexture);
+		}
+		if (mat.normalTexture[0])
+		{
+			outMat.normalTextureName = texturePath(mat.normalTexture);
+		}
+		out.materials.push_back(std::move(outMat));
+	}
+
+	out.vertices.reserve(model.vertices.size());
+	for (const auto& v : model.vertices)
+	{
+		ProceduralSceneVertex dst;
+		dst.position = v.position;
+		dst.normal = v.normal;
+		dst.texcoord = v.texcoord;
+		dst.tangent = v.tangent;
+		dst.bitangent = v.bitangent;
+		out.vertices.push_back(dst);
+	}
+
+	out.indices = std::move(model.indices);
+
+	const u32 materialCount = u32(out.materials.size());
+	out.segments.reserve(model.segments.size());
+	for (const auto& seg : model.segments)
+	{
+		// Out-of-range references (corrupt file) become the 'no material' sentinel.
+		const u32 material = seg.material < materialCount ? seg.material : 0xFFFFFFFFu;
+		out.segments.push_back({material, seg.indexOffset, seg.indexCount});
+	}
+
+	out.bounds = model.bounds;
+	if (!(out.bounds.dimensions().reduceMax() > 0.0f) && !out.vertices.empty())
+	{
+		// Producer left bounds empty/degenerate; rebuild from vertices so camera framing works.
+		out.bounds.expandInit();
+		for (const auto& v : out.vertices)
+		{
+			out.bounds.expand(v.position);
+		}
+	}
+
+	return true;
+}
+
+bool loadSceneFromFile(const char* filename, ProceduralSceneData& out)
+{
+	if (endsWith(filename, ".obj"))
+	{
+		return loadObjScene(filename, out);
+	}
+	if (endsWith(filename, ".model"))
+	{
+		return loadModelScene(filename, out);
+	}
+
+	RUSH_LOG_ERROR("Unsupported model file extension.");
+	return false;
 }
 
 }

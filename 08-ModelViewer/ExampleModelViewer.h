@@ -32,9 +32,8 @@ private:
 	void render();
 
 	bool loadModel(const char* filename);
-	bool loadModelObj(const char* filename);
-	bool loadModelNative(const char* filename);
 	bool buildProceduralModel();
+	bool loadSceneData(const ProceduralSceneData& data); // shared neutral-scene -> GPU conversion
 
 	const char* configModelName() const; // model path for the config key, or null when procedural
 	void saveConfig();
@@ -106,18 +105,15 @@ private:
 		GfxOwn<GfxDescriptorSet> descriptorSet;
 	};
 
+	void updateMaterialDescriptorSet(Material& material); // creates the set if needed, then rebinds
+
 	GfxDescriptorSetDesc m_materialDescriptorSetDesc;
 
 	std::vector<Material> m_materials;
 	Material m_defaultMaterial;
 	GfxOwn<GfxBuffer> m_defaultConstantBuffer;
 
-	struct MeshSegment
-	{
-		u32 material = 0;
-		u32 indexOffset = 0;
-		u32 indexCount = 0;
-	};
+	using MeshSegment = ProceduralSceneSegment;
 
 	std::vector<MeshSegment> m_segments;
 
