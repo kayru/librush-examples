@@ -128,6 +128,9 @@ struct MaterialConstants
 	float roughnessFactor;
 	float reflectance;
 	uint materialMode;
+	float albedoLodBias;   // baked 0.5*log2(w*h) per texture, avoids textureSize on the hit path
+	float specularLodBias;
+	float normalLodBias;
 };
 
 #ifdef PT_CONFIG_RAYQUERY

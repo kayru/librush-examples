@@ -1882,6 +1882,22 @@ void ExamplePathTracer::createGpuScene()
 		);
 	}
 
+	// All texture slots are resolved by now (default white where a load failed).
+	const auto textureLodBias = [&](u32 textureId) -> float {
+		if (textureId >= MaxTextures)
+		{
+			return 0.0f;
+		}
+		const GfxTextureDesc& desc = Gfx_GetTextureDesc(textureDescriptors[textureId]);
+		return 0.5f * log2f(float(desc.width) * float(desc.height));
+	};
+	for (auto& material : m_materials)
+	{
+		material.albedoLodBias = textureLodBias(material.albedoTextureId);
+		material.specularLodBias = textureLodBias(material.specularTextureId);
+		material.normalLodBias = textureLodBias(material.normalTextureId);
+	}
+
 	if (!m_materials.empty())
 	{
 		GfxBufferDesc materialDesc(GfxBufferFlags::Storage, GfxFormat_Unknown, u32(m_materials.size()), sizeof(MaterialConstants));

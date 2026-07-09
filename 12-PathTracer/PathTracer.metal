@@ -65,6 +65,9 @@ struct MaterialConstants
 	float roughnessFactor;
 	float reflectance;
 	uint materialMode;
+	float albedoLodBias;
+	float specularLodBias;
+	float normalLodBias;
 };
 
 struct Vertex

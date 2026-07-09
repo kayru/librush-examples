@@ -159,9 +159,12 @@ private:
 		float roughnessFactor = 1;
 		float reflectance = 0.08f;
 		MaterialMode materialMode = MaterialMode::MetallicRoughness;
+		float albedoLodBias = 0.0f;   // baked 0.5*log2(w*h) per texture, avoids textureSize on the hit path
+		float specularLodBias = 0.0f;
+		float normalLodBias = 0.0f;
 	};
 
-	static_assert(sizeof(MaterialConstants) == 84, "MaterialConstants must stay tightly packed (scalar layout)");
+	static_assert(sizeof(MaterialConstants) == 96, "MaterialConstants must stay tightly packed (scalar layout)");
 
 	std::vector<MaterialConstants> m_materials;
 	GfxOwn<GfxBuffer> m_defaultConstantBuffer;

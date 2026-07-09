@@ -4,14 +4,6 @@
 // Include after the backend has declared MaterialConstants, Vertex and the
 // PathTracerContext/PtHit/PtPayload types.
 
-// Ray-cone texture LOD (Ray Tracing Gems ch. 20): triangleLod folds the triangle's texel density
-// and the cone width at the hit; each fetch adds its own texture-size term.
-SHADER_INLINE float textureLodForCone(PathTracerContext ctx, uint id, float triangleLod)
-{
-	vec2 ts = PT_TEXTURE_SIZE(ctx, id);
-	return triangleLod + 0.5f * log2(ts.x * ts.y);
-}
-
 // Caller resolves material + index base (firstIndex + primId*3 for SBT geometry,
 // primId*3 for inline backends). rayDir is the (normalized) direction of the incoming ray.
 SHADER_INLINE void fillPayload(PathTracerContext ctx, PtHit hit, uint indexBase,
@@ -42,6 +34,8 @@ SHADER_INLINE void fillPayload(PathTracerContext ctx, PtHit hit, uint indexBase,
 	vec2 uv = uv0 * bary.x + uv1 * bary.y + uv2 * bary.z;
 	pl.texcoord = uv;
 
+	// Ray-cone texture LOD (Ray Tracing Gems ch. 20); the per-texture 0.5*log2(w*h) term is baked
+	// into the material as *LodBias.
 	bool useTextureLod = (PT_SCENE(ctx, flags) & PT_FLAG_USE_TEXTURE_LOD) != 0u;
 	float triangleLod = 0.0f;
 	if (useTextureLod)
@@ -61,12 +55,12 @@ SHADER_INLINE void fillPayload(PathTracerContext ctx, PtHit hit, uint indexBase,
 	vec4 specularSample = vec4(1.0f);
 	if (material.albedoTextureId < PT_MAX_TEXTURES)
 	{
-		float lod = useTextureLod ? textureLodForCone(ctx, material.albedoTextureId, triangleLod) : 0.0f;
+		float lod = useTextureLod ? triangleLod + material.albedoLodBias : 0.0f;
 		albedoSample = PT_TEXTURE(ctx, material.albedoTextureId, uv, lod);
 	}
 	if (material.specularTextureId < PT_MAX_TEXTURES)
 	{
-		float lod = useTextureLod ? textureLodForCone(ctx, material.specularTextureId, triangleLod) : 0.0f;
+		float lod = useTextureLod ? triangleLod + material.specularLodBias : 0.0f;
 		specularSample = PT_TEXTURE(ctx, material.specularTextureId, uv, lod);
 	}
 
@@ -116,7 +110,7 @@ SHADER_INLINE void fillPayload(PathTracerContext ctx, PtHit hit, uint indexBase,
 		&& material.normalTextureId < PT_MAX_TEXTURES;
 	if (useNormalMapping && hasTangent && hasBitangent)
 	{
-		float lod = useTextureLod ? textureLodForCone(ctx, material.normalTextureId, triangleLod) : 0.0f;
+		float lod = useTextureLod ? triangleLod + material.normalLodBias : 0.0f;
 		vec3 normalSample = PT_TEXTURE(ctx, material.normalTextureId, uv, lod).xyz * 2.0f - 1.0f;
 		normalSample.z = sqrt(max(0.0f, 1.0f - normalSample.x * normalSample.x - normalSample.y * normalSample.y));
 		mat3 basis = mat3(pl.tangent, pl.bitangent, pl.normal);
