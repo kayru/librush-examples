@@ -26,6 +26,7 @@
 
 #include <Common/ImGuiImpl.h>
 #include <Common/ImGuiExt.h>
+#include <Common/Model.h>
 #include <Common/SceneConfig.h>
 #include <Common/Utils.h>
 #include <imgui.h>
@@ -187,9 +188,12 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 		// Inline ray-query path: same shading run from a compute shader. Bindings mirror PT_CONFIG_RAYQUERY.
 		if (m_startupError.empty() && caps.rayTracingInline)
 		{
-			GfxOwn<GfxComputeShader> cs = Gfx_CreateComputeShader(loadShaderFromFile(RUSH_SHADER_NAME("PathTracer.comp")));
-			if (cs.valid())
-			{
+			const auto createRayQueryPipeline = [&](const char* shaderName) -> GfxOwn<GfxComputePipeline> {
+				GfxOwn<GfxComputeShader> cs = Gfx_CreateComputeShader(loadShaderFromFile(shaderName));
+				if (!cs.valid())
+				{
+					return {};
+				}
 				GfxComputePipelineDesc rqDesc;
 				rqDesc.cs = cs.get();
 				rqDesc.workGroupSize = {PT_RAYQUERY_TILE_X, PT_RAYQUERY_TILE_Y, 1};
@@ -201,13 +205,24 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 				rqDesc.bindings.descriptorSets[0].rwBuffers = 7;
 				rqDesc.bindings.descriptorSets[0].accelerationStructures = 1; // TLAS
 				rqDesc.bindings.descriptorSets[1] = materialDescriptorSetDesc;
-				m_rayQueryPipeline = Gfx_CreateComputePipeline(rqDesc);
-			}
+				return Gfx_CreateComputePipeline(rqDesc);
+			};
+
+			m_rayQueryPipeline = createRayQueryPipeline(RUSH_SHADER_NAME("PathTracer.comp"));
 			if (!m_rayQueryPipeline.valid())
 			{
 				RUSH_LOG("Ray query pipeline unavailable; falling back to RT pipeline only");
 			}
+			else
+			{
+				m_rayQueryDevPipeline = createRayQueryPipeline(RUSH_SHADER_NAME("PathTracerDev.comp"));
+				if (!m_rayQueryDevPipeline.valid())
+				{
+					RUSH_LOG_WARNING("Ray query dev pipeline unavailable; envmap/area light/debug views will render incorrectly");
+				}
+			}
 		}
+
 #endif
 	}
 
@@ -368,6 +383,7 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 		if (getArgU32(g_appCfg.argc, g_appCfg.argv, "h", nullptr, v) && v > 0) { m_headlessSize.y = int(v); }
 		if (getArgU32(g_appCfg.argc, g_appCfg.argv, "rr", nullptr, v)) { m_settings.m_useRussianRoulette = v != 0; }
 		if (getArgU32(g_appCfg.argc, g_appCfg.argv, "nmbounce", nullptr, v)) { m_settings.m_normalMapBounceLimit = int(v); }
+		if (getArgU32(g_appCfg.argc, g_appCfg.argv, "texlod", nullptr, v)) { m_settings.m_useTextureLod = v != 0; }
 		if (getArgU32(g_appCfg.argc, g_appCfg.argv, "seedoffset", nullptr, v)) { m_headlessSampleOffset = v; }
 		// --sampler=lcg|sobol (or a numeric PT_SAMPLER_* index).
 		std::string samplerArg;
@@ -611,6 +627,7 @@ void ExamplePathTracer::onUpdate()
 				renderSettingsChanged = true;
 			}
 			renderSettingsChanged |= ImGui::Checkbox("Russian roulette", &m_settings.m_useRussianRoulette);
+			renderSettingsChanged |= ImGui::Checkbox("Texture LOD (ray cones)", &m_settings.m_useTextureLod);
 			// Normal maps only on bounces <= limit; lower = faster, softer indirect detail (5 = all).
 			renderSettingsChanged |= ImGui::SliderInt("Normal map max bounce", &m_settings.m_normalMapBounceLimit, 0, 5);
 			// Accumulation limits (0 = unlimited); reaching either freezes the image, raising one resumes.
@@ -864,12 +881,15 @@ ExamplePathTracer::SceneConstants ExamplePathTracer::makeSceneConstants(Tuple2i 
 	constants.flags |= m_settings.m_showFocusAssist ? PT_FLAG_DEBUG_FOCAL_PLANE : 0;
 	constants.flags |= m_settings.m_useRussianRoulette ? PT_FLAG_USE_RUSSIAN_ROULETTE : 0;
 	constants.flags |= m_useAreaLight ? PT_FLAG_USE_AREA_LIGHT : 0;
+	constants.flags |= m_settings.m_useTextureLod ? PT_FLAG_USE_TEXTURE_LOD : 0;
+	constants.pixelSpreadAngle = 2.0f * tanf(m_camera.getFov() * 0.5f) / float(outputSize.y);
 	// Light lives in world space; scale it with the geometry (emission is radiance, scale-invariant).
 	const float worldScale = m_settings.m_worldScale;
 	constants.areaLightOrigin = Vec4(m_areaLightOrigin * worldScale);
 	constants.areaLightEdgeU = Vec4(m_areaLightEdgeU * worldScale);
 	constants.areaLightEdgeV = Vec4(m_areaLightEdgeV * worldScale);
 	constants.areaLightEmission = Vec4(m_areaLightEmission);
+	constants.worldScale = worldScale;
 	constants.normalMapBounceLimit = (u32)m_settings.m_normalMapBounceLimit;
 	constants.samplerMode = (u32)m_settings.m_samplerMode;
 	constants.sampleFrameOffset = m_headlessSampleOffset;
@@ -974,7 +994,7 @@ void ExamplePathTracer::renderHeadless(GfxContext* ctx)
 #else
 		if (rayQuery)
 		{
-			Gfx_SetComputePipeline(ctx, m_rayQueryPipeline);
+			Gfx_SetComputePipeline(ctx, activeRayQueryPipeline());
 			Gfx_Dispatch(ctx, divUp(width, PT_RAYQUERY_TILE_X), divUp(height, PT_RAYQUERY_TILE_Y), 1u);
 		}
 		else
@@ -1112,7 +1132,7 @@ void ExamplePathTracer::render()
 #else
 		if (inlineScene)
 		{
-			Gfx_SetComputePipeline(ctx, m_rayQueryPipeline);
+			Gfx_SetComputePipeline(ctx, activeRayQueryPipeline());
 			Gfx_Dispatch(ctx, divUp(outputImageDesc.width, PT_RAYQUERY_TILE_X), divUp(outputImageDesc.height, PT_RAYQUERY_TILE_Y), 1u);
 		}
 		else
@@ -1258,7 +1278,9 @@ void ExamplePathTracer::loadingThreadFunction()
 
 u32 ExamplePathTracer::enqueueLoadTexture(const std::string& filename, GfxFormat format)
 {
-	auto it = m_textures.find(filename);
+	// Key includes the format: the same file may be requested as both sRGB and Unorm.
+	const std::string cacheKey = filename + "#" + std::to_string(u32(format));
+	auto it = m_textures.find(cacheKey);
 
 	if (it == m_textures.end())
 	{
@@ -1271,7 +1293,7 @@ u32 ExamplePathTracer::enqueueLoadTexture(const std::string& filename, GfxFormat
 
 		RUSH_ASSERT(m_textureDescriptors.size() < MaxTextures);
 
-		m_textures[filename] = textureData;
+		m_textures[cacheKey] = textureData;
 
 		m_loadingMutex.lock();
 		m_pendingTextures.push_back(textureData);
@@ -1693,6 +1715,89 @@ bool ExamplePathTracer::loadModelObj(const char* filename)
 	return true;
 }
 
+bool ExamplePathTracer::loadModelNative(const char* filename)
+{
+	Model model;
+	if (!model.read(filename))
+	{
+		return false;
+	}
+
+	RUSH_LOG("Converting mesh from native model");
+
+	const std::string directory = directoryFromFilename(filename);
+
+	const auto texturePath = [&](const char* relativePath) {
+		std::string path = directory + relativePath;
+		fixDirectorySeparatorsInplace(path);
+		return path;
+	};
+
+	m_materials.reserve(model.materials.size());
+	for (const auto& mat : model.materials)
+	{
+		MaterialConstants constants;
+		constants.albedoFactor = Vec4(mat.baseColor.xyz(), 1.0f);
+		constants.albedoTextureId = mat.albedoTexture[0]
+			? enqueueLoadTexture(texturePath(mat.albedoTexture), GfxFormat_RGBA8_sRGB)
+			: m_defaultWhiteTextureId;
+		if (mat.roughnessTexture[0])
+		{
+			// Grayscale roughness: shader reads roughness from .y (metalness stays metallicFactor * .z).
+			constants.specularTextureId = enqueueLoadTexture(texturePath(mat.roughnessTexture), GfxFormat_RGBA8_Unorm);
+		}
+		if (mat.normalTexture[0])
+		{
+			m_haveNormalMaps = true;
+			constants.normalTextureId = enqueueLoadTexture(texturePath(mat.normalTexture), GfxFormat_RGBA8_Unorm);
+		}
+		m_materials.push_back(constants);
+	}
+
+	if (m_materials.empty())
+	{
+		MaterialConstants constants;
+		constants.albedoTextureId = m_defaultWhiteTextureId;
+		m_materials.push_back(constants);
+	}
+
+	m_haveNormals = true;
+	m_haveTangents = true;
+	m_haveTexcoords = true;
+
+	m_vertices.reserve(model.vertices.size());
+	for (const auto& v : model.vertices)
+	{
+		Vertex dst;
+		dst.position = v.position;
+		dst.normal = v.normal;
+		dst.texcoord = v.texcoord;
+		const float w = dot(cross(v.normal, v.tangent), v.bitangent) < 0.0f ? -1.0f : 1.0f;
+		dst.tangent = Vec4(v.tangent, w);
+		m_vertices.push_back(dst);
+	}
+
+	m_indices = std::move(model.indices);
+
+	m_segments.reserve(model.segments.size());
+	for (const auto& seg : model.segments)
+	{
+		MeshSegment outSeg;
+		outSeg.material = seg.material;
+		outSeg.indexOffset = seg.indexOffset;
+		outSeg.indexCount = seg.indexCount;
+		m_segments.push_back(outSeg);
+	}
+
+	m_boundingBox = model.bounds;
+	m_vertexCount = (u32)m_vertices.size();
+	m_indexCount = (u32)m_indices.size();
+
+	createGpuScene();
+
+	return true;
+}
+
 void ExamplePathTracer::createGpuScene()
 {
 	RUSH_LOG("Uploading mesh to GPU");
@@ -1812,6 +1917,24 @@ bool ExamplePathTracer::useInlineScene() const
 #else
 	return m_settings.m_tracingMode == int(TracingMode::RayQuery) && m_rayQueryPipeline.valid();
 #endif
+}
+
+bool ExamplePathTracer::canUseFastPath() const
+{
+	return !m_settings.m_useEnvmap
+	    && !m_useAreaLight
+	    && !m_settings.m_debugSimpleShading
+	    && !m_settings.m_debugHitMask
+	    && m_settings.m_debugVisMode == 0
+	    && !m_settings.m_showFocusAssist
+	    && !m_settings.m_debugDisableAccumulation
+	    && m_settings.m_useRussianRoulette;
+}
+
+GfxComputePipeline ExamplePathTracer::activeRayQueryPipeline() const
+{
+	return canUseFastPath() || !m_rayQueryDevPipeline.valid()
+	    ? m_rayQueryPipeline.get() : m_rayQueryDevPipeline.get();
 }
 
 void ExamplePathTracer::createBottomLevelAccelerationStructure()
@@ -2048,11 +2171,13 @@ bool ExamplePathTracer::loadModel(const char* filename)
 	{
 		return loadModelGLTF(filename);
 	}
-	else
+	if (endsWith(filename, ".model"))
 	{
-		RUSH_LOG_ERROR("Unsupported model file extension.");
-		return false;
+		return loadModelNative(filename);
 	}
+
+	RUSH_LOG_ERROR("Unsupported model file extension.");
+	return false;
 }
 
 // Discrete probability distribution sampling based on alias method

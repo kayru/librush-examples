@@ -4,6 +4,7 @@
 using namespace metal;
 using namespace metal::raytracing;
 
+#define PT_DEV_FEATURES // single Metal kernel carries all features
 #include "PathTracerConstants.glsl"
 #include "ShaderShared.glsl"
 
@@ -46,6 +47,8 @@ struct SceneConstants
 
 	uint samplerMode;
 	uint sampleFrameOffset;
+	float pixelSpreadAngle;
+	float worldScale;
 };
 
 struct MaterialConstants

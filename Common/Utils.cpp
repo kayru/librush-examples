@@ -387,18 +387,31 @@ bool loadImageWithMips(const char* filename, GfxFormat format, GfxTextureDesc& o
 		mipIndex++;
 	}
 
+	// sRGB textures must be filtered in linear space or coarse mips come out too dark.
+	const bool isSrgb = getGfxFormatType(format) == GfxFormatType_sRGB;
+
 	u32 mipWidth  = w;
 	u32 mipHeight = h;
-	while (mipWidth != 1 && mipHeight != 1)
+	while ((mipWidth > 1 || mipHeight > 1) && mipIndex < RUSH_COUNTOF(outMips))
 	{
 		const u32 nextMipWidth  = max<u32>(1, mipWidth / 2);
 		const u32 nextMipHeight = max<u32>(1, mipHeight / 2);
 
 		outMips[mipIndex].resize(nextMipWidth * nextMipHeight * 4);
 
-		const int resizeResult = stbir_resize_uint8(outMips[mipIndex - 1].data(), mipWidth, mipHeight, mipWidth * 4,
-		    outMips[mipIndex].data(), nextMipWidth, nextMipHeight, nextMipWidth * 4, 4);
-		RUSH_ASSERT(resizeResult);
+		// ALPHA_PREMULTIPLIED filters all channels independently; alpha here is data, not coverage.
+		const int resizeResult = isSrgb
+		    ? stbir_resize_uint8_srgb(outMips[mipIndex - 1].data(), mipWidth, mipHeight, mipWidth * 4,
+		          outMips[mipIndex].data(), nextMipWidth, nextMipHeight, nextMipWidth * 4, 4, 3,
+		          STBIR_FLAG_ALPHA_PREMULTIPLIED)
+		    : stbir_resize_uint8(outMips[mipIndex - 1].data(), mipWidth, mipHeight, mipWidth * 4,
+		          outMips[mipIndex].data(), nextMipWidth, nextMipHeight, nextMipWidth * 4, 4);
+		if (!resizeResult)
+		{
+			RUSH_LOG_ERROR("Failed to generate mip %d for '%s'", mipIndex, filename);
+			outMips[mipIndex].clear();
+			break;
+		}
 
 		mipIndex++;
 		mipWidth  = nextMipWidth;

@@ -2,6 +2,8 @@ set(COMMON_SRC
 	Utils.h
 	Utils.cpp
 	Reflect.h
+	Model.h
+	Model.cpp
 	ExampleApp.h
 	ExampleApp.cpp
 	ImGuiImpl.h

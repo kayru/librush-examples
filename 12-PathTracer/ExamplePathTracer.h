@@ -37,6 +37,7 @@ private:
 	bool loadModel(const char* filename);
 	bool loadModelObj(const char* filename);
 	bool loadModelGLTF(const char* filename);
+	bool loadModelNative(const char* filename);
 
 	u32 enqueueLoadTexture(const std::string& filename, GfxFormat format);
 
@@ -115,6 +116,8 @@ private:
 
 		u32 samplerMode = 0;
 		u32 sampleFrameOffset = 0;
+		float pixelSpreadAngle = 0.0f; // ray-cone spread of one pixel (radians), drives texture LOD
+		float worldScale = 1.0f;       // uniform TLAS instance scale; vertex buffer positions are object-space
 	};
 
 	Mat4 m_worldTransform = Mat4::identity();
@@ -223,7 +226,8 @@ private:
 	};
 
 	GfxOwn<GfxRayTracingPipeline>    m_rtPipeline;
-	GfxOwn<GfxComputePipeline>       m_rayQueryPipeline;
+	GfxOwn<GfxComputePipeline>       m_rayQueryPipeline;    // default fast kernel
+	GfxOwn<GfxComputePipeline>       m_rayQueryDevPipeline; // PT_DEV_FEATURES variant (envmap/area light/debug/RR toggle)
 	GfxOwn<GfxAccelerationStructure> m_blas;
 	GfxOwn<GfxAccelerationStructure> m_tlas;
 	GfxOwn<GfxBuffer>                m_sbtBuffer;
@@ -264,6 +268,7 @@ private:
 		bool m_useRussianRoulette = true; // perf: terminate low-throughput paths (unbiased)
 		int m_normalMapBounceLimit = 5; // perf: apply normal maps only on bounces <= this (5 = all)
 		int m_samplerMode = int(PT_SAMPLER_SOBOL); // PT_SAMPLER_* sample generator (Owen-scrambled Sobol default)
+		bool m_useTextureLod = true; // ray-cone texture LOD (perf + texture prefiltering; off = mip 0 everywhere)
 		int m_maxSamplesPerPixel = 0; // stop accumulating past this spp (0 = unlimited)
 		float m_maxRenderTimeSec = 0.0f; // stop accumulating past this GPU render time (0 = unlimited)
 		float m_worldScale = 1.0f; // uniform scale of the scene about the origin (camera units are meters)
@@ -293,6 +298,7 @@ private:
 			ar.field("useRussianRoulette", m_useRussianRoulette);
 			ar.field("normalMapBounceLimit", m_normalMapBounceLimit);
 			ar.field("samplerMode", m_samplerMode);
+			ar.field("useTextureLod", m_useTextureLod);
 			ar.field("maxSamplesPerPixel", m_maxSamplesPerPixel);
 			ar.field("maxRenderTimeSec", m_maxRenderTimeSec);
 			ar.field("worldScale", m_worldScale);
@@ -306,6 +312,10 @@ private:
 
 	// Inline single-geometry BLAS + material buffers (always on Metal; Vulkan ray-query mode).
 	bool useInlineScene() const;
+
+	// True when settings match the default kernel's baked config; anything else needs PT_DEV_FEATURES.
+	bool canUseFastPath() const;
+	GfxComputePipeline activeRayQueryPipeline() const;
 	void createBottomLevelAccelerationStructure();
 	void rebuildAccelerationStructures();
 

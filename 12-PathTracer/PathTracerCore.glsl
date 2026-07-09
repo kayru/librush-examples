@@ -4,12 +4,21 @@
 // Include after the backend has declared MaterialConstants, Vertex and the
 // PathTracerContext/PtHit/PtPayload types.
 
+// Ray-cone texture LOD (Ray Tracing Gems ch. 20): triangleLod folds the triangle's texel density
+// and the cone width at the hit; each fetch adds its own texture-size term.
+SHADER_INLINE float textureLodForCone(PathTracerContext ctx, uint id, float triangleLod)
+{
+	vec2 ts = PT_TEXTURE_SIZE(ctx, id);
+	return triangleLod + 0.5f * log2(ts.x * ts.y);
+}
+
 // Caller resolves material + index base (firstIndex + primId*3 for SBT geometry,
-// primId*3 for inline backends).
+// primId*3 for inline backends). rayDir is the (normalized) direction of the incoming ray.
 SHADER_INLINE void fillPayload(PathTracerContext ctx, PtHit hit, uint indexBase,
-	MaterialConstants material, uint bounceIndex, INOUT(PtPayload) pl)
+	MaterialConstants material, uint bounceIndex, vec3 rayDir, INOUT(PtPayload) pl)
 {
 	pl.hitT = hit.t;
+	pl.coneWidth += hit.t * pl.spreadAngle; // cone width at the hit point
 
 	bool applyNormalMap = bounceIndex <= PT_SCENE(ctx, normalMapBounceLimit);
 
@@ -24,20 +33,41 @@ SHADER_INLINE void fillPayload(PathTracerContext ctx, PtHit hit, uint indexBase,
 	vec3 p2 = PT_VTX_POS(v2);
 
 	vec3 normal = normalize(PT_VTX_NRM(v0) * bary.x + PT_VTX_NRM(v1) * bary.y + PT_VTX_NRM(v2) * bary.z);
-	pl.geoNormal = normalize(cross(p1 - p0, p2 - p0));
+	vec3 edgeCross = cross(p1 - p0, p2 - p0);
+	pl.geoNormal = normalize(edgeCross);
 
-	vec2 uv = PT_VTX_UV(v0) * bary.x + PT_VTX_UV(v1) * bary.y + PT_VTX_UV(v2) * bary.z;
+	vec2 uv0 = PT_VTX_UV(v0);
+	vec2 uv1 = PT_VTX_UV(v1);
+	vec2 uv2 = PT_VTX_UV(v2);
+	vec2 uv = uv0 * bary.x + uv1 * bary.y + uv2 * bary.z;
 	pl.texcoord = uv;
+
+	bool useTextureLod = (PT_SCENE(ctx, flags) & PT_FLAG_USE_TEXTURE_LOD) != 0u;
+	float triangleLod = 0.0f;
+	if (useTextureLod)
+	{
+		vec2 duv1 = uv1 - uv0;
+		vec2 duv2 = uv2 - uv0;
+		float uvArea = abs(duv1.x * duv2.y - duv1.y * duv2.x);
+		// Positions are object-space; coneWidth/hitT are world-space, so scale the area to match.
+		float ws = PT_SCENE(ctx, worldScale);
+		float worldArea = ws * ws * length(edgeCross);
+		triangleLod = 0.5f * log2(max(uvArea, 1e-20f) / max(worldArea, 1e-20f))
+			+ log2(max(pl.coneWidth, 1e-20f))
+			- log2(max(abs(dot(pl.geoNormal, rayDir)), 0.05f)); // grazing hits need finer mips
+	}
 
 	vec4 albedoSample = vec4(1.0f);
 	vec4 specularSample = vec4(1.0f);
 	if (material.albedoTextureId < PT_MAX_TEXTURES)
 	{
-		albedoSample = PT_TEXTURE(ctx, material.albedoTextureId, uv);
+		float lod = useTextureLod ? textureLodForCone(ctx, material.albedoTextureId, triangleLod) : 0.0f;
+		albedoSample = PT_TEXTURE(ctx, material.albedoTextureId, uv, lod);
 	}
 	if (material.specularTextureId < PT_MAX_TEXTURES)
 	{
-		specularSample = PT_TEXTURE(ctx, material.specularTextureId, uv);
+		float lod = useTextureLod ? textureLodForCone(ctx, material.specularTextureId, triangleLod) : 0.0f;
+		specularSample = PT_TEXTURE(ctx, material.specularTextureId, uv, lod);
 	}
 
 	if (material.materialMode == PT_MATERIAL_MODE_PBR_METALLIC_ROUGHNESS)
@@ -86,7 +116,8 @@ SHADER_INLINE void fillPayload(PathTracerContext ctx, PtHit hit, uint indexBase,
 		&& material.normalTextureId < PT_MAX_TEXTURES;
 	if (useNormalMapping && hasTangent && hasBitangent)
 	{
-		vec3 normalSample = PT_TEXTURE(ctx, material.normalTextureId, uv).xyz * 2.0f - 1.0f;
+		float lod = useTextureLod ? textureLodForCone(ctx, material.normalTextureId, triangleLod) : 0.0f;
+		vec3 normalSample = PT_TEXTURE(ctx, material.normalTextureId, uv, lod).xyz * 2.0f - 1.0f;
 		normalSample.z = sqrt(max(0.0f, 1.0f - normalSample.x * normalSample.x - normalSample.y * normalSample.y));
 		mat3 basis = mat3(pl.tangent, pl.bitangent, pl.normal);
 		pl.normal = normalize(basis * normalSample);
@@ -302,7 +333,7 @@ SHADER_INLINE bool ptTraceFill(PathTracerContext ctx, PtRay r, uint bounceIndex,
 	{
 		return false;
 	}
-	fillPayload(ctx, hit, hit.primId * 3u, resolveMaterial(ctx, hit.primId), bounceIndex, pl);
+	fillPayload(ctx, hit, hit.primId * 3u, resolveMaterial(ctx, hit.primId), bounceIndex, r.direction, pl);
 	return true;
 }
 
@@ -344,7 +375,7 @@ bool ptTraceFill(PathTracerContext ctx, PtRay r, uint bounceIndex, INOUT(PtPaylo
 	hit.frontFacing = rayQueryGetIntersectionFrontFaceEXT(rq, true);
 
 	// Single-geometry BLAS: primId is the global triangle index (matches the Metal kernel).
-	fillPayload(ctx, hit, hit.primId * 3u, resolveMaterial(ctx, hit.primId), bounceIndex, pl);
+	fillPayload(ctx, hit, hit.primId * 3u, resolveMaterial(ctx, hit.primId), bounceIndex, r.direction, pl);
 	return true;
 }
 
@@ -364,6 +395,8 @@ bool ptTraceFill(PathTracerContext ctx, PtRay r, uint bounceIndex, INOUT(PtPaylo
 {
 	sbtPayload.hitT = 0.0;
 	sbtPayload.bounceIndex = bounceIndex;
+	sbtPayload.coneWidth = pl.coneWidth;
+	sbtPayload.spreadAngle = pl.spreadAngle;
 	traceRayEXT(TLAS, gl_RayFlagsOpaqueEXT, 0xFFu, 0u, 1u, 0u,
 		r.origin, r.minT, r.direction, r.maxT, 0);
 	pl = sbtPayload;
@@ -395,7 +428,12 @@ SHADER_INLINE void ptRenderPixel(PathTracerContext ctx, ivec2 pixelIndex)
 	const bool useRoughnessBias = true;
 	const bool visNormal = false;
 
+	// Default kernel bakes the common config to constants; PT_DEV_FEATURES makes these runtime flags.
+#ifdef PT_DEV_FEATURES
 	bool useRussianRoulette = (PT_SCENE(ctx, flags) & PT_FLAG_USE_RUSSIAN_ROULETTE) != 0u;
+#else
+	const bool useRussianRoulette = true;
+#endif
 
 	ivec2 outputSize = PT_SCENE(ctx, outputSize);
 	vec2 pixelUV = vec2(pixelIndex) / vec2(outputSize);
@@ -426,6 +464,7 @@ SHADER_INLINE void ptRenderPixel(PathTracerContext ctx, ivec2 pixelIndex)
 	uint maxPathLength = useDebugFurnace ? 2u : 5u;
 	float scatterPdfW = 1e9f;
 	float roughnessBias = 0.0f;
+#ifdef PT_DEV_FEATURES
 	bool useEnvmap = (PT_SCENE(ctx, flags) & PT_FLAG_USE_ENVMAP) != 0u;
 	bool useAreaLight = (PT_SCENE(ctx, flags) & PT_FLAG_USE_AREA_LIGHT) != 0u;
 	bool debugSimple = (PT_SCENE(ctx, flags) & PT_FLAG_DEBUG_SIMPLE_SHADING) != 0u;
@@ -434,13 +473,29 @@ SHADER_INLINE void ptRenderPixel(PathTracerContext ctx, ivec2 pixelIndex)
 	bool debugVisEnabled = debugVisMode != PT_DEBUG_VIS_NONE;
 	bool showFocalPlane = (PT_SCENE(ctx, flags) & PT_FLAG_DEBUG_FOCAL_PLANE) != 0u;
 	bool skipAccum = (PT_SCENE(ctx, flags) & PT_FLAG_DEBUG_DISABLE_ACCUMULATION) != 0u;
+#else
+	const bool useEnvmap = false;
+	const bool useAreaLight = false;
+	const bool debugSimple = false;
+	const bool debugHitMask = false;
+	const uint debugVisMode = PT_DEBUG_VIS_NONE;
+	const bool debugVisEnabled = false;
+	const bool showFocalPlane = false;
+	const bool skipAccum = false;
+#endif
 	float focalOverlay = 0.0f;
 	float primaryDepth = -1.0f; // primary-hit depth for the focus feedback buffer
+
+	// Ray cone for texture LOD: one pixel wide at the camera, grows with distance and roughness.
+	float coneWidth = 0.0f;
+	float coneSpreadAngle = PT_SCENE(ctx, pixelSpreadAngle);
 
 	// Single-bounce debug visualisations (hit mask / simple shading / G-buffer channels).
 	if (debugSimple || debugHitMask || debugVisEnabled)
 	{
 		PtPayload payload;
+		payload.coneWidth = coneWidth;
+		payload.spreadAngle = coneSpreadAngle;
 		bool isHit = ptTraceFill(ctx, primaryRay, 0u, payload);
 		if (debugHitMask)
 		{
@@ -487,6 +542,8 @@ SHADER_INLINE void ptRenderPixel(PathTracerContext ctx, ivec2 pixelIndex)
 				// Closed box lit only by its emitter: a full trace is needed to catch a light hit;
 				// everything else (walls, escaped rays) contributes nothing at the terminal vertex.
 				PtPayload tpl;
+				tpl.coneWidth = coneWidth;
+				tpl.spreadAngle = coneSpreadAngle;
 				if (ptTraceFill(ctx, primaryRay, i, tpl) && max3(tpl.emission) > 0.0f)
 				{
 					float lightPdfW = areaLightPdfW(ctx, primaryRay.direction, tpl.hitT);
@@ -510,6 +567,8 @@ SHADER_INLINE void ptRenderPixel(PathTracerContext ctx, ivec2 pixelIndex)
 		}
 
 		PtPayload payload;
+		payload.coneWidth = coneWidth;
+		payload.spreadAngle = coneSpreadAngle;
 		bool isHit = ptTraceFill(ctx, primaryRay, i, payload);
 
 		if (useDebugFurnace && i > 0u)
@@ -519,6 +578,7 @@ SHADER_INLINE void ptRenderPixel(PathTracerContext ctx, ivec2 pixelIndex)
 
 		if (isHit)
 		{
+			coneWidth = payload.coneWidth;
 			if (useRoughnessBias)
 			{
 				// Path roughening ("Avoiding Caustic Paths", Arnold), keeps fireflies down.
@@ -731,6 +791,9 @@ SHADER_INLINE void ptRenderPixel(PathTracerContext ctx, ivec2 pixelIndex)
 			primaryRay.direction = safeNormalize(N + mapToUniformSphere(reflectionSampleUV));
 			scatterPdfW = 1.0f / M_PI;
 		}
+
+		// Widen the cone with the scattering lobe; texture detail past a rough bounce is invisible.
+		coneSpreadAngle += isSpecular ? 0.25f * linearRoughness : 0.35f;
 
 		if (useRussianRoulette && i >= 1u)
 		{

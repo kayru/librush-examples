@@ -8,6 +8,7 @@ rush_add_app(12-PathTracer
 		PathTracer.rgen
 		PathTracer.rmiss
 		PathTracer.comp
+		PathTracerDev.comp
 		PathTracer.metal
 		PathTracerContext.glsl
 		PathTracerCore.glsl
@@ -38,4 +39,5 @@ else()
 	rush_shader_glsl(PathTracer.rgen DEPENDS ${shaderDependencies})
 	rush_shader_glsl(PathTracer.rmiss DEPENDS ${shaderDependencies})
 	rush_shader_glsl(PathTracer.comp DEPENDS ${shaderDependencies})
+	rush_shader_glsl(PathTracerDev.comp DEPENDS ${shaderDependencies})
 endif()

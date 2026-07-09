@@ -64,6 +64,8 @@ uniform SceneConstants
 
 	uint samplerMode;       // PT_SAMPLER_*
 	uint sampleFrameOffset; // added to the sampler seed only (not accumulation); decorrelates references
+	float pixelSpreadAngle; // ray-cone spread of one pixel (radians), drives texture LOD selection
+	float worldScale;       // uniform TLAS instance scale; vertex buffer positions are object-space
 };
 
 layout(set=0, binding=1)

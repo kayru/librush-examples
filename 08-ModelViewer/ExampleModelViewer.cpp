@@ -15,7 +15,7 @@
 #include <Common/SceneConfig.h>
 #include <Common/Utils.h>
 
-#include "Model.h"
+#include <Common/Model.h>
 
 #include <chrono>
 #include <stdio.h>
@@ -602,7 +602,9 @@ bool ExampleModelViewer::loadModelNative(const char* filename)
 		Material material;
 		if (offlineMaterial.albedoTexture[0])
 		{
-			enqueueLoadTexture(directory + std::string(offlineMaterial.albedoTexture), materialId);
+			std::string path = directory + offlineMaterial.albedoTexture;
+			fixDirectorySeparatorsInplace(path);
+			enqueueLoadTexture(path, materialId);
 		}
 
 		material.albedoTexture = m_defaultWhiteTexture.get();

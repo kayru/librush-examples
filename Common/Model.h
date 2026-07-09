@@ -3,6 +3,9 @@
 #include <Rush/MathTypes.h>
 #include <vector>
 
+namespace Rush
+{
+
 struct ModelVertex
 {
 	Vec3 position;
@@ -45,3 +48,5 @@ struct Model
 	bool read(const char* filename);
 	void write(const char* filename);
 };
+
+} // namespace Rush

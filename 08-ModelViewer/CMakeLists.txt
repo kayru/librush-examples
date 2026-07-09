@@ -2,8 +2,6 @@ rush_add_app(08-ModelViewer
 	SOURCES
 		ExampleModelViewer.h
 		ExampleModelViewer.cpp
-		Model.h
-		Model.cpp
 		Common.hlsl
 		ModelPS.hlsl
 		ModelVS.hlsl

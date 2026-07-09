@@ -45,7 +45,9 @@ struct PtPayload
 	vec3  tangent;
 	vec3  bitangent;
 	vec2  texcoord;
-	uint  bounceIndex; // SBT path: carries the bounce number from raygen to the hit shader
+	uint  bounceIndex;  // SBT path: carries the bounce number from raygen to the hit shader
+	float coneWidth;    // in: ray-cone width at the ray origin; out: width at the hit point
+	float spreadAngle;  // in: ray-cone spread angle (radians)
 };
 
 #ifdef __METAL_VERSION__
@@ -60,7 +62,8 @@ struct PathTracerContext
 #define PT_SCENE(ctx, field)        ((ctx).s0->scene->field)
 #define PT_INDEX(ctx, i)            ((ctx).s0->indexBuffer[(i)])
 #define PT_VERTEX(ctx, i)           ((ctx).s0->vertexBuffer[(i)])
-#define PT_TEXTURE(ctx, id, uv)     ((ctx).s1->textures[(id)].sample((ctx).s0->defaultSampler, (uv)))
+#define PT_TEXTURE(ctx, id, uv, lod) ((ctx).s1->textures[(id)].sample((ctx).s0->defaultSampler, (uv), level(lod)))
+#define PT_TEXTURE_SIZE(ctx, id)     (float2((ctx).s1->textures[(id)].get_width(), (ctx).s1->textures[(id)].get_height()))
 #define PT_ENVMAP(ctx, uv)          ((ctx).s0->envmapTexture.sample((ctx).s0->defaultSampler, (uv)))
 #define PT_ENVDIST(ctx, i)          ((ctx).s0->envmapDistribution[(i)])
 #define PT_ENVDIST_VALID(ctx)       ((ctx).s0->envmapDistribution != nullptr)
@@ -95,7 +98,8 @@ struct PathTracerContext
 #define PT_SCENE(ctx, field)        (field)
 #define PT_INDEX(ctx, i)            (indexBuffer[(i)])
 #define PT_VERTEX(ctx, i)           (vertexBuffer[(i)])
-#define PT_TEXTURE(ctx, id, uv)     (texture(sampler2D(textureDescriptors[nonuniformEXT(id)], defaultSampler), (uv)))
+#define PT_TEXTURE(ctx, id, uv, lod) (textureLod(sampler2D(textureDescriptors[nonuniformEXT(id)], defaultSampler), (uv), (lod)))
+#define PT_TEXTURE_SIZE(ctx, id)     (vec2(textureSize(sampler2D(textureDescriptors[nonuniformEXT(id)], defaultSampler), 0)))
 #define PT_ENVMAP(ctx, uv)          (texture(sampler2D(envmapTexture, defaultSampler), (uv)))
 #define PT_ENVDIST(ctx, i)          (envmapDistributionBuffer[(i)])
 #define PT_ENVDIST_VALID(ctx)       (true)

@@ -1,12 +1,15 @@
 #include "Model.h"
 
-#include <Common/Utils.h>
+#include "Utils.h"
 #include <Rush/UtilFile.h>
 #include <Rush/UtilLog.h>
 
 #ifdef __linux__
 #define strcpy_s strcpy
 #endif
+
+namespace Rush
+{
 
 const u32 Model::magic = 0xfe892a37;
 
@@ -51,3 +54,5 @@ void Model::write(const char* filename)
 	writeContainer(stream, vertices);
 	writeContainer(stream, indices);
 }
+
+} // namespace Rush
