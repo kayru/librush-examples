@@ -289,7 +289,7 @@ public:
 		GfxBufferDesc bufDesc;
 		bufDesc.flags       = GfxBufferFlags::Storage;
 		bufDesc.stride      = 1;
-		bufDesc.count       = m_dstOffset + m_copyInfo.bytesPerRow * m_copyInfo.rowCount;
+		bufDesc.count       = static_cast<u32>(m_dstOffset) + m_copyInfo.bytesPerRow * m_copyInfo.rowCount;
 		bufDesc.hostVisible = true;
 		bufDesc.debugName   = "TestCopyOffsetDst";
 		m_buffer = Gfx_CreateBuffer(bufDesc);
