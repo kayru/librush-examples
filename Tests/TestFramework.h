@@ -65,6 +65,9 @@ public:
 	virtual ~TestCase() = default;
 	virtual void       render(GfxContext*, GfxTexture renderTarget) {}
 	virtual TestResult validate(GfxContext*, const TestImage* image) = 0;
+
+	// True to call render() again in the next frame before validating
+	virtual bool needsMoreFrames() const { return false; }
 };
 
 // GPU test with no screenshot capture by default.

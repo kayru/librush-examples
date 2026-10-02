@@ -19,7 +19,9 @@ readback results (buffers or screenshots).
 4. Register it with `RUSH_REGISTER_TEST(MyTest, "category", "Description")`.
 
 Tests can opt out of screenshots by returning `TestConfig{false}` from
-`config()` and can set `requiresGraphics = false` for CPU-only tests. Future
+`config()` and can set `requiresGraphics = false` for CPU-only tests. Tests that
+need several frames (e.g. GPU timing results, which arrive a few frames late)
+return true from `needsMoreFrames()` until done. Future
 tests may map buffers or use custom readback paths.
 
 ## Build instructions

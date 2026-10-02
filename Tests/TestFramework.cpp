@@ -300,6 +300,10 @@ void TestRunner::updateInternal(GfxContext* ctx)
 		if (cfg.requiresGraphics)
 		{
 			renderCurrent(ctx);
+			if (m_current->needsMoreFrames())
+			{
+				break;
+			}
 			if (cfg.captureScreenshot)
 			{
 				readbackOffscreenTarget(ctx);
