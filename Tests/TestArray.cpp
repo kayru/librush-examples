@@ -2,6 +2,8 @@
 
 #include <Rush/UtilArray.h>
 
+#include <string>
+
 using namespace Test;
 using namespace Rush;
 
@@ -44,6 +46,22 @@ public:
 		if (slice.size() != 2 || slice[0] != 3 || slice[1] != 9)
 		{
 			return TestResult::fail("ArrayView slice mismatch");
+		}
+
+		// Appending an element of the array itself must survive the reallocation.
+		DynamicArray<std::string> strings;
+		strings.push_back(std::string(64, 'a'));
+		for (int i = 0; i < 8; ++i)
+		{
+			strings.push_back(strings[0]);
+		}
+		strings.resize(strings.size() + 9, strings[0]);
+		for (const std::string& s : strings)
+		{
+			if (s != std::string(64, 'a'))
+			{
+				return TestResult::fail("DynamicArray lost an element appended from its own storage");
+			}
 		}
 
 		// Ensure move construction transfers ownership.
