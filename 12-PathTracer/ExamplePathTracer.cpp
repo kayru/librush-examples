@@ -58,6 +58,7 @@ int main(int argc, char** argv)
 	g_appCfg.argc      = argc;
 	g_appCfg.argv      = argv;
 	g_appCfg.resizable = true;
+	g_appCfg.timingLevel = GfxTimingLevel::Scopes;
 
 	// --out=<png> renders offscreen and exits; run without a window or swapchain.
 	std::string headlessOut;
@@ -438,11 +439,21 @@ void ExamplePathTracer::onUpdate()
 
 	TimingScope timingScope(m_stats.cpuTotal);
 
-	m_stats.gpuTotal.add(Gfx_Stats().lastFrameGpuTime);
-	if (m_accumulating)
-	{
-		m_totalGpuRenderTime += Gfx_Stats().lastFrameGpuTime;
-	}
+	// Render time counts the GPU busy time of frames that traced a sample since the last reset
+	m_gpuTiming.update([this](const GfxFrameTimes& frame) {
+		while (!m_tracedFrames.empty() && m_tracedFrames.front() < frame.frame)
+		{
+			m_tracedFrames.pop_front();
+		}
+		if (!m_tracedFrames.empty() && m_tracedFrames.front() == frame.frame)
+		{
+			m_tracedFrames.pop_front();
+			if (frame.frame >= m_accumulationStartFrame)
+			{
+				m_totalGpuRenderTime += double(frame.graphics.busyNs) * 1e-9;
+			}
+		}
+	});
 
 	Gfx_ResetStats();
 
@@ -1021,6 +1032,10 @@ void ExamplePathTracer::render()
 	// pending focus pick still traces (its depth readback needs the frame) even once accumulation is done.
 	const bool accumulate = !accumulationComplete();
 	m_accumulating = accumulate;
+	if (accumulate)
+	{
+		m_tracedFrames.push_back(Gfx_GetFrameIndex());
+	}
 	const bool trace = accumulate || m_focusPickRequested;
 
 	SceneConstants constants = makeSceneConstants(outputImageDesc.getSize2D(), m_frameIndex);
@@ -1032,16 +1047,15 @@ void ExamplePathTracer::render()
 	const bool rtReady = (m_rtPipeline.valid() || m_rayQueryPipeline.valid()) && m_materialDescriptorSet.valid();
 	if (m_valid && rtReady && trace)
 	{
-		GfxMarkerScope markerFrame(ctx, "Model");
-
 		if (!m_tlas.valid())
 		{
+			GfxScope scope(ctx, "BuildScene");
 			createRayTracingScene(ctx);
 		}
 
 		const bool inlineScene = useInlineScene();
 
-		GfxMarkerScope markerRT(ctx, inlineScene ? "RayQuery" : "RT");
+		GfxScope scope(ctx, inlineScene ? "RayQuery" : "RT");
 		Gfx_SetConstantBuffer(ctx, 0, m_sceneConstantBuffer);
 		Gfx_SetSampler(ctx, 0, m_samplerStates.anisotropicWrap);
 		Gfx_SetTexture(ctx, 0, m_envmap);
@@ -1107,6 +1121,7 @@ void ExamplePathTracer::render()
 	GfxPassDesc passDesc;
 	passDesc.flags = GfxPassFlags::ClearAll;
 	passDesc.clearColors[0] = ColorRGBA8(11, 22, 33);
+	passDesc.name = "Display";
 	Gfx_BeginPass(ctx, passDesc);
 
 	Gfx_SetViewport(ctx, GfxViewport(m_window->getFramebufferSize()));
@@ -1145,10 +1160,12 @@ void ExamplePathTracer::render()
 		const GfxStats& stats = Gfx_Stats();
 		snprintf(timingString, sizeof(timingString),
 		    "GPU time: %.2f ms\n"
+		    "%s"
 		    "CPU time: %.2f ms\n"
 		    "Total render time: %.2f sec\n"
 		    "Samples per pixel: %d%s\n",
-		    m_stats.gpuTotal.get() * 1000.0f,
+		    m_gpuTiming.busySeconds() * 1000.0,
+		    m_gpuTiming.format().c_str(),
 		    m_stats.cpuTotal.get() * 1000.0f,
 		    m_totalGpuRenderTime,
 		    m_frameIndex,
@@ -1923,6 +1940,7 @@ void ExamplePathTracer::resetAccumulation()
 {
 	m_frameIndex = 0;
 	m_totalGpuRenderTime = 0;
+	m_accumulationStartFrame = Gfx_GetFrameIndex();
 }
 
 bool ExamplePathTracer::accumulationComplete() const

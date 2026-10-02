@@ -30,6 +30,7 @@ int main(int argc, char** argv)
 	g_appCfg.argc      = argc;
 	g_appCfg.argv      = argv;
 	g_appCfg.resizable = true;
+	g_appCfg.timingLevel = GfxTimingLevel::Scopes;
 
 #ifdef RUSH_DEBUG
 	g_appCfg.debug = true;
@@ -157,7 +158,7 @@ void ExampleModelViewer::onUpdate()
 {
 	TimingScope timingScope(m_stats.cpuTotal);
 
-	m_stats.gpuTotal.add(Gfx_Stats().lastFrameGpuTime);
+	m_gpuTiming.update();
 	Gfx_ResetStats();
 
 	const float dt = (float)m_timer.time();
@@ -302,6 +303,7 @@ void ExampleModelViewer::render()
 		passDesc.clearDepth     = m_reverseZ ? 0.0f : 1.0f;
 		passDesc.color[0]       = m_colorTarget.get();
 		passDesc.depth          = m_depthTarget.get();
+		passDesc.name           = "Scene";
 		Gfx_BeginPass(ctx, passDesc);
 
 		Gfx_SetViewport(ctx, GfxViewport(m_window->getFramebufferSize()));
@@ -329,8 +331,11 @@ void ExampleModelViewer::render()
 
 		Gfx_EndPass(ctx);
 
-		Gfx_ResolveImage(ctx, m_colorTarget, m_resolveTarget);
-		Gfx_AddImageBarrier(ctx, m_resolveTarget, GfxResourceState_ShaderRead);
+		{
+			GfxScope scope(ctx, "Resolve");
+			Gfx_ResolveImage(ctx, m_colorTarget, m_resolveTarget);
+			Gfx_AddImageBarrier(ctx, m_resolveTarget, GfxResourceState_ShaderRead);
+		}
 	}
 
 	{
@@ -338,12 +343,11 @@ void ExampleModelViewer::render()
 		passDesc.flags          = GfxPassFlags::ClearAll;
 		passDesc.clearColors[0] = ColorRGBA8(11, 22, 33);
 		passDesc.clearDepth     = m_reverseZ ? 0.0f : 1.0f;
+		passDesc.name           = "UI";
 		Gfx_BeginPass(ctx, passDesc);
 
 		Gfx_SetViewport(ctx, GfxViewport(m_window->getFramebufferSize()));
 		Gfx_SetScissorRect(ctx, m_window->getFramebufferSize());
-
-		GfxMarkerScope markerFrame(ctx, "UI");
 
 		TimingScope timingScope(m_stats.cpuUI);
 
@@ -378,13 +382,15 @@ void ExampleModelViewer::render()
 		    "Draw calls: %d\n"
 		    "Vertices: %d\n"
 		    "GPU time: %.2f ms\n"
+		    "%s"
 		    "CPU time: %.2f ms\n"
 		    "> Update CB: %.2f ms\n"
 		    "> Model: %.2f ms\n"
 		    "> UI: %.2f ms",
 		    stats.drawCalls,
 		    stats.vertices,
-		    m_stats.gpuTotal.get() * 1000.0f,
+		    m_gpuTiming.busySeconds() * 1000.0,
+		    m_gpuTiming.format().c_str(),
 		    m_stats.cpuTotal.get() * 1000.0f,
 		    m_stats.cpuUpdateConstantBuffer.get() * 1000.0f,
 		    m_stats.cpuModel.get() * 1000.0f,

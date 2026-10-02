@@ -333,7 +333,11 @@ public:
 	{
 		auto ctx = Platform_GetGfxContext();
 
-		m_gpuDrawTime.add(Gfx_Stats().lastFrameGpuTime);
+		GfxFrameTimes frameTimes;
+		while (Gfx_GetFrameTimes(frameTimes))
+		{
+			m_gpuDrawTime.add(double(frameTimes.graphics.busyNs) * 1e-9);
+		}
 		Gfx_ResetStats();
 
 		const GfxCapability& caps    = Gfx_GetCapability();

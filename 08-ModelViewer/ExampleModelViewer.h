@@ -9,6 +9,7 @@
 #include <Rush/Window.h>
 
 #include <Common/ExampleApp.h>
+#include <Common/GpuTimingStats.h>
 #include <Common/Utils.h>
 #include <Common/VirtualGamepad.h>
 
@@ -46,12 +47,13 @@ private:
 
 	struct Stats
 	{
-		MovingAverage<double, 60> gpuTotal;
 		MovingAverage<double, 60> cpuTotal;
 		MovingAverage<double, 60> cpuUI;
 		MovingAverage<double, 60> cpuModel;
 		MovingAverage<double, 60> cpuUpdateConstantBuffer;
 	} m_stats;
+
+	GpuTimingStats m_gpuTiming;
 
 	Camera m_camera;
 	Camera m_interpolatedCamera;

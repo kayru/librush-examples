@@ -1,6 +1,8 @@
 set(COMMON_SRC
 	Utils.h
 	Utils.cpp
+	GpuTimingStats.h
+	GpuTimingStats.cpp
 	Reflect.h
 	Model.h
 	Model.cpp

@@ -9,8 +9,11 @@
 #include <Rush/Window.h>
 
 #include <Common/ExampleApp.h>
+#include <Common/GpuTimingStats.h>
 #include <Common/Utils.h>
 #include <Common/VirtualGamepad.h>
+
+#include <deque>
 
 #include <memory>
 #include <mutex>
@@ -44,11 +47,13 @@ private:
 
 	struct Stats
 	{
-		MovingAverage<double, 60> gpuTotal;
 		MovingAverage<double, 60> cpuTotal;
 	} m_stats;
 
 	double m_totalGpuRenderTime = 0;
+	GpuTimingStats m_gpuTiming;
+	std::deque<u64> m_tracedFrames;
+	u64 m_accumulationStartFrame = 0;
 
 	Camera m_camera;
 	CameraManipulator* m_cameraMan;
