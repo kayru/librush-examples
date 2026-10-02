@@ -6,6 +6,8 @@ rush_add_app(Tests
 		TestBuffer.cpp
 		TestClear.cpp
 		TestCopyTextureToBuffer.cpp
+		TestGpuTiming.cpp
+		TestGpuTiming.hlsl
 		TestArray.cpp
 		TestRayTracing.cpp
 		TestRayTracing.hlsl
@@ -40,5 +42,6 @@ else()
 endif()
 
 rush_shader_hlsl(TestTypedBuffer.hlsl cs_6_0)
+rush_shader_hlsl(TestGpuTiming.hlsl cs_6_0)
 rush_shader_hlsl(TestIndexBufferOffsetVS.hlsl vs_6_0)
 rush_shader_hlsl(TestIndexBufferOffsetPS.hlsl ps_6_0)
