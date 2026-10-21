@@ -1,4 +1,5 @@
 #include "ExampleApp.h"
+#include "CommandLine.h"
 #include "Utils.h"
 
 #include <Rush/GfxBitmapFont.h>
@@ -149,13 +150,29 @@ ExampleApp::~ExampleApp()
 	}
 }
 
-void ExampleApp::SetupScreenshot(const AppConfig& cfg, int argc, char** argv)
+std::optional<int> ExampleApp::ParseArgs(AppConfig& cfg, int argc, char** argv, CommandLine* appArgs)
 {
 	g_runSettings = {};
 
-	bool hasFrames = getArgU32(argc, argv, "frames", nullptr, g_runSettings.frameLimit);
-	bool hasScreenshot = getArgString(argc, argv, "screenshot", nullptr, g_runSettings.screenshotPath);
-	getArgU32(argc, argv, "screenshot-size", nullptr, g_runSettings.maxScreenshotDim);
+	CommandLine  sharedArgs;
+	CommandLine& args = appArgs ? *appArgs : sharedArgs;
+
+	u32 vsync = u32(cfg.vsync);
+	args.addU32("vsync", 0, &vsync, "N", "Present interval, 0 disables vsync");
+	args.addU32("frames", 0, &g_runSettings.frameLimit, "N", "Exit after N frames");
+	args.addString("screenshot", 0, &g_runSettings.screenshotPath, "PATH",
+	    "Save a screenshot after --frames (default 50) and exit");
+	args.addU32("screenshot-size", 0, &g_runSettings.maxScreenshotDim, "N", "Downscale the screenshot to fit N pixels");
+
+	if (const std::optional<int> exitCode = args.parse(argc, argv))
+	{
+		return exitCode;
+	}
+
+	cfg.vsync = int(vsync);
+
+	const bool hasFrames = args.isSet("frames");
+	const bool hasScreenshot = args.isSet("screenshot");
 
 	if (!hasFrames && !hasScreenshot)
 	{
@@ -176,6 +193,8 @@ void ExampleApp::SetupScreenshot(const AppConfig& cfg, int argc, char** argv)
 	}
 
 	g_runSettings.appName = cfg.name ? cfg.name : std::string();
+
+	return std::nullopt;
 }
 
 void ExampleApp::update()

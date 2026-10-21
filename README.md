@@ -25,6 +25,8 @@ Build output goes to `Build/<preset>/...`.
 ./Build/<preset>/Tests/Tests
 ```
 
+Every app takes `--help`. Long options accept `--name value` and `--name=value`; unknown options are errors. Shared example options: `--vsync N`, `--frames N`, `--screenshot PATH`, `--screenshot-size N`.
+
 ## External dependencies
 
 - Vulkan builds require the Vulkan SDK (`VULKAN_SDK` or `VK_SDK_PATH` set). MoltenVK on macOS.

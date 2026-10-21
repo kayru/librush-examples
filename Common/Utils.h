@@ -110,9 +110,6 @@ bool endsWith(const char* str, const char* suffix);
 
 std::string sanitizeFilename(std::string_view name, const char* fallback = "Unnamed");
 std::string toLower(std::string_view text);
-bool getArgString(int argc, char** argv, const char* longKey, const char* shortKey, std::string& out);
-bool getArgU32(int argc, char** argv, const char* longKey, const char* shortKey, u32& out);
-bool getPositionalArg(int argc, char** argv, int position, const char*& value);
 
 struct HumanFriendlyValue
 {

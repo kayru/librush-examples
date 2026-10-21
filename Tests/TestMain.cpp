@@ -1,53 +1,54 @@
 #include "TestFramework.h"
 
+#include <Common/CommandLine.h>
+
 #include <Rush/Platform.h>
 
-#include <cstring>
-
 using namespace Test;
-
-namespace
-{
-bool hasCpuOnlyFlag(int argc, char** argv)
-{
-	for (int i = 1; i < argc; ++i)
-	{
-		const char* arg = argv[i];
-		if (!arg)
-		{
-			continue;
-		}
-		if (std::strcmp(arg, "--cpu-only") == 0 || std::strcmp(arg, "--no-gfx") == 0)
-		{
-			return true;
-		}
-	}
-	return false;
-}
-}
 
 struct RunnerContext
 {
 	TestRunner* runner = nullptr;
+	TestOptions options;
 	int         exitCode = 0;
-	int         argc = 0;
-	char**      argv = nullptr;
 };
 
 int main(int argc, char** argv)
 {
-	Rush::AppConfig cfg;
 	RunnerContext context;
 
-	context.argc = argc;
-	context.argv = argv;
+	std::vector<std::string> testPatterns;
+	std::vector<std::string> categoryPatterns;
 
-	if (hasCpuOnlyFlag(argc, argv))
+	CommandLine args;
+	args.addSwitch("list", 0, &context.options.list, "List available tests");
+	args.addSwitch("list-categories", 0, &context.options.listCategories, "List available categories");
+	args.addList("test", 't', &testPatterns, "PATTERN", "Run tests matching pattern (supports *), repeatable");
+	args.addList("category", 'c', &categoryPatterns, "PATTERN", "Run categories matching pattern (supports *), repeatable");
+	args.addSwitch("no-gfx", 0, &context.options.noGraphics, "Skip tests that require graphics");
+	args.addSwitch("cpu-only", 0, &context.options.noGraphics, "Alias for --no-gfx");
+
+	if (const std::optional<int> exitCode = args.parse(argc, argv))
 	{
-		TestRunner runner(nullptr, argc, argv);
+		return *exitCode;
+	}
+
+	for (const std::string& pattern : testPatterns)
+	{
+		context.options.testPatterns.push_back(String(pattern.c_str()));
+	}
+	for (const std::string& pattern : categoryPatterns)
+	{
+		context.options.categoryPatterns.push_back(String(pattern.c_str()));
+	}
+
+	if (context.options.noGraphics)
+	{
+		TestRunner runner(nullptr, context.options);
 		return runner.runCpuOnly();
 	}
 
+	Rush::AppConfig cfg;
 	cfg.name      = "Rush Tests (" RUSH_RENDER_API_NAME ")";
 	cfg.width     = 256;
 	cfg.height    = 256;
@@ -60,7 +61,7 @@ int main(int argc, char** argv)
 	{
 		auto* ctx = reinterpret_cast<RunnerContext*>(userData);
 		GfxContext* initCtx = Platform_GetGfxContext();
-		ctx->runner = new TestRunner(initCtx, ctx->argc, ctx->argv);
+		ctx->runner = new TestRunner(initCtx, ctx->options);
 		if (ctx->runner->isFinished())
 		{
 			ctx->exitCode = ctx->runner->exitCode();

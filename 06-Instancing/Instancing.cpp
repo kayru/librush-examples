@@ -7,6 +7,7 @@
 #include <Rush/UtilTimer.h>
 #include <Rush/Window.h>
 
+#include <Common/CommandLine.h>
 #include <Common/ExampleApp.h>
 #include <Common/Utils.h>
 
@@ -16,7 +17,8 @@
 
 #include <tiny_obj_loader.h>
 
-static AppConfig g_appCfg;
+static AppConfig   g_appCfg;
+static std::string g_modelPath;
 
 class InstancingApp : public ExampleApp
 {
@@ -34,14 +36,11 @@ class InstancingApp : public ExampleApp
 public:
 	InstancingApp() : ExampleApp()
 	{
-		Gfx_SetPresentInterval(0);
-
 		const GfxCapability& caps = Gfx_GetCapability();
 
-		const char* modelFilename = nullptr;
-		if (getPositionalArg(g_appCfg.argc, g_appCfg.argv, 0, modelFilename))
+		if (!g_modelPath.empty())
 		{
-			loadMesh(modelFilename);
+			loadMesh(g_modelPath.c_str());
 		}
 
 		if (m_meshIndexCount == 0)
@@ -810,10 +809,14 @@ int main(int argc, char** argv)
 	g_appCfg.argc      = argc;
 	g_appCfg.argv      = argv;
 	g_appCfg.resizable = true;
+	g_appCfg.vsync     = 0;
 
 #ifdef RUSH_DEBUG
 	g_appCfg.debug = true;
 #endif
 
-	return Example_Main<InstancingApp>(g_appCfg, argc, argv);
+	CommandLine args;
+	args.addPositional("model", &g_modelPath, "OBJ model to instance (default: generated mesh)");
+
+	return Example_Main<InstancingApp>(g_appCfg, argc, argv, &args);
 }

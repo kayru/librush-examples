@@ -78,8 +78,6 @@ public:
 		Gfx_Draw(ctx, 0, 3);
 
 		Gfx_EndPass(ctx);
-
-		Gfx_SetPresentInterval(1);
 	}
 
 private:

@@ -12,6 +12,7 @@
 #include <Rush/UtilHash.h>
 #include <Rush/UtilLog.h>
 
+#include <Common/CommandLine.h>
 #include <Common/SceneConfig.h>
 #include <Common/Utils.h>
 
@@ -19,7 +20,8 @@
 #include <chrono>
 #include <stdio.h>
 
-static AppConfig g_appCfg;
+static AppConfig   g_appCfg;
+static std::string g_modelPath;
 
 int main(int argc, char** argv)
 {
@@ -37,14 +39,15 @@ int main(int argc, char** argv)
 	Log::breakOnError = true;
 #endif
 
-	return Example_Main<ExampleModelViewer>(g_appCfg, argc, argv);
+	CommandLine args;
+	args.addPositional("model", &g_modelPath, "Model or scene file to load");
+
+	return Example_Main<ExampleModelViewer>(g_appCfg, argc, argv, &args);
 }
 
 ExampleModelViewer::ExampleModelViewer() : ExampleApp(), m_boundingBox(Vec3(0.0f), Vec3(0.0f))
 {
 	const GfxCapability& caps = Gfx_GetCapability();
-
-	Gfx_SetPresentInterval(1);
 
 	m_windowEvents.setOwner(m_window);
 
@@ -93,9 +96,9 @@ ExampleModelViewer::ExampleModelViewer() : ExampleApp(), m_boundingBox(Vec3(0.0f
 	GfxBufferDesc cbDesc(GfxBufferFlags::TransientConstant, GfxFormat_Unknown, 1, sizeof(Constants));
 	m_constantBuffer = Gfx_CreateBuffer(cbDesc);
 
-	const char* modelFilename = nullptr;
-	if (getPositionalArg(g_appCfg.argc, g_appCfg.argv, 0, modelFilename))
+	if (!g_modelPath.empty())
 	{
+		const char* modelFilename = g_modelPath.c_str();
 		m_statusString            = std::string("Model: ") + modelFilename;
 		m_modelFilename           = modelFilename;
 		m_valid                   = loadModel(modelFilename);

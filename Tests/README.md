@@ -36,6 +36,7 @@ Use CMake presets (recommended):
 - `./Build/<preset>/Tests/Tests` to run tests built by that preset
 - `--list` to list tests
 - `--list-categories` to list categories
-- `--test, -t PATTERN` to run tests matching a wildcard
-- `--category, -c CAT` to run categories matching a wildcard
+- `--test, -t PATTERN` to run tests matching a wildcard (repeatable)
+- `--category, -c CAT` to run categories matching a wildcard (repeatable)
 - `--no-gfx` or `--cpu-only` to run only non-graphics tests
+- `--help` for the full list; long options also accept `--name=value`

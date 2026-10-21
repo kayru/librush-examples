@@ -24,6 +24,7 @@
 #include <stdio.h>
 #include <utility>
 
+#include <Common/CommandLine.h>
 #include <Common/ImGuiImpl.h>
 #include <Common/ImGuiExt.h>
 #include <Common/SceneConfig.h>
@@ -32,22 +33,38 @@
 
 static AppConfig g_appCfg;
 
-// Sample-generator names, indexed by PT_SAMPLER_*. Shared by the UI combo and --sampler= parsing.
+// Sample-generator names for the UI, indexed by PT_SAMPLER_*
 static const char* g_samplerNames[] = {"LCG", "Sobol"};
 static_assert(RUSH_COUNTOF(g_samplerNames) == PT_SAMPLER_COUNT, "sampler name table out of sync");
 
-static bool samplerModeFromName(const std::string& name, int& outMode)
+enum class TracingArg
 {
-	for (int i = 0; i < int(PT_SAMPLER_COUNT); ++i)
-	{
-		std::string lhs = name, rhs = g_samplerNames[i];
-		std::transform(lhs.begin(), lhs.end(), lhs.begin(), ::tolower);
-		std::transform(rhs.begin(), rhs.end(), rhs.begin(), ::tolower);
-		rhs.erase(std::remove(rhs.begin(), rhs.end(), ' '), rhs.end());
-		if (lhs == rhs) { outMode = i; return true; }
-	}
-	return false;
-}
+	RayQuery,
+	Pipeline,
+};
+
+static struct PathTracerArgs
+{
+	std::string model;
+	std::string env;
+	int         scene = int(ProceduralScene::CornellBox);
+	std::string out;
+	u32         spp = 0;
+	u32         width = 0;
+	u32         height = 0;
+	u32         seedOffset = 0;
+	u32         rr = 0;
+	u32         nmBounce = 0;
+	u32         texLod = 0;
+	int         sampler = 0;
+	int         tracing = int(TracingArg::RayQuery);
+
+	bool hasRr = false;
+	bool hasNmBounce = false;
+	bool hasTexLod = false;
+	bool hasSampler = false;
+	bool hasTracing = false;
+} g_args;
 
 int main(int argc, char** argv)
 {
@@ -58,24 +75,57 @@ int main(int argc, char** argv)
 	g_appCfg.argc      = argc;
 	g_appCfg.argv      = argv;
 	g_appCfg.resizable = true;
+	g_appCfg.vsync     = 0;
 	g_appCfg.timingLevel = GfxTimingLevel::Scopes;
 
-	// --out=<png> renders offscreen and exits; run without a window or swapchain.
-	std::string headlessOut;
-	g_appCfg.headless = getArgString(argc, argv, "out", nullptr, headlessOut);
+	CommandLine args;
+	args.addPositional("model", &g_args.model, "Model or scene file (default: procedural scene)");
+	args.addString("env", 0, &g_args.env, "PATH", "Environment map (default: envmap.hdr next to the executable)");
+	args.addChoice("scene", 0, &g_args.scene,
+	    {{"cornell", int(ProceduralScene::CornellBox)}, {"boxplane", int(ProceduralScene::BoxOnPlane)}},
+	    "Procedural scene when no model is given");
+	args.addString("out", 0, &g_args.out, "PNG", "Render offscreen to PNG and exit");
+	args.addU32("spp", 0, &g_args.spp, "N", "Samples per pixel for --out");
+	args.addU32("width", 0, &g_args.width, "N", "Image width for --out");
+	args.addU32("height", 0, &g_args.height, "N", "Image height for --out");
+	args.addU32("seedoffset", 0, &g_args.seedOffset, "N", "Sampler seed offset for --out");
+	args.addU32("rr", 0, &g_args.rr, "0|1", "Russian roulette");
+	args.addU32("nmbounce", 0, &g_args.nmBounce, "N", "Normal map bounce limit");
+	args.addU32("texlod", 0, &g_args.texLod, "0|1", "Texture LOD");
+	args.addChoice("sampler", 0, &g_args.sampler, {{"lcg", int(PT_SAMPLER_LCG)}, {"sobol", int(PT_SAMPLER_SOBOL)}},
+	    "Sample generator");
+	args.addChoice("tracing", 0, &g_args.tracing,
+	    {{"rayquery", int(TracingArg::RayQuery)}, {"pipeline", int(TracingArg::Pipeline)}},
+	    "Tracing mode (--out defaults to rayquery)");
+	args.require("spp", "out");
+	args.require("width", "out");
+	args.require("height", "out");
+	args.require("seedoffset", "out");
+
+	if (const std::optional<int> exitCode = ExampleApp::ParseArgs(g_appCfg, argc, argv, &args))
+	{
+		return *exitCode;
+	}
+
+	g_args.hasRr = args.isSet("rr");
+	g_args.hasNmBounce = args.isSet("nmbounce");
+	g_args.hasTexLod = args.isSet("texlod");
+	g_args.hasSampler = args.isSet("sampler");
+	g_args.hasTracing = args.isSet("tracing");
+
+	// No window or swapchain when rendering offscreen
+	g_appCfg.headless = !g_args.out.empty();
 
 #ifdef RUSH_DEBUG
 	g_appCfg.debug = true;
 	Log::breakOnError = true;
 #endif
 
-	return Example_Main<ExamplePathTracer>(g_appCfg, argc, argv);
+	return Platform_Main<ExamplePathTracer>(g_appCfg);
 }
 
 ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f), Vec3(0.0f))
 {
-	Gfx_SetPresentInterval(0);
-
 	if (m_window) // no window/UI in headless (--out) mode
 	{
 		ImGuiImpl_Startup(m_window);
@@ -261,18 +311,14 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 	}
 
 	{
-		std::string envFilename = std::string(Platform_GetExecutableDirectory()) + "/envmap.hdr";
-		std::string envArg;
-		if (getArgString(g_appCfg.argc, g_appCfg.argv, "env", nullptr, envArg))
-		{
-			envFilename = envArg;
-		}
+		const std::string envFilename =
+		    g_args.env.empty() ? std::string(Platform_GetExecutableDirectory()) + "/envmap.hdr" : g_args.env;
 		loadEnvmap(envFilename.c_str());
 	}
 
-	const char* modelFilename = nullptr;
-	if (getPositionalArg(g_appCfg.argc, g_appCfg.argv, 0, modelFilename))
+	if (!g_args.model.empty())
 	{
+		const char* modelFilename = g_args.model.c_str();
 		m_statusString            = std::string("Model: ") + modelFilename;
 		m_modelFilename           = modelFilename;
 		m_valid                   = loadModel(modelFilename);
@@ -291,11 +337,8 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 	}
 	else
 	{
-		// --scene selects the procedural scene: cornell (default) or boxplane.
-		std::string sceneArg;
-		getArgString(g_appCfg.argc, g_appCfg.argv, "scene", nullptr, sceneArg);
-		const bool boxOnPlane = (sceneArg == "boxplane" || sceneArg == "box" || sceneArg == "plane");
-		const ProceduralScene sceneKind = boxOnPlane ? ProceduralScene::BoxOnPlane : ProceduralScene::CornellBox;
+		const ProceduralScene sceneKind = ProceduralScene(g_args.scene);
+		const bool boxOnPlane = sceneKind == ProceduralScene::BoxOnPlane;
 
 		ProceduralSceneData procedural;
 		buildProceduralScene(procedural, sceneKind);
@@ -317,31 +360,46 @@ ExamplePathTracer::ExamplePathTracer() : ExampleApp(), m_boundingBox(Vec3(0.0f),
 		m_settings.m_samplerMode = int(PT_SAMPLER_SOBOL); // guard against a stale saved value
 	}
 
-	// Headless render-to-PNG (applied after loadConfig so command-line wins over the saved config):
-	//   --out=<png> [--spp=N] [--tracing=rayquery|pipeline] [--w=W] [--h=H]
-	if (getArgString(g_appCfg.argc, g_appCfg.argv, "out", nullptr, m_headlessOutPath))
+	// Applied after loadConfig so the command line wins over the saved config
+	if (g_args.hasRr)
 	{
-		u32 v = 0;
-		if (getArgU32(g_appCfg.argc, g_appCfg.argv, "spp", nullptr, v) && v > 0) { m_headlessSpp = v; }
-		if (getArgU32(g_appCfg.argc, g_appCfg.argv, "w", nullptr, v) && v > 0) { m_headlessSize.x = int(v); }
-		if (getArgU32(g_appCfg.argc, g_appCfg.argv, "h", nullptr, v) && v > 0) { m_headlessSize.y = int(v); }
-		if (getArgU32(g_appCfg.argc, g_appCfg.argv, "rr", nullptr, v)) { m_settings.m_useRussianRoulette = v != 0; }
-		if (getArgU32(g_appCfg.argc, g_appCfg.argv, "nmbounce", nullptr, v)) { m_settings.m_normalMapBounceLimit = int(v); }
-		if (getArgU32(g_appCfg.argc, g_appCfg.argv, "texlod", nullptr, v)) { m_settings.m_useTextureLod = v != 0; }
-		if (getArgU32(g_appCfg.argc, g_appCfg.argv, "seedoffset", nullptr, v)) { m_headlessSampleOffset = v; }
-		// --sampler=lcg|sobol (or a numeric PT_SAMPLER_* index).
-		std::string samplerArg;
-		if (getArgString(g_appCfg.argc, g_appCfg.argv, "sampler", nullptr, samplerArg))
+		m_settings.m_useRussianRoulette = g_args.rr != 0;
+	}
+	if (g_args.hasNmBounce)
+	{
+		m_settings.m_normalMapBounceLimit = int(g_args.nmBounce);
+	}
+	if (g_args.hasTexLod)
+	{
+		m_settings.m_useTextureLod = g_args.texLod != 0;
+	}
+	if (g_args.hasSampler)
+	{
+		m_settings.m_samplerMode = g_args.sampler;
+	}
+
+	m_headlessOutPath = g_args.out;
+	if (!m_headlessOutPath.empty())
+	{
+		if (g_args.spp > 0)
 		{
-			int mode = 0;
-			if (samplerModeFromName(samplerArg, mode)) { m_settings.m_samplerMode = mode; }
-			else if (getArgU32(g_appCfg.argc, g_appCfg.argv, "sampler", nullptr, v) && v < PT_SAMPLER_COUNT) { m_settings.m_samplerMode = int(v); }
+			m_headlessSpp = g_args.spp;
 		}
-		// Default to ray query unless --tracing=pipeline is given (ignores the saved config mode).
-		std::string mode;
-		getArgString(g_appCfg.argc, g_appCfg.argv, "tracing", nullptr, mode);
-		const bool wantPipeline = (mode == "pipeline" || mode == "rt");
-		const bool useRayQuery = !wantPipeline && m_rayQueryPipeline.valid();
+		if (g_args.width > 0)
+		{
+			m_headlessSize.x = int(g_args.width);
+		}
+		if (g_args.height > 0)
+		{
+			m_headlessSize.y = int(g_args.height);
+		}
+		m_headlessSampleOffset = g_args.seedOffset;
+	}
+
+	// Headless ignores the saved mode and defaults to ray query
+	if (g_args.hasTracing || !m_headlessOutPath.empty())
+	{
+		const bool useRayQuery = TracingArg(g_args.tracing) == TracingArg::RayQuery && m_rayQueryPipeline.valid();
 		m_settings.m_tracingMode = int(useRayQuery ? TracingMode::RayQuery : TracingMode::RayTracingPipeline);
 	}
 

@@ -38,8 +38,6 @@ int main(int argc, char** argv)
 
 ExampleRayTracing::ExampleRayTracing() : ExampleApp()
 {
-	Gfx_SetPresentInterval(1);
-
 	m_constantBuffer = Gfx_CreateBuffer(GfxBufferFlags::TransientConstant);
 
 	const GfxCapability& caps = Gfx_GetCapability();

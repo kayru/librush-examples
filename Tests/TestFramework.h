@@ -209,11 +209,20 @@ public:
 	static TestType##Registrar s_##TestType##Registrar;                                       \
 	}
 
+struct TestOptions
+{
+	bool                 list = false;
+	bool                 listCategories = false;
+	bool                 noGraphics = false;
+	DynamicArray<String> testPatterns;
+	DynamicArray<String> categoryPatterns;
+};
+
 // Drives test execution and optional filtering.
 class TestRunner
 {
 public:
-	TestRunner(GfxContext* ctx, int argc, char** argv);
+	TestRunner(GfxContext* ctx, const TestOptions& options);
 	void update();
 	int  runCpuOnly();
 	bool isFinished() const { return m_state == State::Done; }
@@ -237,7 +246,7 @@ private:
 	void finishCurrent(GfxContext* ctx);
 	void readbackOffscreenTarget(GfxContext* ctx);
 	void updateInternal(GfxContext* ctx);
-	void configureFromArgs(int argc, char** argv);
+	void configure(const TestOptions& options);
 	void listTests() const;
 	void listCategories() const;
 	bool shouldRunTest(const TestEntry& entry) const;

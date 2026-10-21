@@ -4,12 +4,14 @@
 #include <Rush/GfxDevice.h>
 #include <Rush/Platform.h>
 
+#include <optional>
 #include <string>
 
 namespace Rush
 {
 class PrimitiveBatch;
 class BitmapFontRenderer;
+class CommandLine;
 
 class ExampleApp : public Rush::Application
 {
@@ -19,13 +21,18 @@ public:
 	ExampleApp();
 	~ExampleApp();
 	void update() final;
-	static void SetupScreenshot(const AppConfig& cfg, int argc, char** argv);
+	// Adds the shared options to appArgs (may be null) and parses argv.
+	// Returns the exit code when the app must not run.
+	static std::optional<int> ParseArgs(AppConfig& cfg, int argc, char** argv, CommandLine* appArgs);
 
 	bool isDesktop() const;
 
-	template <typename T> static inline int Main(AppConfig cfg, int argc, char** argv)
+	template <typename T> static inline int Main(AppConfig cfg, int argc, char** argv, CommandLine* appArgs)
 	{
-		SetupScreenshot(cfg, argc, argv);
+		if (const std::optional<int> exitCode = ParseArgs(cfg, argc, argv, appArgs))
+		{
+			return *exitCode;
+		}
 		return Platform_Main<T>(cfg);
 	}
 
@@ -61,8 +68,8 @@ private:
 };
 
 template <typename T>
-inline int Example_Main(AppConfig cfg, int argc, char** argv)
+inline int Example_Main(AppConfig cfg, int argc, char** argv, CommandLine* appArgs = nullptr)
 {
-	return ExampleApp::Main<T>(cfg, argc, argv);
+	return ExampleApp::Main<T>(cfg, argc, argv, appArgs);
 }
 }

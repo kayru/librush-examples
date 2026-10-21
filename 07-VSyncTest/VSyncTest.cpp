@@ -79,7 +79,6 @@ int main(int argc, char** argv)
 	cfg.width     = 640;
 	cfg.height    = 480;
 	cfg.resizable = true;
-	cfg.vsync     = true;
 	cfg.argc = argc;
 	cfg.argv = argv;
 

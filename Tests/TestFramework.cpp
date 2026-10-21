@@ -235,7 +235,7 @@ static bool matchesPattern(const char* pattern, const char* value)
 	}
 }
 
-TestRunner::TestRunner(GfxContext* ctx, int argc, char** argv)
+TestRunner::TestRunner(GfxContext* ctx, const TestOptions& options)
 {
 	if (ctx)
 	{
@@ -257,7 +257,7 @@ TestRunner::TestRunner(GfxContext* ctx, int argc, char** argv)
 		m_stagingBuffer = Gfx_CreateBuffer(bufDesc);
 	}
 
-	configureFromArgs(argc, argv);
+	configure(options);
 	m_runStart = Clock::now();
 }
 
@@ -436,64 +436,13 @@ double TestRunner::elapsedMs(TimePoint start, TimePoint end)
 	return std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(delta).count();
 }
 
-void TestRunner::configureFromArgs(int argc, char** argv)
+void TestRunner::configure(const TestOptions& options)
 {
-	bool listOnly = false;
-	bool listCategoriesOnly = false;
-
-	for (int i = 1; i < argc; ++i)
-	{
-		const char* arg = argv[i];
-		if (!arg)
-		{
-			continue;
-		}
-
-		if (std::strcmp(arg, "--list") == 0)
-		{
-			listOnly = true;
-		}
-		else if (std::strcmp(arg, "--list-categories") == 0)
-		{
-			listCategoriesOnly = true;
-		}
-		else if (std::strcmp(arg, "--test") == 0 || std::strcmp(arg, "-t") == 0)
-		{
-			if (i + 1 < argc)
-			{
-				m_testPatterns.push_back(String(argv[++i]));
-			}
-		}
-		else if (std::strcmp(arg, "--category") == 0 || std::strcmp(arg, "-c") == 0)
-		{
-			if (i + 1 < argc)
-			{
-				m_categoryPatterns.push_back(String(argv[++i]));
-			}
-		}
-		else if (std::strcmp(arg, "--no-gfx") == 0 || std::strcmp(arg, "--cpu-only") == 0)
-		{
-			m_forceNoGraphics = true;
-		}
-		else if (std::strcmp(arg, "--help") == 0 || std::strcmp(arg, "-h") == 0)
-		{
-			RUSH_LOG("Usage:");
-			RUSH_LOG("  --list               List available tests");
-			RUSH_LOG("  --list-categories    List available categories");
-			RUSH_LOG("  --test, -t PATTERN   Run tests matching pattern (supports *)");
-			RUSH_LOG("  --category, -c CAT   Run tests by category pattern (supports *)");
-			RUSH_LOG("  --no-gfx             Skip tests that require graphics");
-			RUSH_LOG("  --cpu-only           Alias for --no-gfx");
-			m_exitRequested = true;
-			m_state = State::Done;
-			m_exitCode = 0;
-			if (Window* window = Platform_GetWindow())
-			{
-				window->close();
-			}
-			return;
-		}
-	}
+	const bool listOnly = options.list;
+	const bool listCategoriesOnly = options.listCategories;
+	m_testPatterns = options.testPatterns;
+	m_categoryPatterns = options.categoryPatterns;
+	m_forceNoGraphics = options.noGraphics;
 
 	for (const auto& entry : TestRegistry::all())
 	{
