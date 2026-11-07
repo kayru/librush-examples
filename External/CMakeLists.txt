@@ -1,4 +1,8 @@
 add_subdirectory("librush")
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS" AND RUSH_RENDER_API STREQUAL "MTL")
+	find_library(CoreGraphics_LIBRARIES CoreGraphics REQUIRED)
+	target_link_libraries(Rush INTERFACE ${CoreGraphics_LIBRARIES})
+endif()
 add_subdirectory("stb")
 add_subdirectory("tiny_obj_loader")
 set(IMGUI_DIR "${CMAKE_CURRENT_SOURCE_DIR}/imgui")
